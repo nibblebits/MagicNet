@@ -15,9 +15,11 @@ struct magicnet_registered_structure
     size_t size;
 };
 
+struct magicnet_client;
 struct magicnet_program
 {
     char name[MAGICNET_PROGRAM_NAME_SIZE];
+    struct magicnet_client* client;
 };
 
 // Represents the magicnet program on the server side
@@ -33,8 +35,6 @@ struct magicnet_server_program
 struct magicnet_server
 {
     int sock;
-
-    struct vector* 
 };
 
 struct magicnet_client
@@ -78,6 +78,8 @@ struct magicnet_packet
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
 int magicnet_client_thread_start(struct magicnet_client *client);
+int magicnet_client_preform_entry_protocol_write(struct magicnet_client* client, const char* program_name);
+struct magicnet_client *giveme_tcp_network_connect(const char *ip_address, int port, int flags, const char* program_name);
 
 int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);

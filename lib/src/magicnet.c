@@ -86,6 +86,7 @@ struct magicnet_program* magicnet_get_program(const char* name)
 
 struct magicnet_program* magicnet_program(const char* name)
 {
+    int res = 0;
     struct magicnet_program* program = magicnet_get_program(name);
     if (program)
     {
@@ -98,5 +99,19 @@ struct magicnet_program* magicnet_program(const char* name)
     program = calloc(1, sizeof(struct magicnet_program));
     strncpy(program->name, name, sizeof(program->name));
     vector_push(program_vec, program);
+
+    struct magicnet_client* client = giveme_tcp_network_connect(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, 0, name);
+    if (!client)
+    {
+        res = -1;
+        goto out;
+    }
+    program->client = client;
+out:
+    if (res < 0)
+    {
+        free(program);
+        program = NULL;
+    }
     return program;
 }

@@ -10,4 +10,6 @@
 // this is a magicnet client not some accidental http request or something.
 // Sent as a 4 byte integer.
 #define MAGICNET_ENTRY_SIGNATURE 0xf6f4
+
+#define MAGICNET_LOCAL_SERVER_ADDRESS "127.0.0.1"
 #endif
