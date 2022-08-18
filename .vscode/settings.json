@@ -3,6 +3,7 @@
         "string.h": "c",
         "log.h": "c",
         "stdlib.h": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "wait.h": "c"
     }
 }

@@ -21,14 +21,14 @@ int main()
         return -1;
     }
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
-    // while (1)
-    // {
-    //     // struct magic_packet* packet = magicnet_next_packet(decentralized_program);
+     while (1)
+     {
+         struct magicnet_packet* packet = magicnet_next_packet(decentralized_program);
     //     // if (packet->type == CHAT_PACKET)
     //     // {
     //     //     struct chat_packet* packet_data = packet->data;
     //     //     printf("%s\n", data->message);
     //     // }
     //     // magicnet_free_packet(packet);
-    // }
+     }
 }

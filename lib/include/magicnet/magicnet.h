@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <time.h>
 #include "magicnet/vector.h"
 #include "magicnet/config.h"
 
@@ -22,32 +23,38 @@ struct magicnet_program
     struct magicnet_client* client;
 };
 
-// Represents the magicnet program on the server side
-struct magicnet_server_program
-{
-    char name[MAGICNET_PROGRAM_NAME_SIZE];
-
-    // Vector of struct magicnet_packet 
-    // All packets received with the given program name are stored here
-    // for polling by the programs subscribed to them.
-    struct vector* packets;
-};
-struct magicnet_server
-{
-    int sock;
-};
-
 struct magicnet_client
 {
     int sock;
+    int flags;
+    time_t last_contact;
+    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
+
     struct sockaddr_in client_info;
     struct magicnet_server *server;
+};
+
+
+struct magicnet_server
+{
+    int sock;
+    struct magicnet_client clients[MAGICNET_MAX_CONNECTIONS];
+};
+
+enum
+{
+    MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,
+    MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
+
 };
 
 enum
 {
     MAGICNET_PACKET_TYPE_USER_DEFINED,
     MAGICNET_PACKET_TYPE_PING,
+    MAGICNET_PACKET_TYPE_PONG,
+    MAGICNET_PACKET_TYPE_POLL_PACKETS,
+    MAGICNET_PACKET_TYPE_NOT_FOUND
 };
 struct magicnet_packet
 {
@@ -79,7 +86,11 @@ struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
 int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client* client, const char* program_name);
-struct magicnet_client *giveme_tcp_network_connect(const char *ip_address, int port, int flags, const char* program_name);
+struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int port, int flags, const char* program_name);
+struct magicnet_packet* magicnet_next_packet(struct magicnet_program* program);
+int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
+int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet);
+int magicnet_send_pong(struct magicnet_client* client);
 
 int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
