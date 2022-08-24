@@ -5,6 +5,7 @@
 #define MAGICNET_MAX_CONNECTIONS 30
 #define MAGICNET_CLIENT_TIMEOUT_SECONDS 30
 #define MAGICNET_PROGRAM_NAME_SIZE 64
+#define MAGICNET_MAX_AWAITING_PACKETS 1024
 
 // This SINGATURE must be sent when you connect to a server of ours. It proves that 
 // this is a magicnet client not some accidental http request or something.
@@ -12,4 +13,5 @@
 #define MAGICNET_ENTRY_SIGNATURE 0xf6f4
 
 #define MAGICNET_LOCAL_SERVER_ADDRESS "127.0.0.1"
+
 #endif

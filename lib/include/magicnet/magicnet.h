@@ -23,43 +23,31 @@ struct magicnet_program
     struct magicnet_client* client;
 };
 
-struct magicnet_client
-{
-    int sock;
-    int flags;
-    time_t last_contact;
-    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
-
-    struct sockaddr_in client_info;
-    struct magicnet_server *server;
-};
-
-
-struct magicnet_server
-{
-    int sock;
-    struct magicnet_client clients[MAGICNET_MAX_CONNECTIONS];
-};
-
 enum
 {
-    MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,
-    MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
-
-};
-
-enum
-{
+    MAGICNET_PACKET_TYPE_EMPTY_PACKET,
     MAGICNET_PACKET_TYPE_USER_DEFINED,
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
     MAGICNET_PACKET_TYPE_NOT_FOUND
 };
+
+enum
+{
+    MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE = 0b00000001,
+    MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING = 0b00000010,
+};
+
+enum
+{
+    MAGICNET_ERROR_QUEUE_FULL = -1000
+};
 struct magicnet_packet
 {
     // The type of this packet see above.
     int type;
+    int flags;
     struct payload
     {
         union
@@ -81,6 +69,33 @@ struct magicnet_packet
         };
     } payload;
 };
+
+
+struct magicnet_client
+{
+    int sock;
+    int flags;
+    time_t last_contact;
+    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
+    struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
+    struct sockaddr_in client_info;
+    struct magicnet_server *server;
+};
+
+
+struct magicnet_server
+{
+    int sock;
+    struct magicnet_client clients[MAGICNET_MAX_CONNECTIONS];
+};
+
+enum
+{
+    MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,
+    MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
+
+};
+
 
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);

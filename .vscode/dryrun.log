@@ -1,21 +1,21 @@
-make --dry-run --keep-going --print-directory
+make --dry-run --always-make --keep-going --print-directory
 make: Entering directory '/home/daniel/MagicNet'
 cd ./lib && make all
 make[1]: Entering directory '/home/daniel/MagicNet/lib'
+gcc -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector ./src/vector/vector.c -c -g -fPIC -o ./build/vector.o 
+gcc -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector ./src/magicnet.c -c -g -fPIC -o ./build/magicnet.o 
+gcc -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector ./src/log.c -c -g -fPIC -o ./build/log.o 
+gcc -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector ./src/network.c -c -g -fPIC -o ./build/network.o 
 gcc -shared -o ./libmagicnet.so -pthread -g ./build/vector.o ./build/magicnet.o ./build/log.o ./build/network.o 
 cp ./libmagicnet.so /usr/lib/libmagicnet.so 
 make[1]: Leaving directory '/home/daniel/MagicNet/lib'
 cd ./server && make all
- 
 make[1]: Entering directory '/home/daniel/MagicNet/server'
 gcc -I ./ -I../lib/include ./main.c -L/usr/lib -lmagicnet  -o ./server
 make[1]: Leaving directory '/home/daniel/MagicNet/server'
- 
 cd ./example/MessageListenerApplication && make all
- 
 make[1]: Entering directory '/home/daniel/MagicNet/example/MessageListenerApplication'
 gcc -I ./ -I ../../lib/include -g  ./main.c -L/usr/lib -lmagicnet  -o ./listener
 make[1]: Leaving directory '/home/daniel/MagicNet/example/MessageListenerApplication'
- 
 make: Leaving directory '/home/daniel/MagicNet'
  

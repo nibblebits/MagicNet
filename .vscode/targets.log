@@ -1,29 +1,17 @@
 make all --print-data-base --no-builtin-variables --no-builtin-rules --question
 cd ./lib && make all
- 
 # GNU Make 4.2.1
- 
 # Built for x86_64-pc-linux-gnu
- 
 # Copyright (C) 1988-2016 Free Software Foundation, Inc.
- 
 # License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
- 
 # This is free software: you are free to change and redistribute it.
- 
 # There is NO WARRANTY, to the extent permitted by law.
- 
 
- 
-# Make data base, printed on Thu Aug 18 18:47:07 2022
- 
+# Make data base, printed on Wed Aug 24 19:36:01 2022
 
 # Variables
- 
 
- 
 # 'override' directive
- 
 GNUMAKEFLAGS := 
 # automatic
 <D = $(patsubst %/,%,$(dir $<))
@@ -58,11 +46,11 @@ CURDIR := /home/daniel/MagicNet/lib
 # makefile
 SHELL = /bin/sh
 # environment
-SNAP_DATA = /var/snap/code/104
+SNAP_DATA = /var/snap/code/105
 # environment
 VSCODE_NLS_CONFIG = {"locale":"en-gb","availableLanguages":{},"_languagePackSupport":true}
 # environment
-JOURNAL_STREAM = 8:38236
+JOURNAL_STREAM = 8:37952
 # environment
 XDG_CONFIG_DIRS = /etc/xdg/xdg-ubuntu:/etc/xdg
 # environment
@@ -82,15 +70,15 @@ XDG_DATA_DIRS = /usr/share/ubuntu:/usr/local/share/:/usr/share/:/var/lib/snapd/d
 # environment
 DBUS_SESSION_BUS_ADDRESS = unix:path=/run/user/1000/bus
 # environment
-_ = /snap/code/104/usr/share/code/code
+_ = /snap/code/105/usr/share/code/code
 # environment
-MANAGERPID = 1846
+MANAGERPID = 1868
 # makefile (from 'Makefile', line 3)
 ADDITIONAL_FLAGS = -g -fPIC
 # environment
 VSCODE_CWD = /home/daniel
 # environment
-GSETTINGS_SCHEMA_DIR = /snap/code/104/usr/share/glib-2.0/schemas
+GSETTINGS_SCHEMA_DIR = /snap/code/105/usr/share/glib-2.0/schemas
 # default
 MAKE_HOST := x86_64-pc-linux-gnu
 # environment
@@ -98,15 +86,15 @@ PATH = /home/daniel/.composer/vendor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbi
 # environment
 GPG_AGENT_INFO = /run/user/1000/gnupg/S.gpg-agent:0:1
 # environment
-SESSION_MANAGER = local/daniel-VirtualBox:@/tmp/.ICE-unix/2116,unix/daniel-VirtualBox:/tmp/.ICE-unix/2116
+SESSION_MANAGER = local/daniel-VirtualBox:@/tmp/.ICE-unix/2129,unix/daniel-VirtualBox:/tmp/.ICE-unix/2129
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # environment
 GDK_PIXBUF_MODULE_FILE = /home/daniel/snap/code/common/.cache/gdk-pixbuf-loaders.cache
 # environment
-SNAP = /snap/code/104
+SNAP = /snap/code/105
 # environment
-SNAP_VERSION = 6d9b74a7
+SNAP_VERSION = e4503b30
 # environment
 XDG_MENU_PREFIX = gnome-
 # environment
@@ -114,9 +102,9 @@ DISABLE_WAYLAND = 1
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-INVOCATION_ID = 8b265dd4f15341a7aa77189417b91b92
+INVOCATION_ID = 9a7aca2b4ad342a5a50cb94373f642e7
 # environment
-GDK_PIXBUF_MODULEDIR = /snap/code/104/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders
+GDK_PIXBUF_MODULEDIR = /snap/code/105/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders
 # default
 .FEATURES := target-specific order-only second-expansion else-if shortest-stem undefine oneshell archives jobserver output-sync check-symlink load
 # environment
@@ -124,7 +112,7 @@ XDG_SESSION_DESKTOP = ubuntu
 # environment
 SSH_AUTH_SOCK = /run/user/1000/keyring/ssh
 # environment
-GIO_LAUNCHED_DESKTOP_FILE_PID = 40086
+GIO_LAUNCHED_DESKTOP_FILE_PID = 4421
 # automatic
 %F = $(notdir $%)
 # environment
@@ -136,7 +124,7 @@ PWD = /home/daniel/MagicNet/lib
 # default
 .LOADED := 
 # environment
-SSH_AGENT_PID = 2047
+SSH_AGENT_PID = 2073
 # environment
 ORIGINAL_XDG_CURRENT_DESKTOP = ubuntu:GNOME
 # environment
@@ -148,7 +136,7 @@ HOME = /home/daniel
 # environment
 VSCODE_CLI = 1
 # environment
-VSCODE_CODE_CACHE_PATH = /home/daniel/.config/Code/CachedData/6d9b74a70ca9c7733b29f0456fd8195364076dda
+VSCODE_CODE_CACHE_PATH = /home/daniel/.config/Code/CachedData/e4503b30fc78200f846c62cf8091b76ff5547662
 # environment
 LOGNAME = daniel
 # environment
@@ -178,7 +166,7 @@ MAKECMDGOALS := all
 # environment
 QT_IM_MODULE = ibus
 # environment
-SNAP_USER_DATA = /home/daniel/snap/code/104
+SNAP_USER_DATA = /home/daniel/snap/code/105
 # environment
 SHLVL = 0
 # environment
@@ -188,7 +176,7 @@ MAKE_VERSION := 4.2.1
 # environment
 USER = daniel
 # environment
-SNAP_REVISION = 104
+SNAP_REVISION = 105
 # makefile
 .DEFAULT_GOAL := all
 # environment
@@ -206,7 +194,7 @@ OLDPWD = /home/daniel/MagicNet
 # environment
 LANGUAGE = en_GB:en
 # environment
-VSCODE_IPC_HOOK = /run/user/1000/vscode-419f9acc-1.70.1-main.sock
+VSCODE_IPC_HOOK = /run/user/1000/vscode-419f9acc-1.70.2-main.sock
 # environment
 BAMF_DESKTOP_FILE_HINT = /var/lib/snapd/desktop/applications/code_code.desktop
 # makefile
@@ -256,12 +244,10 @@ OBJECTS = ./build/vector.o ./build/magicnet.o ./build/log.o ./build/network.o
 # environment
 LANG = C
 # environment
-VSCODE_PID = 40137
+VSCODE_PID = 4470
 # variable set hash-table stats:
 # Load=117/1024=11%, Rehash=0, Collisions=18/150=12%
- 
 
- 
 # Pattern-specific Variable Values
 
 # No pattern-specific variable values.
@@ -280,7 +266,7 @@ VSCODE_PID = 40137
 
 build/magicnet.o: src/magicnet.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-18 18:46:55.750541875
+#  Last modified 2022-08-24 19:35:54.458781947
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 9):
@@ -293,6 +279,7 @@ all: build/vector.o build/magicnet.o build/log.o build/network.o
 #  File does not exist.
 #  File has been updated.
 #  Needs to be updated (-q is set).
+ 
 # automatic
 # @ := all
 # automatic
@@ -317,7 +304,7 @@ all: build/vector.o build/magicnet.o build/log.o build/network.o
 
 build/log.o: src/log.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-18 18:46:55.806543045
+#  Last modified 2022-08-24 19:35:55.018781919
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 19):
@@ -338,7 +325,7 @@ Makefile:
 
 build/network.o: src/network.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-18 18:46:55.898544967
+#  Last modified 2022-08-24 19:35:55.194781911
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 14):
@@ -347,7 +334,7 @@ build/network.o: src/network.c
 # Not a target:
 src/magicnet.c:
 #  Implicit rule search has been done.
-#  Last modified 2022-08-18 18:40:49.257512759
+#  Last modified 2022-08-18 20:28:32.891762663
 #  File has been updated.
 #  Successfully updated.
 
@@ -382,13 +369,13 @@ clean:
 # Not a target:
 src/network.c:
 #  Implicit rule search has been done.
-#  Last modified 2022-08-18 18:45:48.644967485
+#  Last modified 2022-08-18 20:42:22.427448435
 #  File has been updated.
 #  Successfully updated.
 
 build/vector.o: src/vector/vector.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-18 18:46:55.690540623
+#  Last modified 2022-08-24 19:35:54.358781952
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 23):
@@ -408,7 +395,7 @@ build/vector.o: src/vector/vector.c
 # strcache performance: lookups = 37 / hit rate = 43%
 # hash-table stats:
 # Load=21/8192=0%, Rehash=0, Collisions=1/37=3%
-# Finished Make data base on Thu Aug 18 18:47:07 2022
+# Finished Make data base on Wed Aug 24 19:36:01 2022
 
  
 # GNU Make 4.2.1
@@ -418,7 +405,7 @@ build/vector.o: src/vector/vector.c
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Thu Aug 18 18:47:07 2022
+# Make data base, printed on Wed Aug 24 19:36:01 2022
 
 # Variables
 
@@ -455,11 +442,11 @@ CURDIR := /home/daniel/MagicNet
 # makefile
 SHELL = /bin/sh
 # environment
-SNAP_DATA = /var/snap/code/104
+SNAP_DATA = /var/snap/code/105
 # environment
 VSCODE_NLS_CONFIG = {"locale":"en-gb","availableLanguages":{},"_languagePackSupport":true}
 # environment
-JOURNAL_STREAM = 8:38236
+JOURNAL_STREAM = 8:37952
 # environment
 XDG_CONFIG_DIRS = /etc/xdg/xdg-ubuntu:/etc/xdg
 # environment
@@ -479,13 +466,13 @@ XDG_DATA_DIRS = /usr/share/ubuntu:/usr/local/share/:/usr/share/:/var/lib/snapd/d
 # environment
 DBUS_SESSION_BUS_ADDRESS = unix:path=/run/user/1000/bus
 # environment
-_ = /snap/code/104/usr/share/code/code
+_ = /snap/code/105/usr/share/code/code
 # environment
-MANAGERPID = 1846
+MANAGERPID = 1868
 # environment
 VSCODE_CWD = /home/daniel
 # environment
-GSETTINGS_SCHEMA_DIR = /snap/code/104/usr/share/glib-2.0/schemas
+GSETTINGS_SCHEMA_DIR = /snap/code/105/usr/share/glib-2.0/schemas
 # default
 MAKE_HOST := x86_64-pc-linux-gnu
 # environment
@@ -493,15 +480,15 @@ PATH = /home/daniel/.composer/vendor/bin:/usr/local/sbin:/usr/local/bin:/usr/sbi
 # environment
 GPG_AGENT_INFO = /run/user/1000/gnupg/S.gpg-agent:0:1
 # environment
-SESSION_MANAGER = local/daniel-VirtualBox:@/tmp/.ICE-unix/2116,unix/daniel-VirtualBox:/tmp/.ICE-unix/2116
+SESSION_MANAGER = local/daniel-VirtualBox:@/tmp/.ICE-unix/2129,unix/daniel-VirtualBox:/tmp/.ICE-unix/2129
 # environment
 XDG_RUNTIME_DIR = /run/user/1000
 # environment
 GDK_PIXBUF_MODULE_FILE = /home/daniel/snap/code/common/.cache/gdk-pixbuf-loaders.cache
 # environment
-SNAP = /snap/code/104
+SNAP = /snap/code/105
 # environment
-SNAP_VERSION = 6d9b74a7
+SNAP_VERSION = e4503b30
 # environment
 XDG_MENU_PREFIX = gnome-
 # environment
@@ -509,9 +496,9 @@ DISABLE_WAYLAND = 1
 # environment
 ELECTRON_RUN_AS_NODE = 1
 # environment
-INVOCATION_ID = 8b265dd4f15341a7aa77189417b91b92
+INVOCATION_ID = 9a7aca2b4ad342a5a50cb94373f642e7
 # environment
-GDK_PIXBUF_MODULEDIR = /snap/code/104/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders
+GDK_PIXBUF_MODULEDIR = /snap/code/105/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders
 # default
 .FEATURES := target-specific order-only second-expansion else-if shortest-stem undefine oneshell archives jobserver output-sync check-symlink load
 # environment
@@ -519,7 +506,7 @@ XDG_SESSION_DESKTOP = ubuntu
 # environment
 SSH_AUTH_SOCK = /run/user/1000/keyring/ssh
 # environment
-GIO_LAUNCHED_DESKTOP_FILE_PID = 40086
+GIO_LAUNCHED_DESKTOP_FILE_PID = 4421
 # automatic
 %F = $(notdir $%)
 # environment
@@ -531,7 +518,7 @@ PWD = /home/daniel/MagicNet
 # default
 .LOADED := 
 # environment
-SSH_AGENT_PID = 2047
+SSH_AGENT_PID = 2073
 # environment
 ORIGINAL_XDG_CURRENT_DESKTOP = ubuntu:GNOME
 # environment
@@ -543,7 +530,7 @@ HOME = /home/daniel
 # environment
 VSCODE_CLI = 1
 # environment
-VSCODE_CODE_CACHE_PATH = /home/daniel/.config/Code/CachedData/6d9b74a70ca9c7733b29f0456fd8195364076dda
+VSCODE_CODE_CACHE_PATH = /home/daniel/.config/Code/CachedData/e4503b30fc78200f846c62cf8091b76ff5547662
 # environment
 LOGNAME = daniel
 # environment
@@ -573,7 +560,7 @@ MAKECMDGOALS := all
 # environment
 QT_IM_MODULE = ibus
 # environment
-SNAP_USER_DATA = /home/daniel/snap/code/104
+SNAP_USER_DATA = /home/daniel/snap/code/105
 # environment
 SHLVL = 0
 # environment
@@ -583,7 +570,7 @@ MAKE_VERSION := 4.2.1
 # environment
 USER = daniel
 # environment
-SNAP_REVISION = 104
+SNAP_REVISION = 105
 # makefile
 .DEFAULT_GOAL := all
 # environment
@@ -599,7 +586,7 @@ MAKE_COMMAND := make
 # environment
 LANGUAGE = en_GB:en
 # environment
-VSCODE_IPC_HOOK = /run/user/1000/vscode-419f9acc-1.70.1-main.sock
+VSCODE_IPC_HOOK = /run/user/1000/vscode-419f9acc-1.70.2-main.sock
 # environment
 BAMF_DESKTOP_FILE_HINT = /var/lib/snapd/desktop/applications/code_code.desktop
 # makefile
@@ -647,7 +634,7 @@ GJS_DEBUG_OUTPUT = stderr
 # environment
 LANG = C
 # environment
-VSCODE_PID = 40137
+VSCODE_PID = 4470
 # variable set hash-table stats:
 # Load=113/1024=11%, Rehash=0, Collisions=17/147=12%
 
@@ -657,9 +644,9 @@ VSCODE_PID = 40137
 
 # Directories
 
-# . (device 2053, inode 6297522): 9 files, no impossibilities.
+# . (device 2053, inode 6297522): 10 files, no impossibilities.
 
-# 9 files, no impossibilities in 1 directories.
+# 10 files, no impossibilities in 1 directories.
 
 # Implicit Rules
 
@@ -734,12 +721,12 @@ clean:
 
 # No general ('VPATH' variable) search path.
 
-# strcache buffers: 1 (0) / strings = 15 / storage = 117 B / avg = 7 B
-# current buf: size = 8162 B / used = 117 B / count = 15 / avg = 7 B
+# strcache buffers: 1 (0) / strings = 16 / storage = 130 B / avg = 8 B
+# current buf: size = 8162 B / used = 130 B / count = 16 / avg = 8 B
 
-# strcache performance: lookups = 23 / hit rate = 34%
+# strcache performance: lookups = 24 / hit rate = 33%
 # hash-table stats:
-# Load=15/8192=0%, Rehash=0, Collisions=1/23=4%
-# Finished Make data base on Thu Aug 18 18:47:07 2022
+# Load=16/8192=0%, Rehash=0, Collisions=1/24=4%
+# Finished Make data base on Wed Aug 24 19:36:01 2022
 
  

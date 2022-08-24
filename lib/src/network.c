@@ -73,11 +73,17 @@ struct magicnet_server *magicnet_server_start()
     return server;
 }
 
+
+bool magicnet_client_in_use(struct magicnet_client* client)
+{
+    return client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
+}
+
 struct magicnet_client *magicnet_find_free_client(struct magicnet_server *server)
 {
     for (int i = 0; i < MAGICNET_MAX_CONNECTIONS; i++)
     {
-        if (!(server->clients[i].flags & MAGICNET_CLIENT_FLAG_CONNECTED))
+        if (!magicnet_client_in_use(&server->clients[i]))
         {
             bzero(&server->clients[i], sizeof(struct magicnet_client));
             return &server->clients[i];
@@ -122,6 +128,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
 
     mclient->sock = connfd;
     mclient->server = server;
+    mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
     memcpy(&mclient->client_info, &client, sizeof(&client));
     return mclient;
 }
@@ -182,6 +189,18 @@ int magicnet_write_int(struct magicnet_client *client, int value)
     return 0;
 }
 
+int magicnet_write_long(struct magicnet_client *client, long value)
+{
+    // Preform bit manipulation for big-endianness todo later...
+    if (magicnet_write_bytes(client, &value, sizeof(value)) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+
+
 long magicnet_read_long(struct magicnet_client *client)
 {
     long result = 0;
@@ -229,6 +248,14 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
     if (packet_type < 0)
     {
         res = -1;
+        goto out;
+    }
+
+    long data_size = magicnet_read_long(client);
+    data = calloc(1, data_size);
+    res = magicnet_read_bytes(client, data, data_size);
+    if (res < 0)
+    {
         goto out;
     }
 
@@ -318,6 +345,34 @@ int magicnet_client_write_packet_not_found(struct magicnet_client* client, struc
     return res;
 }
 
+int magicnet_client_write_packet_user_defined(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    void *data = NULL;
+
+    res = magicnet_write_long(client, packet->payload.user_defined.type);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_long(client, packet->payload.user_defined.data_len);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, packet->payload.user_defined.data, packet->payload.user_defined.data_len);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -329,6 +384,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_write_packet_poll_packets(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_USER_DEFINED:
+        res = magicnet_client_write_packet_user_defined(client, packet);
         break;
 
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
@@ -388,6 +447,7 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
     struct magicnet_client *mclient = calloc(1, sizeof(struct magicnet_client));
     mclient->sock = sockfd;
     mclient->server = NULL;
+    mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
     if (program_name)
     {
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
@@ -425,21 +485,113 @@ struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client
     return packet;
 }
 
+
+struct magicnet_packet* magicnet_client_get_available_free_to_use_packet(struct magicnet_client* client)
+{
+    struct magicnet_packet* packet = NULL;
+    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    {
+        if (client->awaiting_packets[i].flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE)
+        {
+            client->awaiting_packets[i].type &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+            packet = &client->awaiting_packets[i];
+        }
+    }
+
+    return packet;
+}
+
+struct magicnet_packet* magicnet_client_get_next_packet_to_process(struct magicnet_client* client)
+{
+    struct magicnet_packet* packet = NULL;
+    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    {
+        if (client->awaiting_packets[i].flags & MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING)
+        {
+            packet = &client->awaiting_packets[i];
+        }
+    }
+    return packet;
+}
+
+int magicnet_client_add_awaiting_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    struct magicnet_packet* awaiting_packet = magicnet_client_get_available_free_to_use_packet(client);
+    if (!awaiting_packet)
+    {
+        return MAGICNET_ERROR_QUEUE_FULL;
+    }
+
+    memcpy(awaiting_packet, packet, sizeof(struct magicnet_packet));
+    awaiting_packet->flags |= MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING;
+    return 0;
+}
+
+/**
+ * @brief Marks the packet in the client->awaiting_packets array as processed
+ * \note The packet point must be the same pointer returned from magicnet_client_get_next_packet_to_process
+ * @param client 
+ * @param packet 
+ */
+void magicnet_client_mark_packet_processed(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    memset(packet, 0, sizeof(struct magicnet_packet));
+    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    {
+        if (&client->awaiting_packets[i] == packet)
+        {
+            packet->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+            break;
+        }
+    }
+}
+
 int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
 
-    magicnet_log("poll packets\n");
-    // Let's pretend we have no packets available for them.. just for now.
-    res = magicnet_client_write_packet(client, &(struct magicnet_packet){.type = MAGICNET_PACKET_TYPE_NOT_FOUND});
+    struct magicnet_packet* packet_to_process = NULL;
+    packet_to_process = magicnet_client_get_next_packet_to_process(client);
+    if (!packet_to_process)
+    {
+        res = magicnet_client_write_packet(client, &(struct magicnet_packet){.type = MAGICNET_PACKET_TYPE_NOT_FOUND});
+        goto out;
+
+    }
+
+    // We have a packet they could use.. Lets send it there way
+    res = magicnet_client_write_packet(client, packet_to_process);
     if (res < 0)
     {
         goto out;
     }
 
+    magicnet_client_mark_packet_processed(client, packet_to_process);
 out:
     return res;
 }
+
+int magicnet_client_process_user_defined_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    // We must find all the clients of the same program name
+    for (int i = 0; i < MAGICNET_MAX_CONNECTIONS; i++)
+    {
+        struct magicnet_client* cli = &client->server->clients[i];
+        if (!magicnet_client_in_use(client))
+        {
+            continue;
+        }
+
+        // Same program name as the sending client? Then add it to the packet queue of the connected client
+        if (strncmp(cli->program_name, client->program_name, sizeof(cli->program_name)) == 0)
+        {
+            magicnet_client_add_awaiting_packet(client, packet);
+        }
+    }
+    return res;
+}
+
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -447,6 +599,10 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
     {
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_process_packet_poll_packets(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_USER_DEFINED:
+        res = magicnet_client_process_user_defined_packet(client, packet);
         break;
 
     default:
