@@ -7,7 +7,7 @@ cd ./lib && make all
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Wed Aug 24 19:36:01 2022
+# Make data base, printed on Wed Aug 24 20:52:17 2022
 
 # Variables
 
@@ -266,7 +266,7 @@ VSCODE_PID = 4470
 
 build/magicnet.o: src/magicnet.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-24 19:35:54.458781947
+#  Last modified 2022-08-24 20:51:27.828641231
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 9):
@@ -279,10 +279,10 @@ all: build/vector.o build/magicnet.o build/log.o build/network.o
 #  File does not exist.
 #  File has been updated.
 #  Needs to be updated (-q is set).
- 
 # automatic
 # @ := all
 # automatic
+ 
 # % := 
 # automatic
 # * := 
@@ -304,7 +304,7 @@ all: build/vector.o build/magicnet.o build/log.o build/network.o
 
 build/log.o: src/log.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-24 19:35:55.018781919
+#  Last modified 2022-08-24 20:51:27.944535674
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 19):
@@ -325,7 +325,7 @@ Makefile:
 
 build/network.o: src/network.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-24 19:35:55.194781911
+#  Last modified 2022-08-24 20:51:28.176328843
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 14):
@@ -334,7 +334,7 @@ build/network.o: src/network.c
 # Not a target:
 src/magicnet.c:
 #  Implicit rule search has been done.
-#  Last modified 2022-08-18 20:28:32.891762663
+#  Last modified 2022-08-24 20:42:33.326067503
 #  File has been updated.
 #  Successfully updated.
 
@@ -369,13 +369,13 @@ clean:
 # Not a target:
 src/network.c:
 #  Implicit rule search has been done.
-#  Last modified 2022-08-18 20:42:22.427448435
+#  Last modified 2022-08-24 20:50:12.070614708
 #  File has been updated.
 #  Successfully updated.
 
 build/vector.o: src/vector/vector.c
 #  Implicit rule search has not been done.
-#  Last modified 2022-08-24 19:35:54.358781952
+#  Last modified 2022-08-24 20:51:27.720739509
 #  File has been updated.
 #  Successfully updated.
 #  recipe to execute (from 'Makefile', line 23):
@@ -395,9 +395,8 @@ build/vector.o: src/vector/vector.c
 # strcache performance: lookups = 37 / hit rate = 43%
 # hash-table stats:
 # Load=21/8192=0%, Rehash=0, Collisions=1/37=3%
-# Finished Make data base on Wed Aug 24 19:36:01 2022
+# Finished Make data base on Wed Aug 24 20:52:17 2022
 
- 
 # GNU Make 4.2.1
 # Built for x86_64-pc-linux-gnu
 # Copyright (C) 1988-2016 Free Software Foundation, Inc.
@@ -405,7 +404,7 @@ build/vector.o: src/vector/vector.c
 # This is free software: you are free to change and redistribute it.
 # There is NO WARRANTY, to the extent permitted by law.
 
-# Make data base, printed on Wed Aug 24 19:36:01 2022
+# Make data base, printed on Wed Aug 24 20:52:17 2022
 
 # Variables
 
@@ -527,6 +526,7 @@ GTK_MODULES = gail:atk-bridge
 VSCODE_AMD_ENTRYPOINT = vs/workbench/api/node/extensionHostProcess
 # environment
 HOME = /home/daniel
+ 
 # environment
 VSCODE_CLI = 1
 # environment
@@ -636,7 +636,7 @@ LANG = C
 # environment
 VSCODE_PID = 4470
 # variable set hash-table stats:
-# Load=113/1024=11%, Rehash=0, Collisions=17/147=12%
+# Load=113/1024=11%, Rehash=0, Collisions=17/149=11%
 
 # Pattern-specific Variable Values
 
@@ -678,12 +678,12 @@ all:
 # automatic
 # ? := 
 # variable set hash-table stats:
- 
-# Load=8/32=25%, Rehash=0, Collisions=4/17=24%
+# Load=8/32=25%, Rehash=0, Collisions=5/19=26%
 #  recipe to execute (from 'Makefile', line 2):
 	cd ./lib && $(MAKE) all
 	cd ./server && $(MAKE) all
 	cd ./example/MessageListenerApplication && $(MAKE) all
+	cd ./example/MessageSenderApplication && $(MAKE) all
 
 # Not a target:
 .SUFFIXES:
@@ -694,7 +694,7 @@ all:
 # Not a target:
 Makefile:
 #  Implicit rule search has been done.
-#  Last modified 2022-08-18 18:37:21.175241498
+#  Last modified 2022-08-24 20:29:01.474509947
 #  File has been updated.
 #  Successfully updated.
 
@@ -708,10 +708,11 @@ clean:
 #  Implicit rule search has not been done.
 #  Modification time never checked.
 #  File has not been updated.
-#  recipe to execute (from 'Makefile', line 8):
+#  recipe to execute (from 'Makefile', line 9):
 	cd ./lib && $(MAKE) clean
 	cd ./server && $(MAKE) clean
 	cd ./example/MessageListenerApplication && $(MAKE) clean
+	cd ./example/MessageSenderApplication && $(MAKE) clean
 
 # files hash-table stats:
 # Load=5/1024=0%, Rehash=0, Collisions=0/18=0%
@@ -727,6 +728,6 @@ clean:
 # strcache performance: lookups = 24 / hit rate = 33%
 # hash-table stats:
 # Load=16/8192=0%, Rehash=0, Collisions=1/24=4%
-# Finished Make data base on Wed Aug 24 19:36:01 2022
+# Finished Make data base on Wed Aug 24 20:52:17 2022
 
  

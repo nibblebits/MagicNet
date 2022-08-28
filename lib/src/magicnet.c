@@ -21,6 +21,9 @@ int magicnet_init()
 {
     structure_vec = vector_create(sizeof(struct magicnet_registered_structure));
     program_vec = vector_create(sizeof(struct magicnet_program));
+
+
+
     return 0;
 }
 
@@ -35,6 +38,7 @@ int magicnet_get_structure(int type, struct magicnet_registered_structure *struc
         {
             memcpy(struct_out, current_struct, sizeof(struct magicnet_registered_structure));
             res = 0;
+            break;
         }
         current_struct = vector_peek(structure_vec);
     }
@@ -53,7 +57,7 @@ int magicnet_get_structure(int type, struct magicnet_registered_structure *struc
 int magicnet_register_structure(long type, size_t size)
 {
     struct magicnet_registered_structure structure = {};
-    if (magicnet_get_structure(type, &structure) == 0)
+    if (magicnet_get_structure(type, &structure) >= 0)
     {
         return -1;
     }
@@ -82,7 +86,36 @@ struct magicnet_program *magicnet_get_program(const char *name)
     return program;
 }
 
-struct magicnet_packet *magicnet_next_packet(struct magicnet_program *program)
+int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet)
+{
+    struct magicnet_registered_structure structure = {};
+    struct magicnet_packet magicnet_packet= {};
+    if (magicnet_get_structure(packet_type, &structure) < 0)
+    {
+        return -1;
+    }
+
+    magicnet_packet.type = MAGICNET_PACKET_TYPE_USER_DEFINED;
+    magicnet_packet.payload.user_defined.type = packet_type;
+    strncpy(magicnet_packet.payload.user_defined.program_name, program->name, sizeof(magicnet_packet.payload.user_defined.program_name));
+    magicnet_packet.payload.user_defined.data = calloc(1, structure.size);
+    magicnet_packet.payload.user_defined.data_len = structure.size;
+    memcpy(magicnet_packet.payload.user_defined.data, packet, structure.size);
+    int res = magicnet_client_write_packet(program->client, &magicnet_packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    // Now we have sent the packet we can free the data payload.
+    if (magicnet_packet.payload.user_defined.data)
+    {
+        free(magicnet_packet.payload.user_defined.data);
+    }
+    return res;
+}
+int magicnet_next_packet(struct magicnet_program *program, void** packet_out)
 {
     int res = 0;
     struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
@@ -103,6 +136,12 @@ struct magicnet_packet *magicnet_next_packet(struct magicnet_program *program)
             goto out;
         }
         packet_found = true;
+        if (packet->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
+        {
+            // Someone sent as a dodgy packet.. we only want user defined packets.
+            // Do cleanup.
+            packet_found = false;
+        }
         if (packet->type == MAGICNET_PACKET_TYPE_NOT_FOUND)
         {
             packet_found = false;
@@ -111,12 +150,21 @@ struct magicnet_packet *magicnet_next_packet(struct magicnet_program *program)
         }
     }
 
-out:
+    int payload_packet_type = packet->payload.user_defined.type;
+    struct magicnet_registered_structure structure;
+    res = magicnet_get_structure(payload_packet_type, &structure);
     if (res < 0)
     {
-        free(packet);
+        // We aren't aware of this structure.
+        goto out;
     }
-    return packet;
+    res = payload_packet_type;
+    void* data = calloc(1, structure.size);
+    memcpy(data, packet->payload.user_defined.data, structure.size);
+    *packet_out = data;
+out:
+    free(packet);
+    return res;
 }
 
 struct magicnet_program *magicnet_program(const char *name)

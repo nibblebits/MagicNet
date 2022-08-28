@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "magicnet/magicnet.h"
 
-#define CHAT_PACKET 1
+#define CHAT_PACKET 56
 struct chat_packet
 {
     char message[60];
@@ -23,12 +23,16 @@ int main()
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
      while (1)
      {
-         struct magicnet_packet* packet = magicnet_next_packet(decentralized_program);
-    //     // if (packet->type == CHAT_PACKET)
-    //     // {
-    //     //     struct chat_packet* packet_data = packet->data;
-    //     //     printf("%s\n", data->message);
-    //     // }
-    //     // magicnet_free_packet(packet);
+            struct chat_packet* packet = NULL;
+            int type = magicnet_next_packet(decentralized_program, (void**)&packet);
+            switch(type)
+            {
+                case CHAT_PACKET:
+                    printf("testing: %s\n", packet->message);
+                break;
+
+                default: 
+                    printf("Bad packet %i\n",type);
+            }
      }
 }

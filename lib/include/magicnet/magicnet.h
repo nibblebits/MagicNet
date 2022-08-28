@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <time.h>
+#include <pthread.h>
 #include "magicnet/vector.h"
 #include "magicnet/config.h"
 
@@ -26,11 +27,11 @@ struct magicnet_program
 enum
 {
     MAGICNET_PACKET_TYPE_EMPTY_PACKET,
-    MAGICNET_PACKET_TYPE_USER_DEFINED,
+    MAGICNET_PACKET_TYPE_USER_DEFINED=158,
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
-    MAGICNET_PACKET_TYPE_NOT_FOUND
+    MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
 enum
@@ -41,7 +42,9 @@ enum
 
 enum
 {
-    MAGICNET_ERROR_QUEUE_FULL = -1000
+    MAGICNET_ERROR_QUEUE_FULL = -1000,
+    MAGICNET_ERROR_NOT_FOUND = -1001,
+    MAGICNET_ACKNOWLEGED_ALL_OKAY = 0
 };
 struct magicnet_packet
 {
@@ -87,6 +90,7 @@ struct magicnet_server
 {
     int sock;
     struct magicnet_client clients[MAGICNET_MAX_CONNECTIONS];
+    pthread_mutex_t lock;
 };
 
 enum
@@ -102,9 +106,10 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server);
 int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client* client, const char* program_name);
 struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int port, int flags, const char* program_name);
-struct magicnet_packet* magicnet_next_packet(struct magicnet_program* program);
+int magicnet_next_packet(struct magicnet_program *program, void** packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet);
+int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
 int magicnet_send_pong(struct magicnet_client* client);
 
 int magicnet_init();
