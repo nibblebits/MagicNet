@@ -146,15 +146,18 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
         return NULL;
     }
 
+    magicnet_server_lock(server);
     struct magicnet_client *mclient = magicnet_find_free_client(server);
     if (!mclient)
     {
         // We couldn't get a free client...
         magicnet_log("%s clients are full\n", __FUNCTION__);
+        magicnet_server_unlock(server);
         return NULL;
     }
 
     magicnet_init_client(mclient, server, connfd);
+    magicnet_server_unlock(server);
     return mclient;
 }
 
@@ -286,7 +289,7 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
     packet_out->payload.user_defined.data_len = data_size;
     packet_out->payload.user_defined.data = data;
     strncpy(packet_out->payload.user_defined.program_name, client->program_name, sizeof(packet_out->payload.user_defined.program_name));
-    
+
     // Send a received back
     res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY);
 out:
@@ -494,7 +497,7 @@ struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client
     struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
     if (magicnet_client_read_packet(client, packet) < 0)
     {
-        free(packet);
+        magicnet_free_packet(packet);
         return NULL;
     }
 
@@ -530,6 +533,24 @@ struct magicnet_packet *magicnet_client_get_next_packet_to_process(struct magicn
     return packet;
 }
 
+/**
+ * @brief Copies the packet including copying all internal pointers and creating new memory
+ * for the destination packet
+ * 
+ * @param packet_in 
+ * @param packet_out 
+ */
+void magicnet_copy_packet(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+{
+    memcpy(packet_out, packet_in, sizeof(struct magicnet_packet));
+    switch(packet_in->type)
+    {
+        case MAGICNET_PACKET_TYPE_USER_DEFINED:
+            packet_out->payload.user_defined.data = calloc(1, packet_out->payload.user_defined.data_len);
+            memcpy(packet_out->payload.user_defined.data, packet_in->payload.user_defined.data, packet_out->payload.user_defined.data_len);
+        break;
+    }
+}
 int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     struct magicnet_packet *awaiting_packet = magicnet_client_get_available_free_to_use_packet(client);
@@ -538,7 +559,7 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
         return MAGICNET_ERROR_QUEUE_FULL;
     }
 
-    memcpy(awaiting_packet, packet, sizeof(struct magicnet_packet));
+    magicnet_copy_packet(awaiting_packet, packet);
     awaiting_packet->flags |= MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING;
     awaiting_packet->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     return 0;
@@ -588,6 +609,10 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
         goto out;
     }
 
+    // Free the internal pointers of this packet since we don't care about it anymore as its been sent.
+    // Note dont use packet_free as this packet is declared in an array its not a pointer. It will
+    // be reused for a different packet once marked as processed.
+    magicnet_free_packet_pointers(packet_to_process);
     magicnet_client_mark_packet_processed(client, packet_to_process);
 out:
     return res;
@@ -640,6 +665,7 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
     return res;
 }
 
+
 int magicnet_client_manage_next_packet(struct magicnet_client *client)
 {
     int res = 0;
@@ -661,7 +687,7 @@ int magicnet_client_manage_next_packet(struct magicnet_client *client)
 out:
     if (packet)
     {
-        free(packet);
+        magicnet_free_packet(packet);
     }
     return res;
 }

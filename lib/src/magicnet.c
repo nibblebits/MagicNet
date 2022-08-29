@@ -69,6 +69,47 @@ int magicnet_register_structure(long type, size_t size)
     return 0;
 }
 
+
+void magicnet_free_packet_pointers(struct magicnet_packet* packet)
+{   
+    if (!packet)
+    {
+        return;
+    }
+    switch(packet->type)
+    {
+        case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+
+        break;
+        
+        case MAGICNET_PACKET_TYPE_NOT_FOUND:
+
+        break;
+
+        case MAGICNET_PACKET_TYPE_PING:
+
+        break;
+
+        case MAGICNET_PACKET_TYPE_POLL_PACKETS:
+
+        break;
+
+        case MAGICNET_PACKET_TYPE_PONG:
+
+        break;
+
+        case MAGICNET_PACKET_TYPE_USER_DEFINED:
+            free(packet->payload.user_defined.data);
+        break;
+    }
+
+}
+
+void magicnet_free_packet(struct magicnet_packet* packet)
+{   
+    magicnet_free_packet_pointers(packet);
+    free(packet);
+}
 struct magicnet_program *magicnet_get_program(const char *name)
 {
     vector_set_peek_pointer(program_vec, 0);
@@ -86,7 +127,19 @@ struct magicnet_program *magicnet_get_program(const char *name)
     return program;
 }
 
-int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet)
+void magicnet_reconnect(struct magicnet_program* program)
+{
+    struct magicnet_client *client = magicnet_tcp_network_connect(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, program->name);
+    if (!client)
+    {
+        return;
+    }
+    program->client = client;
+
+}
+
+
+int _magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet, bool reconnect_if_required)
 {
     struct magicnet_registered_structure structure = {};
     struct magicnet_packet magicnet_packet= {};
@@ -113,11 +166,23 @@ out:
     {
         free(magicnet_packet.payload.user_defined.data);
     }
+    if (res < 0)
+    {
+        if (reconnect_if_required)
+        {
+            res = _magicnet_send_packet(program, packet_type, packet, false);
+        }
+    }
     return res;
 }
-int magicnet_next_packet(struct magicnet_program *program, void** packet_out)
+int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet)
 {
-    int res = 0;
+   return _magicnet_send_packet(program, packet_type, packet, true);
+}
+
+int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, bool reconnect_if_neccessary)
+{
+   int res = 0;
     struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
     struct magicnet_client *client = program->client;
 
@@ -163,8 +228,18 @@ int magicnet_next_packet(struct magicnet_program *program, void** packet_out)
     memcpy(data, packet->payload.user_defined.data, structure.size);
     *packet_out = data;
 out:
+    if (res < 0 && reconnect_if_neccessary)
+    {
+        magicnet_reconnect(program);
+        res = _magicnet_next_packet(program, packet_out, false);
+    }
     free(packet);
     return res;
+}
+
+int magicnet_next_packet(struct magicnet_program *program, void** packet_out)
+{
+    return _magicnet_next_packet(program, packet_out, true);
 }
 
 struct magicnet_program *magicnet_program(const char *name)

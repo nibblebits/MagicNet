@@ -111,6 +111,8 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
 int magicnet_send_pong(struct magicnet_client* client);
+void magicnet_free_packet(struct magicnet_packet* packet);
+void magicnet_free_packet_pointers(struct magicnet_packet* packet);
 
 int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
