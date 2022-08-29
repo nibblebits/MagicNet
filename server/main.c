@@ -14,6 +14,13 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    int res = magicnet_network_thread_start(server);
+    if (res < 0)
+    {
+        printf("failed to start magic server thread\n");
+        return -1;
+    }
+    
     // Accept the clients
     while(1)
     {

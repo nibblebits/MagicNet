@@ -4,6 +4,7 @@
         "log.h": "c",
         "stdlib.h": "c",
         "typeinfo": "c",
-        "wait.h": "c"
+        "wait.h": "c",
+        "config.h": "c"
     }
 }

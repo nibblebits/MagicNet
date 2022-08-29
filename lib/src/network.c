@@ -19,6 +19,7 @@
 #include <assert.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -27,11 +28,80 @@
 #include "magicnet/log.h"
 
 int magicnet_send_pong(struct magicnet_client *client);
+void magicnet_close(struct magicnet_client *client);
+
+void magicnet_server_create_files()
+{
+    // We should setup the seeder for when we use random.
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    /* using nano-seconds instead of seconds */
+    srand((time_t)ts.tv_nsec);
+
+    char data_directory[PATH_MAX];
+    sprintf(data_directory, "%s/%s", getenv("HOME"), ".magicnet");
+    DIR *dir = opendir(data_directory);
+    if (!dir)
+    {
+        // First time setup
+        mkdir(data_directory, 0775);
+    }
+}
+bool magicnet_loaded_ips_full(struct magicnet_server *server)
+{
+    return server->total_loaded_ips < MAGICNET_MAX_LOADED_IP_ADDRESSES;
+}
+int magicnet_loaded_ips_add(struct magicnet_server *server, const char *ip_address)
+{
+    if (magicnet_loaded_ips_full(server))
+    {
+        magicnet_log("%s the ip list is full\n", __FUNCTION__);
+        return -1;
+    }
+}
+bool magicnet_is_ip_loaded(struct magicnet_server *server, const char *ip_address)
+{
+    for (int i = 0; i < MAGICNET_MAX_LOADED_IP_ADDRESSES; i++)
+    {
+        if (strncmp(server->loaded_ip_addresses[i], ip_address, strlen(server->loaded_ip_addresses[i])) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+int magicnet_load_ips(struct magicnet_server *server)
+{
+    // Normally we would load randomly but for now in order.
+    size_t read = 0;
+    size_t len = 0;
+    char *line = NULL;
+    while ((read = getline(&line, &len, server->ip_file)) != -1)
+    {
+        magicnet_loaded_ips_add(server, line);
+    }
+    return 0;
+}
+
+int magicnet_ip_file_add_ip(struct magicnet_server *server, const char *ip_address)
+{
+    int res = magicnet_loaded_ips_add(server, ip_address);
+    if (res < 0)
+    {
+        return -1;
+    }
+    return fwrite(ip_address, strlen(ip_address), 1, server->ip_file) > 0 ? 0 : -1;
+}
 
 struct magicnet_server *magicnet_server_start()
 {
     int sockfd, len;
     struct sockaddr_in servaddr, cli;
+
+    magicnet_server_create_files();
 
     // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -62,7 +132,7 @@ struct magicnet_server *magicnet_server_start()
         return NULL;
     }
 
-    if ((listen(sockfd, MAGICNET_MAX_CONNECTIONS)) != 0)
+    if ((listen(sockfd, MAGICNET_MAX_INCOMING_CONNECTIONS)) != 0)
     {
         magicnet_log("TCP Server Listen failed...\n");
         return NULL;
@@ -76,6 +146,18 @@ struct magicnet_server *magicnet_server_start()
         return NULL;
     }
 
+    char ip_file[PATH_MAX];
+    sprintf(ip_file, "%s/%s/%s", getenv("HOME"), ".magicnet", "ips.txt");
+
+    FILE *ip_file_p = fopen(ip_file, "a");
+    if (!ip_file_p)
+    {
+        magicnet_log("IP file could not be opened\n");
+        return NULL;
+    }
+    server->ip_file = ip_file_p;
+    magicnet_load_ips(server);
+
     return server;
 }
 
@@ -86,12 +168,26 @@ bool magicnet_client_in_use(struct magicnet_client *client)
 
 struct magicnet_client *magicnet_find_free_client(struct magicnet_server *server)
 {
-    for (int i = 0; i < MAGICNET_MAX_CONNECTIONS; i++)
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
         if (!magicnet_client_in_use(&server->clients[i]))
         {
             bzero(&server->clients[i], sizeof(struct magicnet_client));
             return &server->clients[i];
+        }
+    }
+
+    return NULL;
+}
+
+struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_server *server)
+{
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    {
+        if (!magicnet_client_in_use(&server->outgoing_clients[i]))
+        {
+            bzero(&server->outgoing_clients[i], sizeof(struct magicnet_client));
+            return &server->outgoing_clients[i];
         }
     }
 
@@ -119,6 +215,74 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     {
         client->awaiting_packets[i].flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     }
+}
+
+struct magicnet_client *magicnet_tcp_network_connect_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name)
+{
+    int sockfd;
+    struct sockaddr_in servaddr, cli;
+
+    struct in_addr addr = {};
+    if (inet_aton(ip_address, &addr) == 0)
+    {
+        return NULL;
+    }
+
+    // socket create and varification
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        return NULL;
+    }
+
+    bzero(&servaddr, sizeof(servaddr));
+
+    // assign IP, PORT
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr = addr;
+    servaddr.sin_port = htons(port);
+
+    struct timeval timeout;
+    timeout.tv_sec = MAGICNET_CLIENT_TIMEOUT_SECONDS;
+    timeout.tv_usec = 0;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                   sizeof timeout) < 0)
+    {
+        // giveme_log("Failed to set socket timeout\n");
+        return NULL;
+    }
+
+    // connect the client socket to server socket
+    if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) != 0)
+    {
+        return NULL;
+    }
+
+    magicnet_server_lock(server);
+    struct magicnet_client *mclient = magicnet_find_free_outgoing_client(server);
+    if (!mclient)
+    {
+        return NULL;
+    }
+    magicnet_init_client(mclient, server, sockfd);
+    mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+    magicnet_server_unlock(server);
+
+    if (program_name)
+    {
+        memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
+    }
+
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name);
+    if (res < 0)
+    {
+        magicnet_close(mclient);
+        mclient = NULL;
+    }
+
+    // Let's find a free slot
+    return mclient;
 }
 
 struct magicnet_client *magicnet_accept(struct magicnet_server *server)
@@ -536,18 +700,18 @@ struct magicnet_packet *magicnet_client_get_next_packet_to_process(struct magicn
 /**
  * @brief Copies the packet including copying all internal pointers and creating new memory
  * for the destination packet
- * 
- * @param packet_in 
- * @param packet_out 
+ *
+ * @param packet_in
+ * @param packet_out
  */
-void magicnet_copy_packet(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
     memcpy(packet_out, packet_in, sizeof(struct magicnet_packet));
-    switch(packet_in->type)
+    switch (packet_in->type)
     {
-        case MAGICNET_PACKET_TYPE_USER_DEFINED:
-            packet_out->payload.user_defined.data = calloc(1, packet_out->payload.user_defined.data_len);
-            memcpy(packet_out->payload.user_defined.data, packet_in->payload.user_defined.data, packet_out->payload.user_defined.data_len);
+    case MAGICNET_PACKET_TYPE_USER_DEFINED:
+        packet_out->payload.user_defined.data = calloc(1, packet_out->payload.user_defined.data_len);
+        memcpy(packet_out->payload.user_defined.data, packet_in->payload.user_defined.data, packet_out->payload.user_defined.data_len);
         break;
     }
 }
@@ -625,7 +789,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
     magicnet_server_lock(client->server);
 
     // We must find all the clients of the same program name
-    for (int i = 0; i < MAGICNET_MAX_CONNECTIONS; i++)
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
         struct magicnet_client *cli = &client->server->clients[i];
         if (!magicnet_client_in_use(client))
@@ -660,11 +824,9 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
     default:
         magicnet_log("%s Illegal packet provided\n", __FUNCTION__);
         res = -1;
-        ;
     }
     return res;
 }
-
 
 int magicnet_client_manage_next_packet(struct magicnet_client *client)
 {
@@ -814,6 +976,110 @@ int magicnet_client_thread_start(struct magicnet_client *client)
 {
     pthread_t threadId;
     if (pthread_create(&threadId, NULL, &magicnet_client_thread, client))
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+bool magicnet_server_is_ip_connected(struct magicnet_server *server, const char *ip_address)
+{
+    struct in_addr addr = {};
+    if (inet_aton(ip_address, &addr) == 0)
+    {
+        return false;
+    }
+
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    {
+        struct magicnet_client *client = &server->clients[i];
+        if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED &&
+            memcmp(&client->client_info.sin_addr, &addr, sizeof(client->client_info.sin_addr) == 0))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server)
+{
+    const char *conn_ip = NULL;
+    for (int i = 0; i < MAGICNET_MAX_LOADED_IP_ADDRESSES; i++)
+    {
+        const char *ip = server->loaded_ip_addresses[i];
+        magicnet_server_lock(server);
+        if (ip && !magicnet_server_is_ip_connected(server, ip))
+        {
+            conn_ip = ip;
+        }
+        magicnet_server_unlock(server);
+    }
+
+    return conn_ip;
+}
+
+void *magicnet_server_client_thread(void *_client)
+{
+    struct magicnet_client *client = _client;
+    magicnet_log("%s new outbound connection created", __FUNCTION__);
+
+    while (1)
+    {
+        usleep(200000);
+    }
+}
+
+void magicnet_server_attempt_new_connections(struct magicnet_server *server)
+{
+    const char *ip = magicnet_server_get_next_ip_to_connect_to(server);
+    if (!ip)
+    {
+        return;
+    }
+
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_server(server, ip, MAGICNET_SERVER_PORT, MAGICNET_LISTEN_ALL_PROGRAM);
+    if (client)
+    {
+        pthread_t threadId;
+        if (pthread_create(&threadId, NULL, &magicnet_server_client_thread, client))
+        {
+            // Error thread not created.
+            return;
+        }
+    }
+}
+
+bool magicnet_server_should_make_new_connections(struct magicnet_server *server)
+{
+    return (time(NULL) - server->last_new_connection_attempt) >= MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS;
+}
+int magicnet_server_process(struct magicnet_server *server)
+{
+    int res = 0;
+    if (magicnet_server_should_make_new_connections(server))
+    {
+        magicnet_server_attempt_new_connections(server);
+        server->last_new_connection_attempt = time(NULL);
+    }
+
+    return res;
+}
+void *magicnet_server_thread(void *_server)
+{
+    struct magicnet_server *server = _server;
+    while (1)
+    {
+        magicnet_server_process(server);
+        usleep(500000);
+    }
+}
+int magicnet_network_thread_start(struct magicnet_server *server)
+{
+    pthread_t threadId;
+    if (pthread_create(&threadId, NULL, &magicnet_server_thread, server))
     {
         return -1;
     }

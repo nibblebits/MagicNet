@@ -89,8 +89,22 @@ struct magicnet_client
 struct magicnet_server
 {
     int sock;
-    struct magicnet_client clients[MAGICNET_MAX_CONNECTIONS];
+    // Clients our server accepted.
+    struct magicnet_client clients[MAGICNET_MAX_INCOMING_CONNECTIONS];
+
+    // Clients our server initiated the connection for
+    struct magicnet_client outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
+
     pthread_mutex_t lock;
+
+
+    // BELOW MUST BE PROCESSED ONLY BY THE SERVER THREAD
+    off_t last_new_connection_attempt;
+    const char* loaded_ip_addresses[MAGICNET_MAX_LOADED_IP_ADDRESSES];
+    size_t total_loaded_ips;
+    FILE* ip_file;
+    // END
+
 };
 
 enum
@@ -100,7 +114,7 @@ enum
 
 };
 
-
+int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
 int magicnet_client_thread_start(struct magicnet_client *client);
