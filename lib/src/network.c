@@ -544,7 +544,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         res = magicnet_client_read_not_found_packet(client, packet_out);
         break;
     default:
-        magicnet_log("%s unexpected packet was provided\n", __FUNCTION__);
+        magicnet_log("%s unexpected packet was provided %i\n", __FUNCTION__, packet_type);
         res = -1;
         break;
     }
