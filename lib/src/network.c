@@ -517,6 +517,13 @@ int magicnet_client_read_server_poll_packet(struct magicnet_client *client, stru
     return 0;
 }
 
+int magicnet_client_read_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    return 0;
+}
+
+
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -529,6 +536,10 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     switch (packet_type)
     {
+
+    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+        res = magicnet_client_read_packet_empty(client, packet_out);
+        break;
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
         res = magicnet_client_read_user_defined_packet(client, packet_out);
         break;
@@ -605,6 +616,13 @@ int magicnet_client_write_packet_server_poll(struct magicnet_client *client, str
     return 0;
 }
 
+
+int magicnet_client_write_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+
+    return 0;
+}
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -617,6 +635,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     switch (packet->type)
     {
 
+    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+        res = magicnet_client_write_packet_empty(client, packet);
+
+        break;
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_write_packet_poll_packets(client, packet);
         break;
