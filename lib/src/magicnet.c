@@ -183,7 +183,7 @@ int magicnet_send_packet(struct magicnet_program *program, int packet_type, void
 int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, bool reconnect_if_neccessary)
 {
    int res = 0;
-    struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
+    struct magicnet_packet *packet = magicnet_packet_new();
     struct magicnet_client *client = program->client;
 
     // First we poll to see if thiers packets for us

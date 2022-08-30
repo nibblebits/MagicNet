@@ -31,6 +31,7 @@ enum
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
+    MAGICNET_PACKET_TYPE_SERVER_POLL,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
@@ -82,6 +83,7 @@ struct magicnet_client
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
     struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
     struct sockaddr_in client_info;
+    off_t relay_packet_pos;
     struct magicnet_server *server;
 };
 
@@ -94,6 +96,14 @@ struct magicnet_server
 
     // Clients our server initiated the connection for
     struct magicnet_client outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
+
+    // Packets that should be relayed. Note when this is full it loops back around erasing the first packet again.
+    struct relay_packets
+    {
+        struct magicnet_packet packets[MAGICNET_MAX_AWAITING_PACKETS];
+        off_t pos;
+    } relay_packets;
+
 
     pthread_mutex_t lock;
 
@@ -127,7 +137,7 @@ int magicnet_send_packet(struct magicnet_program *program, int packet_type, void
 int magicnet_send_pong(struct magicnet_client* client);
 void magicnet_free_packet(struct magicnet_packet* packet);
 void magicnet_free_packet_pointers(struct magicnet_packet* packet);
-
+struct magicnet_packet* magicnet_packet_new();
 int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
