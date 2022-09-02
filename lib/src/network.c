@@ -1253,7 +1253,7 @@ int magicnet_server_poll(struct magicnet_client *client)
 
 
     // Alright we got a packet to relay.. Lets deal with it
-    res = magicnet_server_poll_process(client, &packet);
+    res = magicnet_server_poll_process(client, packet);
     if (res < 0)
     {
         goto out;
