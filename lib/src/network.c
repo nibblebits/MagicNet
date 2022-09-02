@@ -626,18 +626,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     packet_out->id = packet_id;
     packet_out->type = packet_type;
 
-    magicnet_server_lock(client->server);
-    if (magicnet_server_has_seen_packet(client->server, packet_out))
-    {
-        // If we have seen this packet before then we shouldnt process it again.
-        res = MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
-        magicnet_server_unlock(client->server);
-        goto out;
-    }
-
-    magicnet_server_add_seen_packet(client->server, packet_out);
-    magicnet_server_unlock(client->server);
-
 out:
     return res;
 }
