@@ -353,6 +353,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     }
 
     magicnet_init_client(mclient, server, connfd, &client);
+    mclient->relay_packet_pos = server->relay_packets.pos;
     magicnet_server_unlock(server);
     return mclient;
 }
