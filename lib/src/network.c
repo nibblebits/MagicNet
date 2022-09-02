@@ -533,6 +533,11 @@ int magicnet_client_read_server_sync_packet(struct magicnet_client *client, stru
         {
             goto out;
         }
+
+        if (packet_out->payload.sync.packet->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+        {
+            magicnet_log("non empty packet provided\n");
+        }
     }
 
     packet_out->payload.sync.flags = flags;
@@ -647,7 +652,7 @@ int magicnet_client_write_packet_server_poll(struct magicnet_client *client, str
         if (packet->payload.sync.packet->type == MAGICNET_PACKET_TYPE_SERVER_SYNC)
         {
             // This will result in an infinite loop, to prevent denial of service attacks we must refuse
-            magicnet_log("%s Attempting to provide a sync packet as server poll payload. This may result in an infinite loop sois not allowed\n", __FUNCTION__);
+            magicnet_log("%s Attempting to provide a sync packet as server poll payload. This may result in an infinite loop so is not allowed\n", __FUNCTION__);
             res = -1;
             goto out;
         }
