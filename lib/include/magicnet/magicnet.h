@@ -55,6 +55,8 @@ enum
 };
 struct magicnet_packet
 {
+    // Random ID for the packet, prevents duplicate packets.
+    long id;
     // The type of this packet see above.
     int type;
     int flags;
@@ -115,6 +117,14 @@ struct magicnet_server
         struct magicnet_packet packets[MAGICNET_MAX_AWAITING_PACKETS];
         off_t pos;
     } relay_packets;
+
+    // The packets that have been seen already.. If we encounter them again they should be ignored
+    struct seen_packets
+    {
+        long packet_ids[MAGICNET_MAX_AWAITING_PACKETS];
+        off_t pos;
+    } seen_packets;
+
 
 
     pthread_mutex_t lock;

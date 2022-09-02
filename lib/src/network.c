@@ -33,7 +33,8 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new()
 {
-    return calloc(1, sizeof(struct magicnet_packet));
+    struct magicnet_packet* packet = calloc(1, sizeof(struct magicnet_packet));
+    packet->id = rand() % 999999999;
 }
 
 void magicnet_server_create_files()
@@ -187,10 +188,34 @@ struct magicnet_server *magicnet_server_start()
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
         server->relay_packets.packets[i].flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+        server->seen_packets.packet_ids[i ]= -1;
     }
 
+    srand(time(NULL));
     return server;
 }
+
+
+bool magicnet_server_has_seen_packet(struct magicnet_server* server, struct magicnet_packet* packet)
+{
+    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    {
+        if (server->seen_packets.packet_ids[i] == packet->id)
+            return true;
+    }
+
+    return false;
+}
+
+int magicnet_server_add_seen_packet(struct magicnet_server *server, struct magicnet_packet *packet)
+{
+    // Do we already have this packet to relay?
+    long* seen_packet_id_ptr = &server->seen_packets.packet_ids[server->seen_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
+    *seen_packet_id_ptr = packet->id;
+    server->seen_packets.pos++;
+    return 0;
+}
+
 
 bool magicnet_client_in_use(struct magicnet_client *client)
 {
@@ -557,7 +582,15 @@ int magicnet_client_read_packet_empty(struct magicnet_client *client, struct mag
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
+    int packet_id = 0;
     int packet_type = 0;
+
+    packet_id = magicnet_read_int(client);
+    if (packet_id < 0)
+    {
+        return -1;
+    }
+
     packet_type = magicnet_read_int(client);
     if (packet_type < 0)
     {
@@ -589,8 +622,18 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         res = -1;
         break;
     }
+    packet_out->id = packet_id;
     packet_out->type = packet_type;
 
+    if (magicnet_server_has_seen_packet(client->server, packet_out))
+    {
+        // If we have seen this packet before then we shouldnt process it again.
+        res = -1;
+        goto out;
+    }
+
+    magicnet_server_add_seen_packet(client->server, packet_out);
+out:
     return res;
 }
 
@@ -674,6 +717,12 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
+    res = magicnet_write_int(client, packet->id);
+    if (res < 0)
+    {
+        return res;
+    }
+
     res = magicnet_write_int(client, packet->type);
     if (res < 0)
     {
@@ -848,8 +897,10 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
     return 0;
 }
 
+
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
 {
+    // Do we already have this packet to relay?
     struct magicnet_packet *free_relay_packet = &server->relay_packets.packets[server->relay_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
     if (!(free_relay_packet->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
@@ -858,7 +909,7 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
 
     magicnet_copy_packet(free_relay_packet, packet);
     free_relay_packet->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
-    magicnet_log("wrote to %i\n", server->relay_packets.pos);
+
     server->relay_packets.pos++;
     return 0;
 }
@@ -876,8 +927,6 @@ struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_cli
     if (!(packet->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
         // Yeah we had a valid packet we can use this.
-            magicnet_log("wrote to %i\n", client->relay_packet_pos);
-
         client->relay_packet_pos++;
     }
     return packet;

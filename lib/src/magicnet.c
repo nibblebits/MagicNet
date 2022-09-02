@@ -21,8 +21,7 @@ int magicnet_init()
 {
     structure_vec = vector_create(sizeof(struct magicnet_registered_structure));
     program_vec = vector_create(sizeof(struct magicnet_program));
-
-
+    srand(time(NULL));
 
     return 0;
 }
