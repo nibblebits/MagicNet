@@ -30,7 +30,7 @@
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet);
-
+int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new()
 {
     return calloc(1, sizeof(struct magicnet_packet));
@@ -512,17 +512,39 @@ int magicnet_client_read_not_found_packet(struct magicnet_client *client, struct
     return 0;
 }
 
-int magicnet_client_read_server_poll_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+int magicnet_client_read_server_sync_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
-    return 0;
+    int res = 0;
+    int flags = 0;
+
+    flags = magicnet_read_int(client);
+    if (flags < 0)
+    {
+        res = -1;
+        goto out;
+    }
+
+    if (flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
+    {
+        // They also sent us a packet of their own in this sync.. Lets read it
+        packet_out->payload.sync.packet = magicnet_packet_new();
+        res = magicnet_client_read_packet(client, packet_out->payload.sync.packet);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+    packet_out->payload.sync.flags = flags;
+
+out:
+    return res;
 }
 
 int magicnet_client_read_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     return 0;
 }
-
-
 
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
@@ -548,8 +570,8 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         res = magicnet_client_read_poll_packets_packet(client, packet_out);
         break;
 
-    case MAGICNET_PACKET_TYPE_SERVER_POLL:
-        res = magicnet_client_read_server_poll_packet(client, packet_out);
+    case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+        res = magicnet_client_read_server_sync_packet(client, packet_out);
         break;
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
         res = magicnet_client_read_not_found_packet(client, packet_out);
@@ -612,10 +634,28 @@ out:
 
 int magicnet_client_write_packet_server_poll(struct magicnet_client *client, struct magicnet_packet *packet)
 {
+    int res = 0;
+    res = magicnet_write_int(client, packet->payload.sync.flags);
+    if (res < 0)
+    {
+        goto out;
+    }
 
-    return 0;
+    if (packet->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
+    {
+        // We need to send the packet
+        if (packet->payload.sync.packet->type == MAGICNET_PACKET_TYPE_SERVER_SYNC)
+        {
+            // This will result in an infinite loop, to prevent denial of service attacks we must refuse
+            magicnet_log("%s Attempting to provide a sync packet as server poll payload. This may result in an infinite loop sois not allowed\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+        res = magicnet_client_write_packet(client, packet->payload.sync.packet);
+    }
+out:
+    return res;
 }
-
 
 int magicnet_client_write_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -651,7 +691,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_client_write_packet_not_found(client, packet);
         break;
 
-    case MAGICNET_PACKET_TYPE_SERVER_POLL:
+    case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_write_packet_server_poll(client, packet);
         break;
     }
@@ -904,7 +944,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
     return res;
 }
 
-int magicnet_client_process_server_poll_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+int magicnet_client_process_server_sync_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
@@ -918,6 +958,16 @@ int magicnet_client_process_server_poll_packet(struct magicnet_client *client, s
     if (res < 0)
     {
         goto out;
+    }
+
+    // Do we also have a packet from them?
+    if (packet->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
+    {
+        res = magicnet_server_poll_process(client, packet->payload.sync.packet);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
 
 out:
@@ -938,8 +988,8 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         res = magicnet_client_process_user_defined_packet(client, packet);
         break;
 
-    case MAGICNET_PACKET_TYPE_SERVER_POLL:
-        res = magicnet_client_process_server_poll_packet(client, packet);
+    case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+        res = magicnet_client_process_server_sync_packet(client, packet);
         break;
 
     default:
@@ -1095,7 +1145,15 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 int magicnet_server_poll(struct magicnet_client *client)
 {
     int res = 0;
-    res = magicnet_client_write_packet(client, &(struct magicnet_packet){.type=MAGICNET_PACKET_TYPE_SERVER_POLL});
+
+    // We also want to send a packet of our own
+    int flags = MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
+
+    struct magicnet_packet *packet_to_relay = magicnet_packet_new();
+    magicnet_server_lock(client->server);
+    magicnet_copy_packet(packet_to_relay, magicnet_client_next_packet_to_relay(client));
+    magicnet_server_unlock(client->server);
+    res = magicnet_client_write_packet(client, &(struct magicnet_packet){.type = MAGICNET_PACKET_TYPE_SERVER_SYNC, .payload.sync.flags = flags, .payload.sync.packet = packet_to_relay});
     if (res < 0)
     {
         goto out;
@@ -1122,6 +1180,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     }
 
 out:
+    magicnet_free_packet(packet_to_relay);
     magicnet_free_packet_pointers(&packet);
     return res;
 }

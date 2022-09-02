@@ -99,8 +99,12 @@ void magicnet_free_packet_pointers(struct magicnet_packet* packet)
         break;
 
         case MAGICNET_PACKET_TYPE_USER_DEFINED:
-            free(packet->payload.user_defined.data);
+            magicnet_free_packet(packet->payload.sync.packet);
         break;
+
+        case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+            (packet->payload.sync.packet);
+            break;
     }
 
 }

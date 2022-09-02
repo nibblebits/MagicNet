@@ -31,7 +31,7 @@ enum
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
-    MAGICNET_PACKET_TYPE_SERVER_POLL,
+    MAGICNET_PACKET_TYPE_SERVER_SYNC,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
@@ -39,6 +39,12 @@ enum
 {
     MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE = 0b00000001,
     MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING = 0b00000010,
+};
+
+enum
+{
+    // Sent when the receiver of a packet should expect a packet to be sent upon reading this flag.
+    MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET = 0b00000001
 };
 
 enum
@@ -69,6 +75,12 @@ struct magicnet_packet
                 // Pointer to the actual packet data known by the application using the network
                 void *data;
             } user_defined;
+
+            struct sync
+            {
+                int flags;
+                struct magicnet_packet* packet;
+            } sync;
 
         };
     } payload;
