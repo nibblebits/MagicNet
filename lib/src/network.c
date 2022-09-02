@@ -35,6 +35,7 @@ struct magicnet_packet *magicnet_packet_new()
 {
     struct magicnet_packet* packet = calloc(1, sizeof(struct magicnet_packet));
     packet->id = rand() % 999999999;
+    return packet;
 }
 
 void magicnet_server_create_files()

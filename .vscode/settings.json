@@ -5,6 +5,7 @@
         "stdlib.h": "c",
         "typeinfo": "c",
         "wait.h": "c",
-        "config.h": "c"
+        "config.h": "c",
+        "fcntl.h": "c"
     }
 }
