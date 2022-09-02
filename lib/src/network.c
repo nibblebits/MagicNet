@@ -1068,6 +1068,10 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         res = magicnet_client_process_server_sync_packet(client, packet);
         break;
 
+    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+        //empty..
+        res = 0;
+        break;
     default:
         magicnet_log("%s Illegal packet provided\n", __FUNCTION__);
         res = -1;
