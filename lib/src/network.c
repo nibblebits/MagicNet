@@ -628,7 +628,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     if (magicnet_server_has_seen_packet(client->server, packet_out))
     {
         // If we have seen this packet before then we shouldnt process it again.
-        res = -1;
+        res = -MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
         goto out;
     }
 
@@ -827,10 +827,16 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
 struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client)
 {
     struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
-    if (magicnet_client_read_packet(client, packet) < 0)
+    int res = magicnet_client_read_packet(client, packet);
+    if (res < 0)
     {
         magicnet_free_packet(packet);
-        return NULL;
+        packet = NULL;
+        if (res == MAGICNET_ERROR_RECEIVED_PACKET_BEFORE)
+        {
+            // We received the packet before.. Therefore lets just send back a blank packet so it can be easily ignored
+            packet = magicnet_packet_new();
+        }
     }
 
     return packet;
