@@ -858,6 +858,7 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
 
     magicnet_copy_packet(free_relay_packet, packet);
     free_relay_packet->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+    magicnet_log("wrote to %i\n", server->relay_packets.pos);
     server->relay_packets.pos++;
     return 0;
 }
@@ -875,6 +876,8 @@ struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_cli
     if (!(packet->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
         // Yeah we had a valid packet we can use this.
+            magicnet_log("wrote to %i\n", client->relay_packet_pos);
+
         client->relay_packet_pos++;
     }
     return packet;
