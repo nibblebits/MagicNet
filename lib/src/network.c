@@ -629,7 +629,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     if (magicnet_server_has_seen_packet(client->server, packet_out))
     {
         // If we have seen this packet before then we shouldnt process it again.
-        res = -MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
+        res = MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
         magicnet_server_unlock(client->server);
         goto out;
     }
