@@ -298,6 +298,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_server(struct magicnet_
     }
     magicnet_init_client(mclient, server, sockfd, &servaddr);
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+    mclient->relay_packet_pos = server->relay_packets.pos;
     magicnet_server_unlock(server);
 
     if (program_name)
@@ -1158,6 +1159,10 @@ int magicnet_server_poll(struct magicnet_client *client)
     magicnet_server_lock(client->server);
     magicnet_copy_packet(packet_to_relay, magicnet_client_next_packet_to_relay(client));
     magicnet_server_unlock(client->server);
+    if (packet_to_relay->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+    {
+        magicnet_log("non empty packet to send\n");
+    }
     res = magicnet_client_write_packet(client, &(struct magicnet_packet){.type = MAGICNET_PACKET_TYPE_SERVER_SYNC, .payload.sync.flags = flags, .payload.sync.packet = packet_to_relay});
     if (res < 0)
     {
