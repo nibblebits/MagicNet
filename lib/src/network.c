@@ -1239,22 +1239,18 @@ int magicnet_server_poll(struct magicnet_client *client)
         goto out;
     }
 
-    struct magicnet_packet packet;
-    res = magicnet_client_read_packet(client, &packet);
-    if (res < 0)
+    struct magicnet_packet* packet = magicnet_recv_next_packet(client);
+    if (packet == NULL)
     {
         goto out;
     }
 
-    if (packet.type == MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+    if (packet->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET)
     {
         res = 0;
         goto out;
     }
 
-    magicnet_server_lock(client->server);
-    magicnet_server_add_seen_packet(client->server, &packet);
-    magicnet_server_unlock(client->server);
 
     // Alright we got a packet to relay.. Lets deal with it
     res = magicnet_server_poll_process(client, &packet);
@@ -1264,8 +1260,8 @@ int magicnet_server_poll(struct magicnet_client *client)
     }
 
 out:
+    magicnet_free_packet(packet);
     magicnet_free_packet(packet_to_relay);
-    magicnet_free_packet_pointers(&packet);
     return res;
 }
 void *magicnet_client_thread(void *_client)
