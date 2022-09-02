@@ -237,6 +237,7 @@ void magicnet_server_unlock(struct magicnet_server *server)
 
 void magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in)
 {
+    memset(client, 0, sizeof(struct magicnet_client));
     client->sock = connfd;
     client->server = server;
     client->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
@@ -857,6 +858,7 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
 
     magicnet_copy_packet(free_relay_packet, packet);
     free_relay_packet->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+    server->relay_packets.pos++;
     return 0;
 }
 
@@ -869,7 +871,12 @@ struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_cli
 
     struct magicnet_server *server = client->server;
     struct magicnet_packet *packet = &server->relay_packets.packets[client->relay_packet_pos % MAGICNET_MAX_AWAITING_PACKETS];
-    client->relay_packet_pos++;
+
+    if (!(packet->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
+    {
+        // Yeah we had a valid packet we can use this.
+        client->relay_packet_pos++;
+    }
     return packet;
 }
 /**
