@@ -1312,7 +1312,7 @@ void *magicnet_server_client_thread(void *_client)
     {
         // We must ask the server to relay packets to us
         magicnet_server_poll(client);
-        usleep(200000);
+        usleep(2000000);
     }
     magicnet_close(client);
 }
