@@ -151,6 +151,7 @@ int _magicnet_send_packet(struct magicnet_program *program, int packet_type, voi
         return -1;
     }
 
+    magicnet_packet.id = rand() % 999999999;
     magicnet_packet.type = MAGICNET_PACKET_TYPE_USER_DEFINED;
     magicnet_packet.payload.user_defined.type = packet_type;
     strncpy(magicnet_packet.payload.user_defined.program_name, program->name, sizeof(magicnet_packet.payload.user_defined.program_name));

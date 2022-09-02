@@ -188,7 +188,7 @@ struct magicnet_server *magicnet_server_start()
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
         server->relay_packets.packets[i].flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
-        server->seen_packets.packet_ids[i ]= -1;
+        server->seen_packets.packet_ids[i]= -1;
     }
 
     srand(time(NULL));
@@ -830,7 +830,7 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
 
 struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client)
 {
-    struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
+    struct magicnet_packet *packet = magicnet_packet_new();
     int res = magicnet_client_read_packet(client, packet);
     if (res < 0)
     {
