@@ -41,11 +41,12 @@ struct magicnet_packet *magicnet_packet_new()
 void magicnet_server_create_files()
 {
     // We should setup the seeder for when we use random.
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
 
-    /* using nano-seconds instead of seconds */
-    srand((time_t)ts.tv_nsec);
+    struct timespec time_seed;
+    // CLOCK_MONOTONIC: absolute elapsed wall-clock time since // an arbitrary point in the past.
+    clock_gettime(CLOCK_MONOTONIC, &time_seed);
+    // use nanoseconds to seed RNG.
+    srand((time_t)time_seed.tv_nsec); 
 
     char data_directory[PATH_MAX];
     sprintf(data_directory, "%s/%s", getenv("HOME"), ".magicnet");
