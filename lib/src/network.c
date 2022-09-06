@@ -891,8 +891,7 @@ bool magicnet_client_has_awaiting_packet_been_queued(struct magicnet_client *cli
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (!(client->awaiting_packets[i].flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE) &&
-            client->awaiting_packets[i].id == packet->id)
+        if(client->awaiting_packets[i].id == packet->id)
         {
             return true;
         }
