@@ -102,7 +102,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet* packet)
         break;
 
         case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-            magicnet_free_packet(packet->payload.sync.packet);
+            
             break;
     }
 
