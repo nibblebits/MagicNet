@@ -46,7 +46,7 @@ void magicnet_server_create_files()
     // CLOCK_MONOTONIC: absolute elapsed wall-clock time since // an arbitrary point in the past.
     clock_gettime(CLOCK_MONOTONIC, &time_seed);
     // use nanoseconds to seed RNG.
-    srand((time_t)time_seed.tv_nsec); 
+    srand((time_t)time_seed.tv_nsec);
 
     char data_directory[PATH_MAX];
     sprintf(data_directory, "%s/%s", getenv("HOME"), ".magicnet");
@@ -887,14 +887,34 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         break;
     }
 }
+bool magicnet_client_has_packet_been_queued(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    {
+        if (client->awaiting_packets[i].flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE &&
+            client->awaiting_packets[i].id == packet->id)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
+
+    if (magicnet_client_has_packet_been_queued(client, packet))
+    {
+        return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
+    }
+
     struct magicnet_packet *awaiting_packet = magicnet_client_get_available_free_to_use_packet(client);
     if (!awaiting_packet)
     {
         return MAGICNET_ERROR_QUEUE_FULL;
     }
 
+    // Let us check if the packet has already been sent before
     magicnet_copy_packet(awaiting_packet, packet);
     awaiting_packet->flags |= MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING;
     awaiting_packet->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
@@ -958,7 +978,7 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
     int res = 0;
     magicnet_log("%s polling packet request\n", __FUNCTION__);
     struct magicnet_packet *packet_to_process = NULL;
-    struct magicnet_packet* packet_to_send = NULL;
+    struct magicnet_packet *packet_to_send = NULL;
     magicnet_server_lock(client->server);
     packet_to_process = magicnet_client_get_next_packet_to_process(client);
     magicnet_server_unlock(client->server);
@@ -1208,7 +1228,7 @@ int magicnet_ping_pong(struct magicnet_client *client)
     //     return res;
     // }
     return 0;
-   // return packet.type == MAGICNET_PACKET_TYPE_PONG;
+    // return packet.type == MAGICNET_PACKET_TYPE_PONG;
 }
 
 int magicnet_server_poll_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet)
@@ -1250,7 +1270,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     // We also want to send a packet of our own
     int flags = MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
 
-    struct magicnet_packet* packet_to_send= magicnet_packet_new();
+    struct magicnet_packet *packet_to_send = magicnet_packet_new();
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
     magicnet_server_lock(client->server);
     magicnet_copy_packet(packet_to_relay, magicnet_client_next_packet_to_relay(client));
