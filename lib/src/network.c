@@ -509,10 +509,15 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
         goto out;
     }
 
+    res = magicnet_read_bytes(client, packet_out->payload.user_defined.program_name, sizeof(packet_out->payload.user_defined.program_name));
+    if (res < 0)
+    {
+        goto out;
+    }
+
     packet_out->payload.user_defined.type = packet_type;
     packet_out->payload.user_defined.data_len = data_size;
     packet_out->payload.user_defined.data = data;
-    strncpy(packet_out->payload.user_defined.program_name, client->program_name, sizeof(packet_out->payload.user_defined.program_name));
 
     // Send a received back
     res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY);
@@ -670,6 +675,12 @@ int magicnet_client_write_packet_user_defined(struct magicnet_client *client, st
         goto out;
     }
 
+    res = magicnet_write_bytes(client, packet->payload.user_defined.program_name, sizeof(packet->payload.user_defined.program_name));
+    if (res < 0)
+    {
+        goto out;
+    }
+    
     // Read the response.
     res = magicnet_read_int(client);
 out:
