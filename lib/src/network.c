@@ -1238,7 +1238,7 @@ int magicnet_server_poll(struct magicnet_client *client)
         goto out;
     }
 
-    if (packet->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+    if (packet->type == MAGICNET_PACKET_TYPE_EMPTY_PACKET)
     {
         res = 0;
         goto out;
