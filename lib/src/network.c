@@ -33,7 +33,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new()
 {
-    struct magicnet_packet* packet = calloc(1, sizeof(struct magicnet_packet));
+    struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
     packet->id = rand() % 999999999;
     return packet;
 }
@@ -189,15 +189,14 @@ struct magicnet_server *magicnet_server_start()
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
         server->relay_packets.packets[i].flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
-        server->seen_packets.packet_ids[i]= -1;
+        server->seen_packets.packet_ids[i] = -1;
     }
 
     srand(time(NULL));
     return server;
 }
 
-
-bool magicnet_server_has_seen_packet(struct magicnet_server* server, struct magicnet_packet* packet)
+bool magicnet_server_has_seen_packet(struct magicnet_server *server, struct magicnet_packet *packet)
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
@@ -211,12 +210,11 @@ bool magicnet_server_has_seen_packet(struct magicnet_server* server, struct magi
 int magicnet_server_add_seen_packet(struct magicnet_server *server, struct magicnet_packet *packet)
 {
     // Do we already have this packet to relay?
-    long* seen_packet_id_ptr = &server->seen_packets.packet_ids[server->seen_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
+    long *seen_packet_id_ptr = &server->seen_packets.packet_ids[server->seen_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
     *seen_packet_id_ptr = packet->id;
     server->seen_packets.pos++;
     return 0;
 }
-
 
 bool magicnet_client_in_use(struct magicnet_client *client)
 {
@@ -907,7 +905,6 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
     return 0;
 }
 
-
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
 {
     // Do we already have this packet to relay?
@@ -1015,7 +1012,6 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
             magicnet_client_add_awaiting_packet(cli, packet);
         }
     }
-    magicnet_log("program_name for packet=%s\n", packet->payload.user_defined.program_name);
     magicnet_server_add_packet_to_relay(client->server, packet);
     magicnet_server_unlock(client->server);
     return res;
@@ -1054,6 +1050,8 @@ out:
 
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
+    assert(client->server);
+
     int res = 0;
     switch (packet->type)
     {
@@ -1070,13 +1068,14 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         break;
 
     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
-        //empty..
+        // empty..
         res = 0;
         break;
     default:
         magicnet_log("%s Illegal packet provided\n", __FUNCTION__);
         res = -1;
     }
+
     return res;
 }
 
@@ -1215,12 +1214,25 @@ int magicnet_server_poll_process_user_defined_packet(struct magicnet_client *cli
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
+    magicnet_server_lock(client->server);
+    if (magicnet_server_has_seen_packet(client->server, packet))
+    {
+        magicnet_server_unlock(client->server);
+        return 0;
+    }
+    magicnet_server_unlock(client->server);
+
     switch (packet->type)
     {
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
         res = magicnet_server_poll_process_user_defined_packet(client, packet);
         break;
     };
+
+    magicnet_server_lock(client->server);
+    res = magicnet_server_add_seen_packet(client->server, packet);
+    magicnet_server_unlock(client->server);
+
     return res;
 }
 int magicnet_server_poll(struct magicnet_client *client)
@@ -1244,7 +1256,7 @@ int magicnet_server_poll(struct magicnet_client *client)
         goto out;
     }
 
-    struct magicnet_packet* packet = magicnet_recv_next_packet(client);
+    struct magicnet_packet *packet = magicnet_recv_next_packet(client);
     if (packet == NULL)
     {
         goto out;
@@ -1255,7 +1267,6 @@ int magicnet_server_poll(struct magicnet_client *client)
         res = 0;
         goto out;
     }
-
 
     // Alright we got a packet to relay.. Lets deal with it
     res = magicnet_server_poll_process(client, packet);
