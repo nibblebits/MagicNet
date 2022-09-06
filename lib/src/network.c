@@ -569,7 +569,7 @@ int magicnet_client_read_server_sync_packet(struct magicnet_client *client, stru
 
         if (packet_out->payload.sync.packet->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
         {
-            magicnet_log("non empty packet provided\n");
+            magicnet_log("non empty packet provided ID=%i\n", packet_out->id);
         }
     }
 
