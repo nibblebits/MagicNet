@@ -925,8 +925,7 @@ bool magicnet_server_has_relay_packet_been_queued(struct magicnet_server *server
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (!(server->relay_packets.packets[i].flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE) &&
-            server->relay_packets.packets[i].id == packet->id)
+        if (server->relay_packets.packets[i].id == packet->id)
         {
             return true;
         }
