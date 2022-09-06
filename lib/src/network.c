@@ -1010,7 +1010,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
         }
 
         // Same program name as the sending client? Then add it to the packet queue of the connected client
-        if (strncmp(cli->program_name, client->program_name, sizeof(cli->program_name)) == 0)
+        if (strncmp(cli->program_name, packet->payload.user_defined.program_name, sizeof(cli->program_name)) == 0)
         {
             magicnet_client_add_awaiting_packet(cli, packet);
         }
