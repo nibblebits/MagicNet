@@ -834,6 +834,7 @@ struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client
     if (res < 0)
     {
         magicnet_free_packet(packet);
+        packet = NULL;
     }
 
     return packet;
