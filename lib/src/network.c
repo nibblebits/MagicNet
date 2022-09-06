@@ -982,7 +982,7 @@ void magicnet_client_mark_packet_processed(struct magicnet_client *client, struc
     memset(packet, 0, sizeof(struct magicnet_packet));
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (&client->awaiting_packets[i] == packet)
+        if (&client->awaiting_packets[i].id == packet->id)
         {
             packet->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
             break;
