@@ -887,7 +887,7 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         break;
     }
 }
-bool magicnet_client_has_packet_been_queued(struct magicnet_client *client, struct magicnet_packet *packet)
+bool magicnet_client_has_awaiting_packet_been_queued(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
@@ -903,7 +903,7 @@ bool magicnet_client_has_packet_been_queued(struct magicnet_client *client, stru
 int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
 
-    if (magicnet_client_has_packet_been_queued(client, packet))
+    if (magicnet_client_has_awaiting_packet_been_queued(client, packet))
     {
         return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
     }
@@ -921,8 +921,27 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
     return 0;
 }
 
+bool magicnet_server_has_relay_packet_been_queued(struct magicnet_server *server, struct magicnet_packet *packet)
+{
+    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    {
+        if (!(server->relay_packets.packets[i].flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE) &&
+            server->relay_packets.packets[i].id == packet->id)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
 {
+    if (magicnet_server_has_relay_packet_been_queued(server, packet))
+    {
+        return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
+    }
+
     // Do we already have this packet to relay?
     struct magicnet_packet *free_relay_packet = &server->relay_packets.packets[server->relay_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
     if (!(free_relay_packet->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
