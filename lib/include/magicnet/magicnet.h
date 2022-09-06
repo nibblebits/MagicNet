@@ -57,7 +57,7 @@ enum
 struct magicnet_packet
 {
     // Random ID for the packet, prevents duplicate packets.
-    long id;
+    int id;
     // The type of this packet see above.
     int type;
     int flags;
