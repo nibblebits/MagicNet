@@ -1119,6 +1119,8 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         res = -1;
     }
 
+    // We have seen this packet now.
+    magicnet_server_add_seen_packet(client->server, packet);
     return res;
 }
 
