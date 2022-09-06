@@ -680,7 +680,7 @@ int magicnet_client_write_packet_user_defined(struct magicnet_client *client, st
     {
         goto out;
     }
-    
+
     // Read the response.
     res = magicnet_read_int(client);
 out:
@@ -1015,6 +1015,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
             magicnet_client_add_awaiting_packet(cli, packet);
         }
     }
+    magicnet_log("program_name for packet=%s\n", packet->payload.user_defined.program_name);
     magicnet_server_add_packet_to_relay(client->server, packet);
     magicnet_server_unlock(client->server);
     return res;
