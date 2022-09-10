@@ -32,7 +32,7 @@ int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
-struct signed_data* magicnet_signed_data(struct magicnet_packet* packet)
+struct signed_data *magicnet_signed_data(struct magicnet_packet *packet)
 {
     return &packet->signed_data;
 }
@@ -43,7 +43,6 @@ struct magicnet_packet *magicnet_packet_new()
     magicnet_signed_data(packet)->id = rand() % 999999999;
     return packet;
 }
-
 
 void magicnet_server_create_files()
 {
@@ -395,7 +394,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
         mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
     }
     magicnet_server_unlock(server);
-    
+
     return mclient;
 }
 
@@ -427,7 +426,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
     return res;
 }
 
-int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer* store_in_buffer)
+int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
     size_t amount_written = 0;
@@ -438,7 +437,7 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
         // Sometimes we are to store the result in a buffer for debugging and validation purposes..
         if (store_in_buffer)
         {
-            buffer_write(store_in_buffer, *((char*)(ptr_out+amount_written)));
+            buffer_write(store_in_buffer, *((char *)(ptr_out + amount_written)));
         }
 
         if (res <= 0)
@@ -452,7 +451,7 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
     return res;
 }
 
-int magicnet_write_int(struct magicnet_client *client, int value, struct buffer* store_in_buffer)
+int magicnet_write_int(struct magicnet_client *client, int value, struct buffer *store_in_buffer)
 {
     // Preform bit manipulation for big-endianness todo later...
     if (magicnet_write_bytes(client, &value, sizeof(value), store_in_buffer) < 0)
@@ -463,7 +462,7 @@ int magicnet_write_int(struct magicnet_client *client, int value, struct buffer*
     return 0;
 }
 
-int magicnet_write_long(struct magicnet_client *client, long value, struct buffer* store_in_buffer)
+int magicnet_write_long(struct magicnet_client *client, long value, struct buffer *store_in_buffer)
 {
     // Preform bit manipulation for big-endianness todo later...
     if (magicnet_write_bytes(client, &value, sizeof(value), store_in_buffer) < 0)
@@ -607,7 +606,7 @@ int magicnet_client_read_packet_empty(struct magicnet_client *client, struct mag
     return 0;
 }
 
-int magicnet_client_verify_packet_was_signed(struct magicnet_packet* packet)
+int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
 {
     // Let's ensure that they signed the hash that was given to us
     int res = public_verify(&packet->pub_key, packet->datahash, sizeof(packet->datahash), &packet->signature);
@@ -633,29 +632,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     int res = 0;
     int packet_id = 0;
     int packet_type = 0;
-    bool has_signature = false;
-
-    has_signature = magicnet_read_int(client);
-    if (has_signature)
-    {
-        res = magicnet_read_bytes(client, &packet_out->pub_key, sizeof(packet_out->pub_key));
-        if (res < 0)
-        {
-            return res;
-        }
-
-        res = magicnet_read_bytes(client, &packet_out->signature, sizeof(packet_out->signature));
-        if (res < 0)
-        {
-            return res;
-        }
-    }
-
-    res = magicnet_read_bytes(client, &packet_out->datahash, sizeof(packet_out->datahash));
-    if (res < 0)
-    {
-        return -1;
-    } 
 
     packet_id = magicnet_read_int(client);
     if (packet_id < 0)
@@ -696,6 +672,30 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     }
     magicnet_signed_data(packet_out)->id = packet_id;
     magicnet_signed_data(packet_out)->type = packet_type;
+
+    bool has_signature = false;
+
+    has_signature = magicnet_read_int(client);
+    if (has_signature)
+    {
+        res = magicnet_read_bytes(client, &packet_out->pub_key, sizeof(packet_out->pub_key));
+        if (res < 0)
+        {
+            return res;
+        }
+
+        res = magicnet_read_bytes(client, &packet_out->signature, sizeof(packet_out->signature));
+        if (res < 0)
+        {
+            return res;
+        }
+    }
+
+    res = magicnet_read_bytes(client, &packet_out->datahash, sizeof(packet_out->datahash));
+    if (res < 0)
+    {
+        return -1;
+    }
 
     // Now the packet is constructed lets verify its contents if it has been signed.
     if (has_signature)
@@ -834,8 +834,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
     }
 
-    // Hash the data
-    sha256_data(magicnet_signed_data(packet), packet->datahash, sizeof(*magicnet_signed_data(packet)));
+    // Okay we have a buffer of all the data we sent to the peer, lets get it and hash it so that
+    // we can prove who signed this packet later on..
+
+    sha256_data(buffer_ptr(packet->not_sent.tmp_buf), packet->datahash, sizeof(*magicnet_signed_data(packet)));
     if (flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
     {
         if (!MAGICNET_nulled_signature(&packet->signature))
@@ -884,7 +886,6 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
         return res;
     }
-
 
     buffer_free(packet->not_sent.tmp_buf);
     packet->not_sent.tmp_buf = NULL;
@@ -1024,7 +1025,7 @@ bool magicnet_client_has_awaiting_packet_been_queued(struct magicnet_client *cli
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if(magicnet_signed_data(&client->awaiting_packets[i])->id == magicnet_signed_data(packet)->id)
+        if (magicnet_signed_data(&client->awaiting_packets[i])->id == magicnet_signed_data(packet)->id)
         {
             return true;
         }
