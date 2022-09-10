@@ -326,6 +326,15 @@ int generate_key()
     EC_KEY_free(eckey);
     return 0;
 }
+
+bool MAGICNET_nulled_signature(struct signature* signature)
+{
+    struct signature nulled_sig;
+    bzero(&nulled_sig, sizeof(nulled_sig));
+
+    return memcmp(signature, &nulled_sig, sizeof(nulled_sig)) == 0;
+}
+
 void MAGICNET_load_public_key()
 {
     memset(&public_key, 0, sizeof(public_key));

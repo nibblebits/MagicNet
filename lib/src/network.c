@@ -389,7 +389,13 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
 
     magicnet_init_client(mclient, server, connfd, &client);
     mclient->relay_packet_pos = server->relay_packets.pos;
+    if (strcmp(inet_ntoa(client.sin_addr), "127.0.0.1") == 0)
+    {
+        // This is a localhost connection, therefore packets that are not signed are allowed.
+        mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
+    }
     magicnet_server_unlock(server);
+    
     return mclient;
 }
 
@@ -593,12 +599,60 @@ int magicnet_client_read_packet_empty(struct magicnet_client *client, struct mag
     return 0;
 }
 
+int magicnet_client_verify_packet_was_signed(struct magicnet_packet* packet)
+{
+    // Let's ensure that they signed the hash that was given to us
+    int res = public_verify(&packet->pub_key, packet->datahash, sizeof(packet->datahash), &packet->signature);
+    if (res < 0)
+    {
+        magicnet_log("%s the signatuure was not signed with the public key provided\n", __FUNCTION__);
+        return -1;
+    }
+
+    char tmp_buf[SHA256_STRING_LENGTH];
+    sha256_data(&packet->signed_data, tmp_buf, sizeof(packet->signed_data));
+    if (strncmp(tmp_buf, packet->datahash, sizeof(tmp_buf)) != 0)
+    {
+        magicnet_log("%s the signature signed the hash but the hash is not the hash of the data provided\n", __FUNCTION__);
+        return -1;
+    }
+
+    return 0;
+}
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     int packet_id = 0;
     int packet_type = 0;
+    bool has_signature = false;
 
+    has_signature = magicnet_read_int(client);
+    if (has_signature)
+    {
+        res = magicnet_read_bytes(client, &packet_out->pub_key, sizeof(packet_out->pub_key));
+        if (res < 0)
+        {
+            return res;
+        }
+
+        res = magicnet_read_bytes(client, &packet_out->signature, sizeof(packet_out->signature));
+        if (res < 0)
+        {
+            return res;
+        }
+    }
+
+    res = magicnet_read_bytes(client, &packet_out->datahash, sizeof(packet_out->datahash));
+    if (has_signature)
+    {
+        res = magicnet_client_verify_packet_was_signed(packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
+            return res;
+        }
+    }
     packet_id = magicnet_read_int(client);
     if (packet_id < 0)
     {
@@ -714,7 +768,7 @@ int magicnet_client_write_packet_server_poll(struct magicnet_client *client, str
             res = -1;
             goto out;
         }
-        res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet);
+        res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     }
 out:
     return res;
@@ -726,9 +780,61 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
     return 0;
 }
 
-int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
+    // Hash the data
+    sha256_data(magicnet_signed_data(packet), packet->datahash, sizeof(*magicnet_signed_data(packet)));
+    bool has_signature = false;
+    if (flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+    {
+        if (!MAGICNET_nulled_signature(&packet->signature))
+        {
+            magicnet_log("%s you asked us to sign the packet but it was already signed.. We will not send this packet as it may be a potential attacker playing games\n", __FUNCTION__);
+            res = -1;
+            return res;
+        }
+
+        packet->pub_key = *MAGICNET_public_key();
+        res = private_sign(packet->datahash, sizeof(packet->datahash), &packet->signature);
+        if (res < 0)
+        {
+            magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
+            return -1;
+        }
+    }
+
+    // Its possible packet was already signed
+    has_signature = !MAGICNET_nulled_signature(&packet->signature);
+    res = magicnet_write_int(client, has_signature);
+    if (res < 0)
+    {
+        return res;
+    }
+
+    // Send the key and signature if their is any
+    if (has_signature)
+    {
+        res = magicnet_write_bytes(client, &packet->pub_key, sizeof(packet->pub_key));
+        if (res < 0)
+        {
+            return res;
+        }
+
+        res = magicnet_write_bytes(client, &packet->signature, sizeof(packet->signature));
+        if (res < 0)
+        {
+            return res;
+        }
+    }
+
+    // Send the data hash
+    res = magicnet_write_bytes(client, packet->datahash, sizeof(packet->datahash));
+    if (res < 0)
+    {
+        return res;
+    }
+
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id);
     if (res < 0)
     {
@@ -1013,15 +1119,15 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
     {
         packet_to_send = magicnet_packet_new();
         magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
-        res = magicnet_client_write_packet(client, packet_to_send);
+        res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
         magicnet_log("%s Not found\n", __FUNCTION__);
 
         goto out;
     }
 
     magicnet_log("%s packet found\n", __FUNCTION__);
-    // We have a packet they could use.. Lets send it there way
-    res = magicnet_client_write_packet(client, packet_to_process);
+    // We have a packet they could use.. Lets send it there way.. We wont sign it as it should already be signed.
+    res = magicnet_client_write_packet(client, packet_to_process, 0);
     if (res < 0)
     {
         goto out;
@@ -1079,7 +1185,7 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     magicnet_server_unlock(client->server);
 
     // We have a packet lets send to the client
-    res = magicnet_client_write_packet(client, packet_to_relay);
+    res = magicnet_client_write_packet(client, packet_to_relay, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     if (res < 0)
     {
         goto out;
@@ -1310,7 +1416,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
     magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
     magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
-    res = magicnet_client_write_packet(client, packet_to_send);
+    res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     if (res < 0)
     {
         goto out;

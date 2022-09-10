@@ -158,7 +158,7 @@ int _magicnet_send_packet(struct magicnet_program *program, int packet_type, voi
     magicnet_packet.signed_data.payload.user_defined.data = calloc(1, structure.size);
     magicnet_packet.signed_data.payload.user_defined.data_len = structure.size;
     memcpy(magicnet_packet.signed_data.payload.user_defined.data, packet, structure.size);
-    int res = magicnet_client_write_packet(program->client, &magicnet_packet);
+    int res = magicnet_client_write_packet(program->client, &magicnet_packet, 0);
     if (res < 0)
     {
         goto out;
@@ -195,7 +195,7 @@ int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, b
     bool packet_found = false;
     while (!packet_found)
     {
-        res = magicnet_client_write_packet(client, packet_to_send);
+        res = magicnet_client_write_packet(client, packet_to_send, 0);
         if (res < 0)
         {
             goto out;

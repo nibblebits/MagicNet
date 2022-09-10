@@ -40,6 +40,7 @@ enum
 {
     MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE = 0b00000001,
     MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING = 0b00000010,
+    MAGICNET_PACKET_FLAG_MUST_BE_SIGNED = 0b00000100
 };
 
 enum
@@ -58,8 +59,16 @@ enum
 struct magicnet_packet
 {
 
-    // The signature used to sign the signed_data
+    // The public key use to sign the signature.
+    struct key pub_key;
+    
+    // The signature used to sign the datahash. To verify the packets check the signature signed
+    // the datahash. Rehash the signed_data with sha256 and compare the hashes. If all tests pass then
+    // this signature signed the data provided.
     struct signature signature;
+    // The hash of the signed_data
+    char datahash[SHA256_STRING_LENGTH];
+
     struct signed_data
     {
         // Random ID for the packet, prevents duplicate packets.
@@ -144,6 +153,8 @@ enum
 {
     MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,
     MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
+    // True if this connection is from an IP address on our local machine.
+    MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
 
 };
 struct signed_data* magicnet_signed_data(struct magicnet_packet* packet);
@@ -156,7 +167,7 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
 struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
-int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet);
+int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);

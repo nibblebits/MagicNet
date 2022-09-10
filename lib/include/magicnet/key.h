@@ -38,6 +38,14 @@ int public_verify_key_sig_hash(struct key_signature_hash* key_sig_hash, const ch
 int private_sign_key_sig_hash(struct key_signature_hash* key_sig_hash, void* hash);
 struct key* key_from_key_sig_hash(struct key_signature_hash* key_sig_hash);
 
+/**
+ * @brief Returns true if the signature is NULL i.e no signature.
+ * 
+ * @param signature 
+ * @return true 
+ * @return false 
+ */
+bool MAGICNET_nulled_signature(struct signature* signature);
 void MAGICNET_load_keypair();
 struct key *MAGICNET_public_key();
 struct key *MAGICNET_private_key();
