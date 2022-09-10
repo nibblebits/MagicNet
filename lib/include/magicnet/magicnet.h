@@ -9,6 +9,7 @@
 #include "magicnet/vector.h"
 #include "magicnet/config.h"
 #include "key.h"
+#include "buffer.h"
 
 struct magicnet_registered_structure
 {
@@ -61,13 +62,33 @@ struct magicnet_packet
 
     // The public key use to sign the signature.
     struct key pub_key;
-    
+
     // The signature used to sign the datahash. To verify the packets check the signature signed
     // the datahash. Rehash the signed_data with sha256 and compare the hashes. If all tests pass then
     // this signature signed the data provided.
     struct signature signature;
-    // The hash of the signed_data
+    // The hash of the data in tmp_buf
     char datahash[SHA256_STRING_LENGTH];
+
+    /**
+     * @brief The not_sent structure contains values that will not be sent to any peers
+     * or clients at all. It is used for our own internal information regarding the packet we are dealing with.
+     * 
+     */
+    struct
+    {
+        /**
+         * @brief This tmp_buf is NULL until we send this packet. When the packet is being sent
+         * the buffer is initialized and filled with every byte we send to the peer. Once we are done sending the packet
+         * it is freed and NULLED Once more.
+         * 
+         * It is used for debugging purposes and also to ensure packet integrity through the use of signatures.
+         * The datahash further above is based off the buffer of tmp_buf. tmp_buf contains every single byte
+         * sent to the client in regards to this packet.
+         */
+        struct buffer* tmp_buf;
+    } not_sent;
+
 
     struct signed_data
     {

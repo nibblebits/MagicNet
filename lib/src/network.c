@@ -427,13 +427,20 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
     return res;
 }
 
-int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t amount)
+int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer* store_in_buffer)
 {
     int res = 0;
     size_t amount_written = 0;
     while (amount_written < amount)
     {
         res = write(client->sock, ptr_out + amount_written, amount - amount_written);
+
+        // Sometimes we are to store the result in a buffer for debugging and validation purposes..
+        if (store_in_buffer)
+        {
+            buffer_write(store_in_buffer, *((char*)(ptr_out+amount_written)));
+        }
+
         if (res <= 0)
         {
             res = -1;
@@ -445,20 +452,21 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
     return res;
 }
 
-int magicnet_write_int(struct magicnet_client *client, int value)
+int magicnet_write_int(struct magicnet_client *client, int value, struct buffer* store_in_buffer)
 {
     // Preform bit manipulation for big-endianness todo later...
-    if (magicnet_write_bytes(client, &value, sizeof(value)) < 0)
+    if (magicnet_write_bytes(client, &value, sizeof(value), store_in_buffer) < 0)
     {
         return -1;
     }
+
     return 0;
 }
 
-int magicnet_write_long(struct magicnet_client *client, long value)
+int magicnet_write_long(struct magicnet_client *client, long value, struct buffer* store_in_buffer)
 {
     // Preform bit manipulation for big-endianness todo later...
-    if (magicnet_write_bytes(client, &value, sizeof(value)) < 0)
+    if (magicnet_write_bytes(client, &value, sizeof(value), store_in_buffer) < 0)
     {
         return -1;
     }
@@ -534,7 +542,7 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
     magicnet_signed_data(packet_out)->payload.user_defined.data = data;
 
     // Send a received back
-    res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY);
+    res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY, NULL);
 out:
     if (res < 0)
     {
@@ -725,25 +733,25 @@ int magicnet_client_write_packet_user_defined(struct magicnet_client *client, st
 {
     int res = 0;
     void *data = NULL;
-    res = magicnet_write_long(client, magicnet_signed_data(packet)->payload.user_defined.type);
+    res = magicnet_write_long(client, magicnet_signed_data(packet)->payload.user_defined.type, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_long(client, magicnet_signed_data(packet)->payload.user_defined.data_len);
+    res = magicnet_write_long(client, magicnet_signed_data(packet)->payload.user_defined.data_len, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.user_defined.data, magicnet_signed_data(packet)->payload.user_defined.data_len);
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.user_defined.data, magicnet_signed_data(packet)->payload.user_defined.data_len, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.user_defined.program_name, sizeof(magicnet_signed_data(packet)->payload.user_defined.program_name));
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.user_defined.program_name, sizeof(magicnet_signed_data(packet)->payload.user_defined.program_name), packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
@@ -758,7 +766,7 @@ out:
 int magicnet_client_write_packet_server_poll(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.sync.flags);
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.sync.flags, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
@@ -789,65 +797,14 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
-    // Hash the data
-    sha256_data(magicnet_signed_data(packet), packet->datahash, sizeof(*magicnet_signed_data(packet)));
-    bool has_signature = false;
-    if (flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
-    {
-        if (!MAGICNET_nulled_signature(&packet->signature))
-        {
-            magicnet_log("%s you asked us to sign the packet but it was already signed.. We will not send this packet as it may be a potential attacker playing games\n", __FUNCTION__);
-            res = -1;
-            return res;
-        }
-
-        packet->pub_key = *MAGICNET_public_key();
-        res = private_sign(packet->datahash, sizeof(packet->datahash), &packet->signature);
-        if (res < 0)
-        {
-            magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
-            return -1;
-        }
-    }
-
-    // Its possible packet was already signed
-    has_signature = !MAGICNET_nulled_signature(&packet->signature);
-    res = magicnet_write_int(client, has_signature);
+    packet->not_sent.tmp_buf = buffer_create();
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         return res;
     }
 
-    // Send the key and signature if their is any
-    if (has_signature)
-    {
-        res = magicnet_write_bytes(client, &packet->pub_key, sizeof(packet->pub_key));
-        if (res < 0)
-        {
-            return res;
-        }
-
-        res = magicnet_write_bytes(client, &packet->signature, sizeof(packet->signature));
-        if (res < 0)
-        {
-            return res;
-        }
-    }
-
-    // Send the data hash
-    res = magicnet_write_bytes(client, packet->datahash, sizeof(packet->datahash));
-    if (res < 0)
-    {
-        return res;
-    }
-
-    res = magicnet_write_int(client, magicnet_signed_data(packet)->id);
-    if (res < 0)
-    {
-        return res;
-    }
-
-    res = magicnet_write_int(client, magicnet_signed_data(packet)->type);
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->type, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         return res;
@@ -876,6 +833,61 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_client_write_packet_server_poll(client, packet);
         break;
     }
+
+    // Hash the data
+    sha256_data(magicnet_signed_data(packet), packet->datahash, sizeof(*magicnet_signed_data(packet)));
+    if (flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+    {
+        if (!MAGICNET_nulled_signature(&packet->signature))
+        {
+            magicnet_log("%s you asked us to sign the packet but it was already signed.. We will not send this packet as it may be a potential attacker playing games\n", __FUNCTION__);
+            res = -1;
+            return res;
+        }
+
+        packet->pub_key = *MAGICNET_public_key();
+        res = private_sign(packet->datahash, sizeof(packet->datahash), &packet->signature);
+        if (res < 0)
+        {
+            magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
+            return -1;
+        }
+    }
+
+    // Its possible packet was already signed
+    bool has_signature = !MAGICNET_nulled_signature(&packet->signature);
+    res = magicnet_write_int(client, has_signature, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        return res;
+    }
+
+    // Send the key and signature if their is any
+    if (has_signature)
+    {
+        res = magicnet_write_bytes(client, &packet->pub_key, sizeof(packet->pub_key), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            return res;
+        }
+
+        res = magicnet_write_bytes(client, &packet->signature, sizeof(packet->signature), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            return res;
+        }
+    }
+
+    // Send the data hash
+    res = magicnet_write_bytes(client, packet->datahash, sizeof(packet->datahash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        return res;
+    }
+
+
+    buffer_free(packet->not_sent.tmp_buf);
+    packet->not_sent.tmp_buf = NULL;
     return res;
 }
 
@@ -1291,20 +1303,20 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
     }
 
     memcpy(client->program_name, program_name, sizeof(client->program_name));
-    res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE);
+    res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE, NULL);
     return res;
 }
 
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name)
 {
     int res = 0;
-    res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE);
+    res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE, NULL);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, (void *)program_name, MAGICNET_PROGRAM_NAME_SIZE);
+    res = magicnet_write_bytes(client, (void *)program_name, MAGICNET_PROGRAM_NAME_SIZE, NULL);
     if (res < 0)
     {
         goto out;
