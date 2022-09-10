@@ -1,8 +1,8 @@
-OBJECTS= ./build/vector.o ./build/magicnet.o ./build/log.o ./build/network.o
+OBJECTS= ./build/vector.o ./build/magicnet.o ./build/log.o ./build/network.o ./build/key.o ./build/sha256.o ./build/misc.o
 INCLUDES= -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector
 ADDITIONAL_FLAGS= -g -fPIC
 all: ${OBJECTS}
-	gcc -shared -o ./libmagicnet.so -pthread -g ${OBJECTS} 
+	gcc -pthread -lssl -lcrypto -lminiupnpc -pthread -lzip -shared -o ./libmagicnet.so   -g ${OBJECTS} 
 	cp ./libmagicnet.so /usr/lib/libmagicnet.so 
 
 ./build/magicnet.o:./src/magicnet.c
@@ -21,6 +21,17 @@ all: ${OBJECTS}
 
 ./build/vector.o:./src/vector/vector.c
 	gcc ${INCLUDES} ./src/vector/vector.c -c ${ADDITIONAL_FLAGS} -o ./build/vector.o 
+
+./build/key.o:./src/key.c
+	gcc ${INCLUDES} ./src/key.c -c ${ADDITIONAL_FLAGS} -o ./build/key.o 
+
+./build/sha256.o:./src/sha256.c
+	gcc ${INCLUDES} ./src/sha256.c -c ${ADDITIONAL_FLAGS} -o ./build/sha256.o 
+
+
+./build/misc.o:./src/misc.c
+	gcc ${INCLUDES} ./src/misc.c -c ${ADDITIONAL_FLAGS} -o ./build/misc.o 
+
 
 
 clean:

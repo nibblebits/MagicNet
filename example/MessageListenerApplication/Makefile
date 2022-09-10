@@ -2,7 +2,7 @@ OBJECTS=
 INCLUDES= -I ./ -I ../../lib/include
 ADDITIONAL_FLAGS= -g 
 all: ${OBJECTS}
-	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./main.c -L/usr/lib -lmagicnet ${OBJECTS} -o ./listener
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./main.c -lmagicnet  -lcrypto -lminiupnpc -pthread -lzip  ${OBJECTS} -o ./listener
 
 
 clean:

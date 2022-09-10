@@ -27,4 +27,17 @@
 // Anyone who listens on this will get all packets regardless who they are.
 #define MAGICNET_LISTEN_ALL_PROGRAM "magicnet"
 
+
+#define MAGICNET_DATA_BASE_DIRECTORY_ENV "HOME"
+#define MAGICNET_DATA_BASE ".magicnet"
+#define MAGICNET_PUBLIC_KEY_FILEPATH "/key.pub"
+#define MAGICNET_PRIVATE_KEY_FILEPATH "/key.pri"
+// CRYPTOGRAPHY
+
+// 64 bytes for hashed key then +1 for null terminator
+#define MAGICNET_MAX_KEY_LENGTH 140
+
+#define MAGICNET_MAX_SIGNATURE_PART_LENGTH 65
+
+
 #endif

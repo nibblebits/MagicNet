@@ -26,17 +26,24 @@
 #include "magicnet/config.h"
 #include "magicnet/magicnet.h"
 #include "magicnet/log.h"
+#include "key.h"
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
+struct signed_data* magicnet_signed_data(struct magicnet_packet* packet)
+{
+    return &packet->signed_data;
+}
+
 struct magicnet_packet *magicnet_packet_new()
 {
     struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
-    packet->id = rand() % 999999999;
+    magicnet_signed_data(packet)->id = rand() % 999999999;
     return packet;
 }
+
 
 void magicnet_server_create_files()
 {
@@ -189,11 +196,13 @@ struct magicnet_server *magicnet_server_start()
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        server->relay_packets.packets[i].flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+        magicnet_signed_data(&server->relay_packets.packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
         server->seen_packets.packet_ids[i] = -1;
     }
 
     srand(time(NULL));
+
+    MAGICNET_load_keypair();
     return server;
 }
 
@@ -201,7 +210,7 @@ bool magicnet_server_has_seen_packet(struct magicnet_server *server, struct magi
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (server->seen_packets.packet_ids[i] == packet->id)
+        if (server->seen_packets.packet_ids[i] == magicnet_signed_data(packet)->id)
             return true;
     }
 
@@ -212,7 +221,7 @@ int magicnet_server_add_seen_packet(struct magicnet_server *server, struct magic
 {
     // Do we already have this packet to relay?
     long *seen_packet_id_ptr = &server->seen_packets.packet_ids[server->seen_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
-    *seen_packet_id_ptr = packet->id;
+    *seen_packet_id_ptr = magicnet_signed_data(packet)->id;
     server->seen_packets.pos++;
     return 0;
 }
@@ -270,7 +279,7 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        client->awaiting_packets[i].flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+        magicnet_signed_data(&client->awaiting_packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     }
 }
 
@@ -306,7 +315,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_server(struct magicnet_
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                    sizeof timeout) < 0)
     {
-        // giveme_log("Failed to set socket timeout\n");
+        // magicnet_log("Failed to set socket timeout\n");
         return NULL;
     }
 
@@ -508,15 +517,15 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
         goto out;
     }
 
-    res = magicnet_read_bytes(client, packet_out->payload.user_defined.program_name, sizeof(packet_out->payload.user_defined.program_name));
+    res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.user_defined.program_name, sizeof(magicnet_signed_data(packet_out)->payload.user_defined.program_name));
     if (res < 0)
     {
         goto out;
     }
 
-    packet_out->payload.user_defined.type = packet_type;
-    packet_out->payload.user_defined.data_len = data_size;
-    packet_out->payload.user_defined.data = data;
+    magicnet_signed_data(packet_out)->payload.user_defined.type = packet_type;
+    magicnet_signed_data(packet_out)->payload.user_defined.data_len = data_size;
+    magicnet_signed_data(packet_out)->payload.user_defined.data = data;
 
     // Send a received back
     res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY);
@@ -535,13 +544,13 @@ out:
 
 int magicnet_client_read_poll_packets_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
-    packet_out->type = MAGICNET_PACKET_TYPE_POLL_PACKETS;
+    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_POLL_PACKETS;
     return 0;
 }
 
 int magicnet_client_read_not_found_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
-    packet_out->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
+    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
     return 0;
 }
 
@@ -560,20 +569,20 @@ int magicnet_client_read_server_sync_packet(struct magicnet_client *client, stru
     if (flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
     {
         // They also sent us a packet of their own in this sync.. Lets read it
-        packet_out->payload.sync.packet = magicnet_packet_new();
-        res = magicnet_client_read_packet(client, packet_out->payload.sync.packet);
+        magicnet_signed_data(packet_out)->payload.sync.packet = magicnet_packet_new();
+        res = magicnet_client_read_packet(client, magicnet_signed_data(packet_out)->payload.sync.packet);
         if (res < 0)
         {
             goto out;
         }
 
-        if (packet_out->payload.sync.packet->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+        if (magicnet_signed_data(packet_out)->payload.sync.packet->signed_data.type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
         {
-            magicnet_log("non empty packet provided type=%i ID=%i\n", packet_out->payload.sync.packet->type, packet_out->payload.sync.packet->id);
+            magicnet_log("non empty packet provided type=%i ID=%i\n", magicnet_signed_data(packet_out)->payload.sync.packet->signed_data.type, magicnet_signed_data(packet_out)->payload.sync.packet->signed_data.id);
         }
     }
 
-    packet_out->payload.sync.flags = flags;
+    magicnet_signed_data(packet_out)->payload.sync.flags = flags;
 
 out:
     return res;
@@ -627,8 +636,8 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         res = -1;
         break;
     }
-    packet_out->id = packet_id;
-    packet_out->type = packet_type;
+    magicnet_signed_data(packet_out)->id = packet_id;
+    magicnet_signed_data(packet_out)->type = packet_type;
 
 out:
     return res;
@@ -656,25 +665,25 @@ int magicnet_client_write_packet_user_defined(struct magicnet_client *client, st
 {
     int res = 0;
     void *data = NULL;
-    res = magicnet_write_long(client, packet->payload.user_defined.type);
+    res = magicnet_write_long(client, magicnet_signed_data(packet)->payload.user_defined.type);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_long(client, packet->payload.user_defined.data_len);
+    res = magicnet_write_long(client, magicnet_signed_data(packet)->payload.user_defined.data_len);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, packet->payload.user_defined.data, packet->payload.user_defined.data_len);
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.user_defined.data, magicnet_signed_data(packet)->payload.user_defined.data_len);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, packet->payload.user_defined.program_name, sizeof(packet->payload.user_defined.program_name));
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.user_defined.program_name, sizeof(magicnet_signed_data(packet)->payload.user_defined.program_name));
     if (res < 0)
     {
         goto out;
@@ -689,23 +698,23 @@ out:
 int magicnet_client_write_packet_server_poll(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    res = magicnet_write_int(client, packet->payload.sync.flags);
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.sync.flags);
     if (res < 0)
     {
         goto out;
     }
 
-    if (packet->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
+    if (magicnet_signed_data(packet)->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
     {
         // We need to send the packet
-        if (packet->payload.sync.packet->type == MAGICNET_PACKET_TYPE_SERVER_SYNC)
+        if (magicnet_signed_data(packet)->payload.sync.packet->signed_data.type == MAGICNET_PACKET_TYPE_SERVER_SYNC)
         {
             // This will result in an infinite loop, to prevent denial of service attacks we must refuse
             magicnet_log("%s Attempting to provide a sync packet as server poll payload. This may result in an infinite loop so is not allowed\n", __FUNCTION__);
             res = -1;
             goto out;
         }
-        res = magicnet_client_write_packet(client, packet->payload.sync.packet);
+        res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet);
     }
 out:
     return res;
@@ -720,19 +729,19 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    res = magicnet_write_int(client, packet->id);
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->id);
     if (res < 0)
     {
         return res;
     }
 
-    res = magicnet_write_int(client, packet->type);
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->type);
     if (res < 0)
     {
         return res;
     }
 
-    switch (packet->type)
+    switch (magicnet_signed_data(packet)->type)
     {
 
     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
@@ -795,7 +804,7 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
     if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                    sizeof timeout) < 0)
     {
-        // giveme_log("Failed to set socket timeout\n");
+        // magicnet_log("Failed to set socket timeout\n");
         return NULL;
     }
 
@@ -845,9 +854,9 @@ struct magicnet_packet *magicnet_client_get_available_free_to_use_packet(struct 
     struct magicnet_packet *packet = NULL;
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (client->awaiting_packets[i].flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE)
+        if (magicnet_signed_data(&client->awaiting_packets[i])->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE)
         {
-            client->awaiting_packets[i].type &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+            magicnet_signed_data(&client->awaiting_packets[i])->type &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
             packet = &client->awaiting_packets[i];
         }
     }
@@ -860,7 +869,7 @@ struct magicnet_packet *magicnet_client_get_next_packet_to_process(struct magicn
     struct magicnet_packet *packet = NULL;
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (client->awaiting_packets[i].flags & MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING)
+        if (magicnet_signed_data(&client->awaiting_packets[i])->flags & MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING)
         {
             packet = &client->awaiting_packets[i];
             break;
@@ -879,11 +888,11 @@ struct magicnet_packet *magicnet_client_get_next_packet_to_process(struct magicn
 void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
     memcpy(packet_out, packet_in, sizeof(struct magicnet_packet));
-    switch (packet_in->type)
+    switch (magicnet_signed_data(packet_in)->type)
     {
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
-        packet_out->payload.user_defined.data = calloc(1, packet_out->payload.user_defined.data_len);
-        memcpy(packet_out->payload.user_defined.data, packet_in->payload.user_defined.data, packet_out->payload.user_defined.data_len);
+        magicnet_signed_data(packet_out)->payload.user_defined.data = calloc(1, magicnet_signed_data(packet_out)->payload.user_defined.data_len);
+        memcpy(magicnet_signed_data(packet_out)->payload.user_defined.data, magicnet_signed_data(packet_in)->payload.user_defined.data, magicnet_signed_data(packet_out)->payload.user_defined.data_len);
         break;
     }
 }
@@ -891,7 +900,7 @@ bool magicnet_client_has_awaiting_packet_been_queued(struct magicnet_client *cli
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if(client->awaiting_packets[i].id == packet->id)
+        if(magicnet_signed_data(&client->awaiting_packets[i])->id == magicnet_signed_data(packet)->id)
         {
             return true;
         }
@@ -915,8 +924,8 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
 
     // Let us check if the packet has already been sent before
     magicnet_copy_packet(awaiting_packet, packet);
-    awaiting_packet->flags |= MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING;
-    awaiting_packet->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+    magicnet_signed_data(awaiting_packet)->flags |= MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING;
+    magicnet_signed_data(awaiting_packet)->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     return 0;
 }
 
@@ -924,7 +933,7 @@ bool magicnet_server_has_relay_packet_been_queued(struct magicnet_server *server
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (server->relay_packets.packets[i].id == packet->id)
+        if (magicnet_signed_data(&server->relay_packets.packets[i])->id == magicnet_signed_data(packet)->id)
         {
             return true;
         }
@@ -942,13 +951,13 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
 
     // Do we already have this packet to relay?
     struct magicnet_packet *free_relay_packet = &server->relay_packets.packets[server->relay_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
-    if (!(free_relay_packet->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
+    if (!(magicnet_signed_data(free_relay_packet)->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
         magicnet_free_packet_pointers(free_relay_packet);
     }
 
     magicnet_copy_packet(free_relay_packet, packet);
-    free_relay_packet->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+    magicnet_signed_data(free_relay_packet)->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
 
     server->relay_packets.pos++;
     return 0;
@@ -964,7 +973,7 @@ struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_cli
     struct magicnet_server *server = client->server;
     struct magicnet_packet *packet = &server->relay_packets.packets[client->relay_packet_pos % MAGICNET_MAX_AWAITING_PACKETS];
 
-    if (!(packet->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
+    if (!(magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
         // Yeah we had a valid packet we can use this.
         client->relay_packet_pos++;
@@ -982,9 +991,9 @@ void magicnet_client_mark_packet_processed(struct magicnet_client *client, struc
     memset(packet, 0, sizeof(struct magicnet_packet));
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (client->awaiting_packets[i].id == packet->id)
+        if (magicnet_signed_data(&client->awaiting_packets[i])->id == magicnet_signed_data(packet)->id)
         {
-            packet->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+            magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
             break;
         }
     }
@@ -1003,7 +1012,7 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
     if (!packet_to_process)
     {
         packet_to_send = magicnet_packet_new();
-        packet_to_send->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
+        magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
         res = magicnet_client_write_packet(client, packet_to_send);
         magicnet_log("%s Not found\n", __FUNCTION__);
 
@@ -1050,7 +1059,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
         }
 
         // Same program name as the sending client? Then add it to the packet queue of the connected client
-        if (strncmp(cli->program_name, packet->payload.user_defined.program_name, sizeof(cli->program_name)) == 0)
+        if (strncmp(cli->program_name, magicnet_signed_data(packet)->payload.user_defined.program_name, sizeof(cli->program_name)) == 0)
         {
             magicnet_client_add_awaiting_packet(cli, packet);
         }
@@ -1077,9 +1086,9 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     }
 
     // Do we also have a packet from them?
-    if (packet->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
+    if (magicnet_signed_data(packet)->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
     {
-        res = magicnet_server_poll_process(client, packet->payload.sync.packet);
+        res = magicnet_server_poll_process(client, magicnet_signed_data(packet)->payload.sync.packet);
         if (res < 0)
         {
             goto out;
@@ -1096,7 +1105,7 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
     assert(client->server);
 
     int res = 0;
-    switch (packet->type)
+    switch (magicnet_signed_data(packet)->type)
     {
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_process_packet_poll_packets(client, packet);
@@ -1269,7 +1278,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     }
     magicnet_server_unlock(client->server);
 
-    switch (packet->type)
+    switch (magicnet_signed_data(packet)->type)
     {
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
         res = magicnet_server_poll_process_user_defined_packet(client, packet);
@@ -1294,13 +1303,13 @@ int magicnet_server_poll(struct magicnet_client *client)
     magicnet_server_lock(client->server);
     magicnet_copy_packet(packet_to_relay, magicnet_client_next_packet_to_relay(client));
     magicnet_server_unlock(client->server);
-    if (packet_to_relay->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+    if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
     {
         magicnet_log("non empty packet to send\n");
     }
-    packet_to_send->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
-    packet_to_send->payload.sync.flags = flags;
-    packet_to_send->payload.sync.packet = packet_to_relay;
+    magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
+    magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
+    magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
     res = magicnet_client_write_packet(client, packet_to_send);
     if (res < 0)
     {
@@ -1313,7 +1322,7 @@ int magicnet_server_poll(struct magicnet_client *client)
         goto out;
     }
 
-    if (packet->type == MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+    if (magicnet_signed_data(packet)->type == MAGICNET_PACKET_TYPE_EMPTY_PACKET)
     {
         res = 0;
         goto out;

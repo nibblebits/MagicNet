@@ -47,7 +47,7 @@ int magicnet_get_structure(int type, struct magicnet_registered_structure *struc
 
 /**
  * @brief Registers the structure on THIS client only, any network operations will be translated
- * based on the structures registered.. Only APPLIES to this client only
+ * based on the structures registered. Only APPLIES to this client only
  *
  * @param type
  * @param size
@@ -75,7 +75,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet* packet)
     {
         return;
     }
-    switch(packet->type)
+    switch(magicnet_signed_data(packet)->type)
     {
         case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
 
@@ -98,7 +98,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet* packet)
         break;
 
         case MAGICNET_PACKET_TYPE_USER_DEFINED:
-            free(packet->payload.user_defined.data);
+            free(magicnet_signed_data(packet)->payload.user_defined.data);
         break;
 
         case MAGICNET_PACKET_TYPE_SERVER_SYNC:
@@ -151,13 +151,13 @@ int _magicnet_send_packet(struct magicnet_program *program, int packet_type, voi
         return -1;
     }
 
-    magicnet_packet.id = rand() % 999999999;
-    magicnet_packet.type = MAGICNET_PACKET_TYPE_USER_DEFINED;
-    magicnet_packet.payload.user_defined.type = packet_type;
-    strncpy(magicnet_packet.payload.user_defined.program_name, program->name, sizeof(magicnet_packet.payload.user_defined.program_name));
-    magicnet_packet.payload.user_defined.data = calloc(1, structure.size);
-    magicnet_packet.payload.user_defined.data_len = structure.size;
-    memcpy(magicnet_packet.payload.user_defined.data, packet, structure.size);
+    magicnet_packet.signed_data.id = rand() % 999999999;
+    magicnet_packet.signed_data.type = MAGICNET_PACKET_TYPE_USER_DEFINED;
+    magicnet_packet.signed_data.payload.user_defined.type = packet_type;
+    strncpy(magicnet_packet.signed_data.payload.user_defined.program_name, program->name, sizeof(magicnet_packet.signed_data.payload.user_defined.program_name));
+    magicnet_packet.signed_data.payload.user_defined.data = calloc(1, structure.size);
+    magicnet_packet.signed_data.payload.user_defined.data_len = structure.size;
+    memcpy(magicnet_packet.signed_data.payload.user_defined.data, packet, structure.size);
     int res = magicnet_client_write_packet(program->client, &magicnet_packet);
     if (res < 0)
     {
@@ -166,9 +166,9 @@ int _magicnet_send_packet(struct magicnet_program *program, int packet_type, voi
 
 out:
     // Now we have sent the packet we can free the data payload.
-    if (magicnet_packet.payload.user_defined.data)
+    if (magicnet_packet.signed_data.payload.user_defined.data)
     {
-        free(magicnet_packet.payload.user_defined.data);
+        free(magicnet_packet.signed_data.payload.user_defined.data);
     }
     if (res < 0)
     {
@@ -189,12 +189,13 @@ int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, b
    int res = 0;
     struct magicnet_packet *packet = magicnet_packet_new();
     struct magicnet_client *client = program->client;
-
+    struct magicnet_packet* packet_to_send = magicnet_packet_new();
+    packet_to_send->signed_data.type = MAGICNET_PACKET_TYPE_POLL_PACKETS;
     // First we poll to see if thiers packets for us
     bool packet_found = false;
     while (!packet_found)
     {
-        res = magicnet_client_write_packet(client, &(struct magicnet_packet){.type = MAGICNET_PACKET_TYPE_POLL_PACKETS});
+        res = magicnet_client_write_packet(client, packet_to_send);
         if (res < 0)
         {
             goto out;
@@ -205,21 +206,21 @@ int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, b
             goto out;
         }
         packet_found = true;
-        if (packet->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
+        if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
         {
-            // Someone sent as a dodgy packet.. we only want user defined packets.
+            // Someone sent as a dodgy packet. we only want user defined packets.
             // Do cleanup.
             packet_found = false;
         }
-        if (packet->type == MAGICNET_PACKET_TYPE_NOT_FOUND)
+        if (magicnet_signed_data(packet)->type == MAGICNET_PACKET_TYPE_NOT_FOUND)
         {
             packet_found = false;
-            // We've to wait a bit... lets not do damage.
+            // We've to wait a bit.. lets not do damage.
             usleep(5000000);
         }
     }
 
-    int payload_packet_type = packet->payload.user_defined.type;
+    int payload_packet_type = magicnet_signed_data(packet)->payload.user_defined.type;
     struct magicnet_registered_structure structure;
     res = magicnet_get_structure(payload_packet_type, &structure);
     if (res < 0)
@@ -229,7 +230,7 @@ int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, b
     }
     res = payload_packet_type;
     void* data = calloc(1, structure.size);
-    memcpy(data, packet->payload.user_defined.data, structure.size);
+    memcpy(data, magicnet_signed_data(packet)->payload.user_defined.data, structure.size);
     *packet_out = data;
 out:
     if (res < 0 && reconnect_if_neccessary)
@@ -237,7 +238,8 @@ out:
         magicnet_reconnect(program);
         res = _magicnet_next_packet(program, packet_out, false);
     }
-    free(packet);
+    magicnet_free_packet(packet);
+    magicnet_free_packet(packet_to_send);
     return res;
 }
 

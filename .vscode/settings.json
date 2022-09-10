@@ -6,6 +6,7 @@
         "typeinfo": "c",
         "wait.h": "c",
         "config.h": "c",
-        "fcntl.h": "c"
+        "fcntl.h": "c",
+        "stdbool.h": "c"
     }
 }
