@@ -799,7 +799,7 @@ int magicnet_client_write_packet_server_poll(struct magicnet_client *client, str
             res = -1;
             goto out;
         }
-        res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+        res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet, 0);
     }
 out:
     return res;
