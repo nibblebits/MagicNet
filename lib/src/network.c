@@ -644,15 +644,11 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     }
 
     res = magicnet_read_bytes(client, &packet_out->datahash, sizeof(packet_out->datahash));
-    if (has_signature)
+    if (res < 0)
     {
-        res = magicnet_client_verify_packet_was_signed(packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
-            return res;
-        }
-    }
+        return -1;
+    } 
+
     packet_id = magicnet_read_int(client);
     if (packet_id < 0)
     {
@@ -693,6 +689,16 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     magicnet_signed_data(packet_out)->id = packet_id;
     magicnet_signed_data(packet_out)->type = packet_type;
 
+    // Now the packet is constructed lets verify its contents if it has been signed.
+    if (has_signature)
+    {
+        res = magicnet_client_verify_packet_was_signed(packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
+            return res;
+        }
+    }
 out:
     return res;
 }
