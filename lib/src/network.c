@@ -630,7 +630,7 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
     }
 
     char tmp_buf[SHA256_STRING_LENGTH];
-    sha256_data(buffer_ptr(packet->not_sent.tmp_buf), packet->datahash, packet->not_sent.tmp_buf->len);
+    sha256_data(buffer_ptr(packet->not_sent.tmp_buf), tmp_buf, packet->not_sent.tmp_buf->len);
     if (strncmp(tmp_buf, packet->datahash, sizeof(tmp_buf)) != 0)
     {
         magicnet_log("%s the signature signed the hash but the hash is not the hash of the data provided\n", __FUNCTION__);
