@@ -202,6 +202,9 @@ struct magicnet_server *magicnet_server_start()
     srand(time(NULL));
 
     MAGICNET_load_keypair();
+
+    server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote*));
+    server->next_block.signed_up_verifiers = vector_create(sizeof(struct key*));
     return server;
 }
 
@@ -613,6 +616,12 @@ int magicnet_client_read_packet_empty(struct magicnet_client *client, struct mag
     return 0;
 }
 
+int magicnet_client_read_verifier_signup_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    return 0;
+}
+
+
 int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
 {
     if (!packet->not_sent.tmp_buf)
@@ -677,6 +686,10 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_read_server_sync_packet(client, packet_out);
         break;
+
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        res = magicnet_client_read_verifier_signup_packet(client, packet_out);
+        break;
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
         res = magicnet_client_read_not_found_packet(client, packet_out);
         break;
@@ -691,6 +704,13 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     bool has_signature = false;
 
     has_signature = magicnet_read_int(client, NULL);
+    if (!has_signature && !(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
+    {
+        magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
+        return -1;
+    }
+
+
     if (has_signature)
     {
         res = magicnet_read_bytes(client, &packet_out->pub_key, sizeof(packet_out->pub_key), NULL);
@@ -725,6 +745,10 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 out:
     buffer_free(packet_out->not_sent.tmp_buf);
     packet_out->not_sent.tmp_buf = NULL;
+
+    // Write the response code back to the client
+    magicnet_write_int(client, res, NULL);
+
     return res;
 }
 
@@ -811,6 +835,14 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
     return 0;
 }
 
+
+int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+
+    return 0;
+}
+
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -846,6 +878,9 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_client_write_packet_not_found(client, packet);
         break;
 
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        res = magicnet_client_write_packet_verifier_signup(client, packet);
+        break;
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_write_packet_server_poll(client, packet);
         break;
@@ -906,6 +941,16 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     buffer_free(packet->not_sent.tmp_buf);
     packet->not_sent.tmp_buf = NULL;
+
+    // We expect to receive a response byte
+    res = magicnet_read_int(client, NULL);
+    // If the respponse is a critical error then we will change it to unknown
+    // since its illegal in our protocol to transmit critical error codes to prevent abuses to terminate connections
+    if (res == MAGICNET_ERROR_CRITICAL_ERROR)
+    {
+        res = MAGICNET_ERROR_UNKNOWN;
+    }
+    
     return res;
 }
 
@@ -978,7 +1023,7 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
     return mclient;
 }
 
-struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client)
+struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client, int* res_out)
 {
     struct magicnet_packet *packet = magicnet_packet_new();
     int res = magicnet_client_read_packet(client, packet);
@@ -988,6 +1033,7 @@ struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client
         packet = NULL;
     }
 
+    *res_out = res;
     return packet;
 }
 
@@ -1242,6 +1288,68 @@ out:
     return res;
 }
 
+
+bool magicnet_server_verifier_is_signed_up(struct magicnet_server* server, struct key* key)
+{
+    vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
+    struct key* key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while(key_in_vec)
+    {
+        if (key_cmp(key_in_vec, key))
+        {
+            return true;
+        }
+        key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    }
+
+    return false;
+}
+
+int magicnet_server_verifier_signup(struct magicnet_server* server, struct key* pub_key)
+{
+    int res = 0;
+    // Already signed up.
+    if (magicnet_server_verifier_is_signed_up(server, pub_key))
+    {
+        res = MAGICNET_ERROR_ALREADY_EXISTANT;
+        goto out;
+    }
+
+    // We allow a maximum of 20480 verifiers if we have too many we will reject this signup
+    if (vector_count(server->next_block.signed_up_verifiers) > MAGICNET_MAX_VERIFIER_CONTESTANTS)
+    {
+        res = MAGICNET_ERROR_QUEUE_FULL;
+        goto out;
+    }
+    
+    // We must now add this verifier to the vector
+    // Clone the key
+    struct key* cloned_key = calloc(1, sizeof(struct key));
+    memcpy(cloned_key, pub_key, sizeof(struct key));
+    vector_push(server->next_block.signed_up_verifiers, &cloned_key);
+
+    magicnet_log("%s new verifier signup %s\n", __FUNCTION__, pub_key->key);
+out:
+    return res;
+}
+int magicnet_client_process_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    if (!client->server)
+    {
+        magicnet_log("%s no server instance for this client to use for verifier signup\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    magicnet_server_lock(client->server);
+    res = magicnet_server_verifier_signup(client->server, &packet->pub_key);
+    magicnet_server_unlock(client->server);
+    
+
+out:
+    return res; 
+}
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
@@ -1257,10 +1365,13 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         res = magicnet_client_process_user_defined_packet(client, packet);
         break;
 
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        res = magicnet_client_process_verifier_signup(client, packet);
+        break;
+
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_process_server_sync_packet(client, packet);
         break;
-
     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
         // empty..
         res = 0;
@@ -1278,18 +1389,16 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
 int magicnet_client_manage_next_packet(struct magicnet_client *client)
 {
     int res = 0;
-    struct magicnet_packet *packet = magicnet_recv_next_packet(client);
+    struct magicnet_packet *packet = magicnet_recv_next_packet(client, &res);
     if (!packet)
     {
         magicnet_log("%s failed to receive new packet from client\n", __FUNCTION__);
-
-        res = -1;
         goto out;
     }
 
-    if (magicnet_client_process_packet(client, packet) < 0)
+    res = magicnet_client_process_packet(client, packet);
+    if (res < 0)
     {
-        res = -1;
         goto out;
     }
 
@@ -1458,7 +1567,7 @@ int magicnet_server_poll(struct magicnet_client *client)
         goto out;
     }
 
-    struct magicnet_packet *packet = magicnet_recv_next_packet(client);
+    struct magicnet_packet *packet = magicnet_recv_next_packet(client, &res);
     if (packet == NULL)
     {
         goto out;
@@ -1495,7 +1604,7 @@ void *magicnet_client_thread(void *_client)
         goto out;
     }
 
-    while (res >= 0)
+    while (res != MAGICNET_ERROR_CRITICAL_ERROR)
     {
         res = magicnet_client_manage_next_packet(client);
     }
@@ -1583,6 +1692,21 @@ const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *se
     return conn_ip;
 }
 
+bool magicnet_client_have_we_offered_to_make_next_block(struct magicnet_client* client)
+{
+    return client->flags & MAGICNET_CLIENT_FLAG_WE_OFFERED_TO_VERIFY_NEXT_BLOCK;
+}
+
+int magicnet_offer_to_client_to_verify_next_block(struct magicnet_client* client)
+{
+    int res = 0;
+    struct magicnet_packet* packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
+    res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    magicnet_free_packet(packet);
+    client->flags |= MAGICNET_CLIENT_FLAG_WE_OFFERED_TO_VERIFY_NEXT_BLOCK;
+    return res;
+}
 void *magicnet_server_client_thread(void *_client)
 {
     struct magicnet_client *client = _client;
@@ -1591,6 +1715,15 @@ void *magicnet_server_client_thread(void *_client)
     int res = 0;
     while (res >= 0)
     {
+        // After half time we must send our key to be a verifier.
+        if ((time(NULL) % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS) > MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 2)
+        {
+            if (magicnet_client_have_we_offered_to_make_next_block(client))
+            {
+                // Okay lets offer this
+                magicnet_offer_to_client_to_verify_next_block(client);
+            }
+        }
         // We must ask the server to relay packets to us
         magicnet_server_poll(client);
         usleep(2000000);

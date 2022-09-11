@@ -34,6 +34,8 @@ enum
     MAGICNET_PACKET_TYPE_PONG,
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
     MAGICNET_PACKET_TYPE_SERVER_SYNC,
+    MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP,
+    MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
@@ -55,6 +57,11 @@ enum
     MAGICNET_ERROR_QUEUE_FULL = -1000,
     MAGICNET_ERROR_NOT_FOUND = -1001,
     MAGICNET_ERROR_RECEIVED_PACKET_BEFORE = -1002,
+    MAGICNET_ERROR_ALREADY_EXISTANT = -1003,
+    MAGICNET_ERROR_UNKNOWN = -1004,
+    // Critical errors will terminate connections when received be cautious..
+    // You may not send a critical error over the network it will be ignored and changed to an unknown error
+    MAGICNET_ERROR_CRITICAL_ERROR = -1,
     MAGICNET_ACKNOWLEGED_ALL_OKAY = 0
 };
 struct magicnet_packet
@@ -120,6 +127,30 @@ struct magicnet_packet
                     int flags;
                     struct magicnet_packet *packet;
                 } sync;
+
+
+                /**
+                 * This packet describes a VOTE of the key who should verify the next block.
+                 * SOme better abstraction would be better i think, come back to revise...
+                 */
+                struct magicnet_vote
+                {       
+                    // Contains the public key of whome this vote is for.
+                    // If enough people vote for this key they will create the next block
+                    // all blocks signed whome are not the winner will be rejected.
+                    struct key vote_for_key;
+                } vote_next_verifier;
+
+                /**
+                 * @brief Once this packet is signed and sent your public key
+                 * will be eligible to be voted for to be the next signer of the block
+                 * unless you signup before a block is created you wont be considered.
+                 * You must sign up for every block you wish to sign.
+                 */
+                struct magicnet_verifier_signup
+                {
+                    // Empty... We will use the key that signed this block.
+                } verifier_signup;
             };
         } payload;
     } signed_data;
@@ -134,7 +165,16 @@ struct magicnet_client
     struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
     struct sockaddr_in client_info;
     off_t relay_packet_pos;
+
     struct magicnet_server *server;
+};
+
+struct magicnet_key_vote
+{
+    // THe key who voted
+    struct key vote_from;
+    // The key voted for  
+    struct key voted_for;
 };
 
 struct magicnet_server
@@ -160,6 +200,27 @@ struct magicnet_server
         off_t pos;
     } seen_packets;
 
+
+    /**
+     * @brief Rules on how the next block will be created
+     * 
+     */
+    struct next_block
+    {
+        /**
+         * The votes for the verifier who will make the next block. 
+         */
+        struct votes
+        {
+            // vector of struct magicnet_key_vote*
+            struct vector* votes;
+        } verifier_votes;
+
+        // Vector of struct key* . Everybody in this vector can be voted on to make the next block
+        // do not vote on people who are not signed up to sign the next block!
+        struct vector* signed_up_verifiers;
+    } next_block;
+
     pthread_mutex_t lock;
 
     // BELOW MUST BE PROCESSED ONLY BY THE SERVER THREAD
@@ -176,6 +237,8 @@ enum
     MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
     // True if this connection is from an IP address on our local machine.
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
+    // Bit is set if we sent to the connected client that we wish to verify the next block
+    MAGICNET_CLIENT_FLAG_WE_OFFERED_TO_VERIFY_NEXT_BLOCK = 0b00001000,
 
 };
 struct signed_data* magicnet_signed_data(struct magicnet_packet* packet);
