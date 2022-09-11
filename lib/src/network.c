@@ -1554,26 +1554,33 @@ int magicnet_server_poll(struct magicnet_client *client)
     int res = 0;
 
     // We also want to send a packet of our own
-    int flags = MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
+    int flags = 0;
 
     struct magicnet_packet *packet_to_send = magicnet_packet_new();
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
     magicnet_server_lock(client->server);
-    magicnet_copy_packet(packet_to_relay, magicnet_client_next_packet_to_relay(client));
+    struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+    if (tmp_packet)
+    {
+        magicnet_copy_packet(packet_to_relay, tmp_packet);
+        flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
+    }
     magicnet_server_unlock(client->server);
     if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
     {
         magicnet_log("non empty packet to send\n");
     }
-    magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
-    magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
-    magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
-    res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
-    if (res < 0)
+    if (flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
     {
-        goto out;
+        magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
+        magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
+        magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
+        res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
-
     struct magicnet_packet *packet = magicnet_recv_next_packet(client, &res);
     if (packet == NULL)
     {
