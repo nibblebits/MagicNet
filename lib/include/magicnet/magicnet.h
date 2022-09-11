@@ -59,6 +59,7 @@ enum
     MAGICNET_ERROR_RECEIVED_PACKET_BEFORE = -1002,
     MAGICNET_ERROR_ALREADY_EXISTANT = -1003,
     MAGICNET_ERROR_UNKNOWN = -1004,
+    MAGICNET_ERROR_SECURITY_RISK = -1005,
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
     MAGICNET_ERROR_CRITICAL_ERROR = -1,

@@ -203,8 +203,8 @@ struct magicnet_server *magicnet_server_start()
 
     MAGICNET_load_keypair();
 
-    server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote*));
-    server->next_block.signed_up_verifiers = vector_create(sizeof(struct key*));
+    server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
+    server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
     return server;
 }
 
@@ -411,7 +411,7 @@ void magicnet_close(struct magicnet_client *client)
     }
 }
 
-int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer* store_in_buffer)
+int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
     size_t amount_read = 0;
@@ -427,7 +427,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
         // Sometimes we are to store the result in a buffer for debugging and validation purposes..
         if (store_in_buffer)
         {
-            buffer_write_bytes(store_in_buffer, ptr_out + amount_read, amount-amount_read);
+            buffer_write_bytes(store_in_buffer, ptr_out + amount_read, amount - amount_read);
         }
 
         amount_read += res;
@@ -452,7 +452,7 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
         // Sometimes we are to store the result in a buffer for debugging and validation purposes..
         if (store_in_buffer)
         {
-            buffer_write_bytes(store_in_buffer, ptr_out + amount_written, amount-amount_written);
+            buffer_write_bytes(store_in_buffer, ptr_out + amount_written, amount - amount_written);
         }
 
         amount_written += res;
@@ -482,7 +482,7 @@ int magicnet_write_long(struct magicnet_client *client, long value, struct buffe
     return 0;
 }
 
-long magicnet_read_long(struct magicnet_client *client, struct buffer* store_in_buffer)
+long magicnet_read_long(struct magicnet_client *client, struct buffer *store_in_buffer)
 {
     long result = 0;
     if (magicnet_read_bytes(client, &result, sizeof(result), store_in_buffer) < 0)
@@ -494,7 +494,7 @@ long magicnet_read_long(struct magicnet_client *client, struct buffer* store_in_
     return result;
 }
 
-int magicnet_read_int(struct magicnet_client *client, struct buffer* store_in_buffer)
+int magicnet_read_int(struct magicnet_client *client, struct buffer *store_in_buffer)
 {
     int result = 0;
     if (magicnet_read_bytes(client, &result, sizeof(result), store_in_buffer) < 0)
@@ -506,7 +506,7 @@ int magicnet_read_int(struct magicnet_client *client, struct buffer* store_in_bu
     return result;
 }
 
-short magicnet_read_short(struct magicnet_client *client, struct buffer* store_in_buffer)
+short magicnet_read_short(struct magicnet_client *client, struct buffer *store_in_buffer)
 {
     short result = 0;
     if (magicnet_read_bytes(client, &result, sizeof(result), store_in_buffer) < 0)
@@ -621,7 +621,6 @@ int magicnet_client_read_verifier_signup_packet(struct magicnet_client *client, 
     return 0;
 }
 
-
 int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
 {
     if (!packet->not_sent.tmp_buf)
@@ -709,7 +708,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
         return -1;
     }
-
 
     if (has_signature)
     {
@@ -823,6 +821,7 @@ int magicnet_client_write_packet_server_poll(struct magicnet_client *client, str
             res = -1;
             goto out;
         }
+        // Packet should already be signed no need to sign again.
         res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet, 0);
     }
 out:
@@ -835,13 +834,11 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
     return 0;
 }
 
-
 int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
 {
 
     return 0;
 }
-
 
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
@@ -950,7 +947,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
         res = MAGICNET_ERROR_UNKNOWN;
     }
-    
+
     return res;
 }
 
@@ -1023,7 +1020,7 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
     return mclient;
 }
 
-struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client, int* res_out)
+struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client, int *res_out)
 {
     struct magicnet_packet *packet = magicnet_packet_new();
     int res = magicnet_client_read_packet(client, packet);
@@ -1104,6 +1101,12 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
         return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
     }
 
+    if (MAGICNET_nulled_signature(&packet->signature))
+    {
+        magicnet_log("%s you may not add an awaiting packet that has not been signed with a key. We need to know whos sending data on the network. Refused\n", __FUNCTION__);
+        return MAGICNET_ERROR_SECURITY_RISK;
+    }
+
     struct magicnet_packet *awaiting_packet = magicnet_client_get_available_free_to_use_packet(client);
     if (!awaiting_packet)
     {
@@ -1135,6 +1138,12 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
     if (magicnet_server_has_relay_packet_been_queued(server, packet))
     {
         return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
+    }
+
+    if (MAGICNET_nulled_signature(&packet->signature))
+    {
+        magicnet_log("%s you may not add a packet to relay that has not been signed with a key. We need to know whos sending data on the network. Refused\n", __FUNCTION__);
+        return MAGICNET_ERROR_SECURITY_RISK;
     }
 
     // Do we already have this packet to relay?
@@ -1288,12 +1297,11 @@ out:
     return res;
 }
 
-
-bool magicnet_server_verifier_is_signed_up(struct magicnet_server* server, struct key* key)
+bool magicnet_server_verifier_is_signed_up(struct magicnet_server *server, struct key *key)
 {
     vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
-    struct key* key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
-    while(key_in_vec)
+    struct key *key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while (key_in_vec)
     {
         if (key_cmp(key_in_vec, key))
         {
@@ -1305,7 +1313,7 @@ bool magicnet_server_verifier_is_signed_up(struct magicnet_server* server, struc
     return false;
 }
 
-int magicnet_server_verifier_signup(struct magicnet_server* server, struct key* pub_key)
+int magicnet_server_verifier_signup(struct magicnet_server *server, struct key *pub_key)
 {
     int res = 0;
     // Already signed up.
@@ -1321,10 +1329,10 @@ int magicnet_server_verifier_signup(struct magicnet_server* server, struct key* 
         res = MAGICNET_ERROR_QUEUE_FULL;
         goto out;
     }
-    
+
     // We must now add this verifier to the vector
     // Clone the key
-    struct key* cloned_key = calloc(1, sizeof(struct key));
+    struct key *cloned_key = calloc(1, sizeof(struct key));
     memcpy(cloned_key, pub_key, sizeof(struct key));
     vector_push(server->next_block.signed_up_verifiers, &cloned_key);
 
@@ -1345,10 +1353,9 @@ int magicnet_client_process_verifier_signup(struct magicnet_client *client, stru
     magicnet_server_lock(client->server);
     res = magicnet_server_verifier_signup(client->server, &packet->pub_key);
     magicnet_server_unlock(client->server);
-    
 
 out:
-    return res; 
+    return res;
 }
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -1692,15 +1699,15 @@ const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *se
     return conn_ip;
 }
 
-bool magicnet_client_have_we_offered_to_make_next_block(struct magicnet_client* client)
+bool magicnet_client_have_we_offered_to_make_next_block(struct magicnet_client *client)
 {
     return client->flags & MAGICNET_CLIENT_FLAG_WE_OFFERED_TO_VERIFY_NEXT_BLOCK;
 }
 
-int magicnet_offer_to_client_to_verify_next_block(struct magicnet_client* client)
+int magicnet_offer_to_client_to_verify_next_block(struct magicnet_client *client)
 {
     int res = 0;
-    struct magicnet_packet* packet = magicnet_packet_new();
+    struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
     res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     magicnet_free_packet(packet);
