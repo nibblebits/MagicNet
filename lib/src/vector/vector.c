@@ -83,7 +83,7 @@ void vector_resize_for_index(struct vector *vector, int start_index, int total_e
 
     vector->data = realloc(vector->data, ((start_index + total_elements + VECTOR_ELEMENT_INCREMENT) * vector->esize));
     assert(vector->data);
-    vector->mindex = start_index + total_elements;
+    vector->mindex = start_index + total_elements + VECTOR_ELEMENT_INCREMENT;
 }
 
 void vector_resize_for(struct vector *vector, int total_elements)
