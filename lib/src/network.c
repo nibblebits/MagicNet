@@ -1175,6 +1175,10 @@ struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_cli
         // Yeah we had a valid packet we can use this.
         client->relay_packet_pos++;
     }
+    else
+    {
+        packet = NULL;
+    }
     return packet;
 }
 /**
