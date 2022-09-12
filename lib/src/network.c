@@ -1321,7 +1321,13 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     if (has_packet_to_relay)
     {
         // We have a packet lets send to the client
-        res = magicnet_client_write_packet(client, packet_to_relay, 0);
+        int flags = 0;
+        if (magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+        {
+            // We got to sign this packet we are about to relay.
+            flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+        }
+        res = magicnet_client_write_packet(client, packet_to_relay, flags);
         if (res < 0)
         {
             goto out;
@@ -1602,6 +1608,14 @@ int magicnet_server_poll_process_user_defined_packet(struct magicnet_client *cli
 
     return res;
 }
+
+int  magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    magicnet_log("%s client has asked to signup as a verifier for the next block: %s\n", __FUNCTION__, inet_ntoa(client->client_info.sin_addr));
+    return res;
+}
+
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -1617,6 +1631,10 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     {
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
         res = magicnet_server_poll_process_user_defined_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
         break;
     };
 
@@ -1792,6 +1810,22 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_client *client)
 {
     // struct magicnet_packet* packet = magicnet_packet_new();
     //  packet->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
+
+    // Lets create verifier signups for the block
+    // peers can ask to be elected to make the next block
+
+    struct magicnet_packet* packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+
+    // Let's add this packet to the server relay so all connected hosts will find it and relay it
+    // to millions
+    int res = magicnet_server_add_packet_to_relay(client->server, packet);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
+    }
+
 }
 void *magicnet_server_client_thread(void *_client)
 {
