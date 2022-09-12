@@ -845,8 +845,16 @@ int magicnet_client_write_packet_server_poll(struct magicnet_client *client, str
             res = -1;
             goto out;
         }
-        // Packet should already be signed no need to sign again.
-        res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet, 0);
+        // Packet might not be signed if its not we need to sign it
+
+        int flags = 0;
+        struct magicnet_packet* sync_packet = magicnet_signed_data(packet)->payload.sync.packet;
+        if (MAGICNET_nulled_signature(&sync_packet->signature) && magicnet_signed_data(sync_packet)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+        {
+            // We have been instructed to sign this packet we have to do this for it to work on the network.
+            flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+        }
+        res = magicnet_client_write_packet(client, magicnet_signed_data(packet)->payload.sync.packet, flags);
     }
 out:
     return res;
