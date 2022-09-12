@@ -872,13 +872,13 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
     if (res < 0)
     {
-        return res;
+        goto out;
     }
 
     res = magicnet_write_int(client, magicnet_signed_data(packet)->type, packet->not_sent.tmp_buf);
     if (res < 0)
     {
-        return res;
+        goto out;
     }
 
     switch (magicnet_signed_data(packet)->type)
@@ -918,7 +918,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         {
             magicnet_log("%s you asked us to sign the packet but it was already signed.. We will not send this packet as it may be a potential attacker playing games\n", __FUNCTION__);
             res = -1;
-            return res;
+            goto out;
         }
 
         packet->pub_key = *MAGICNET_public_key();
@@ -926,7 +926,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         if (res < 0)
         {
             magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
-            return -1;
+            goto out;
         }
     }
 
@@ -935,7 +935,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     res = magicnet_write_int(client, has_signature, NULL);
     if (res < 0)
     {
-        return res;
+        goto out;
     }
 
     // Send the key and signature if their is any
@@ -944,13 +944,13 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_write_bytes(client, &packet->pub_key, sizeof(packet->pub_key), NULL);
         if (res < 0)
         {
-            return res;
+            goto out;
         }
 
         res = magicnet_write_bytes(client, &packet->signature, sizeof(packet->signature), NULL);
         if (res < 0)
         {
-            return res;
+            goto out;
         }
     }
 
@@ -958,9 +958,18 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     res = magicnet_write_bytes(client, packet->datahash, sizeof(packet->datahash), NULL);
     if (res < 0)
     {
-        return res;
+        goto out;
     }
 
+out:
+    if (res < 0)
+    {
+        magicnet_log("%s invalid response for write, to avoid a desync of the protocol we have to close the connection\n", __FUNCTION__);
+        // Invalid res? We need to kill this client connection as we
+        // just broke the protocol, receiver is waiting on data from us we didnt send.
+        // Its too late to send more data we will be out of sync
+        magicnet_close(client);
+    }
     buffer_free(packet->not_sent.tmp_buf);
     packet->not_sent.tmp_buf = NULL;
 
