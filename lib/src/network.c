@@ -730,7 +730,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         return -1;
     }
 
-
     /**
      * @brief Here unsigned packets provided by a LOCALHOST connection will be signed with our local key
      * this is okay because this is the local machine therefore it is the authority of this server instance
@@ -748,7 +747,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         sha256_data(buffer_ptr(packet_out->not_sent.tmp_buf), tmp_buf, packet_out->not_sent.tmp_buf->len);
         strncpy(packet_out->datahash, tmp_buf, sizeof(packet_out->datahash));
 
-        // Now let us craft a signature 
+        // Now let us craft a signature
         packet_out->pub_key = *MAGICNET_public_key();
         res = private_sign(packet_out->datahash, sizeof(packet_out->datahash), &packet_out->signature);
         if (res < 0)
@@ -1302,16 +1301,37 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
 {
     int res = 0;
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
+    bool has_packet_to_relay = false;
     // We got to lock this server
     magicnet_server_lock(client->server);
-    magicnet_copy_packet(packet_to_relay, magicnet_client_next_packet_to_relay(client));
+    struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+    if (tmp_packet)
+    {
+        magicnet_copy_packet(packet_to_relay, tmp_packet);
+        has_packet_to_relay = true;
+    }
     magicnet_server_unlock(client->server);
 
-    // We have a packet lets send to the client
-    res = magicnet_client_write_packet(client, packet_to_relay, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
-    if (res < 0)
+    if (has_packet_to_relay)
     {
-        goto out;
+        // We have a packet lets send to the client
+        res = magicnet_client_write_packet(client, packet_to_relay, 0);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+    else
+    {
+        // No packet to relay? Then we need to send back a not found packet
+        magicnet_signed_data(packet_to_relay)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
+        // Since this is a packet of our creation it also must be signed.. We aren't relaying
+        // anything new here.
+        res = magicnet_client_write_packet(client, packet_to_relay, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
 
     // Do we also have a packet from them?
@@ -1604,6 +1624,7 @@ int magicnet_server_poll(struct magicnet_client *client)
 
     struct magicnet_packet *packet_to_send = magicnet_packet_new();
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
+    struct magicnet_packet *packet = NULL;
     magicnet_server_lock(client->server);
     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
     if (tmp_packet)
@@ -1627,7 +1648,7 @@ int magicnet_server_poll(struct magicnet_client *client)
             goto out;
         }
     }
-    struct magicnet_packet *packet = magicnet_recv_next_packet(client, &res);
+    packet = magicnet_recv_next_packet(client, &res);
     if (packet == NULL)
     {
         goto out;
