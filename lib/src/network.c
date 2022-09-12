@@ -1173,9 +1173,9 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
         return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
     }
 
-    if (MAGICNET_nulled_signature(&packet->signature))
+    if (MAGICNET_nulled_signature(&packet->signature) && !(magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED))
     {
-        magicnet_log("%s you may not add a packet to relay that has not been signed with a key. We need to know whos sending data on the network. Refused\n", __FUNCTION__);
+        magicnet_log("%s you may not add a packet to relay that has not been signed with a key. We need to know whos sending data on the network. Refused. If you want to force this then assign the flag MAGICNET_PACKET_FLAG_MUST_BE_SIGNED and then it will be signed with our local key before its relayed to any peers.\n", __FUNCTION__);
         return MAGICNET_ERROR_SECURITY_RISK;
     }
 
