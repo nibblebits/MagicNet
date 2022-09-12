@@ -741,9 +741,23 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         assert((client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST));
         // Since we have no signature let us create our own this is allowed since we have confimed
         // that we are localhost and by default localhost packets have no signatures.
+
+        // Let's start by rehashing the data so we have an accurate hash. Just in case they provided us with a NULL hash entry
+        // perfectly valid from a localhost client.
         char tmp_buf[SHA256_STRING_LENGTH];
         sha256_data(buffer_ptr(packet_out->not_sent.tmp_buf), tmp_buf, packet_out->not_sent.tmp_buf->len);
         strncpy(packet_out->datahash, tmp_buf, sizeof(packet_out->datahash));
+
+        // Now let us craft a signature 
+        packet_out->pub_key = *MAGICNET_public_key();
+        res = private_sign(packet_out->datahash, sizeof(packet_out->datahash), &packet_out->signature);
+        if (res < 0)
+        {
+            magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
+            return -1;
+        }
+
+        magicnet_log("%s unsigned packet from localhost has now been signed with our signature\n", __FUNCTION__);
     }
 
     // Now the packet is constructed lets verify its contents if it has been signed.
