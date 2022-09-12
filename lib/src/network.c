@@ -1653,9 +1653,10 @@ int magicnet_server_poll(struct magicnet_client *client)
     {
         magicnet_log("non empty packet to send\n");
     }
+    
+    magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
     if (flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
     {
-        magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
         magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
         magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
     }
