@@ -767,11 +767,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         return res;
     }
 
-    magicnet_log("%s received packet from %s\n", __FUNCTION__, inet_ntoa(client->client_info.sin_addr));
-    if (inet_ntoa(client->client_info.sin_addr)[0] == '3')
-    {
-        magicnet_log("special\n");
-    }
 out:
     buffer_free(packet_out->not_sent.tmp_buf);
     packet_out->not_sent.tmp_buf = NULL;
