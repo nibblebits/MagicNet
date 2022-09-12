@@ -1247,7 +1247,7 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
     if (!packet_to_process)
     {
         packet_to_send = magicnet_packet_new();
-        magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
+        magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
         res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
         magicnet_log("%s Not found\n", __FUNCTION__);
 
@@ -1428,6 +1428,11 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         {
         case MAGICNET_PACKET_TYPE_SERVER_SYNC:
             res = magicnet_client_process_server_sync_packet(client, packet);
+            break;
+
+     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+            // empty..
+            res = 0;
             break;
 
         default:
