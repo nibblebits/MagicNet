@@ -771,8 +771,6 @@ out:
     buffer_free(packet_out->not_sent.tmp_buf);
     packet_out->not_sent.tmp_buf = NULL;
 
-    // Write the response code back to the client
-    magicnet_write_int(client, res, NULL);
 
     return res;
 }
@@ -966,14 +964,14 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     buffer_free(packet->not_sent.tmp_buf);
     packet->not_sent.tmp_buf = NULL;
 
-    // We expect to receive a response byte
-    res = magicnet_read_int(client, NULL);
-    // If the respponse is a critical error then we will change it to unknown
-    // since its illegal in our protocol to transmit critical error codes to prevent abuses to terminate connections
-    if (res == MAGICNET_ERROR_CRITICAL_ERROR)
-    {
-        res = MAGICNET_ERROR_UNKNOWN;
-    }
+    // // We expect to receive a response byte
+    // res = magicnet_read_int(client, NULL);
+    // // If the respponse is a critical error then we will change it to unknown
+    // // since its illegal in our protocol to transmit critical error codes to prevent abuses to terminate connections
+    // if (res == MAGICNET_ERROR_CRITICAL_ERROR)
+    // {
+    //     res = MAGICNET_ERROR_UNKNOWN;
+    // }
 
     return res;
 }
