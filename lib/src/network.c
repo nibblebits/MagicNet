@@ -730,16 +730,30 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         return -1;
     }
 
-    // Now the packet is constructed lets verify its contents if it has been signed.
-    if (has_signature)
+
+    /**
+     * @brief Here unsigned packets provided by a LOCALHOST connection will be signed with our local key
+     * this is okay because this is the local machine therefore it is the authority of this server instance
+     * to sign all packets
+     */
+    if (!has_signature)
     {
-        res = magicnet_client_verify_packet_was_signed(packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
-            return res;
-        }
+        assert((client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST));
+        // Since we have no signature let us create our own this is allowed since we have confimed
+        // that we are localhost and by default localhost packets have no signatures.
+        char tmp_buf[SHA256_STRING_LENGTH];
+        sha256_data(buffer_ptr(packet_out->not_sent.tmp_buf), tmp_buf, packet_out->not_sent.tmp_buf->len);
+        strncpy(packet_out->datahash, tmp_buf, sizeof(packet_out->datahash));
     }
+
+    // Now the packet is constructed lets verify its contents if it has been signed.
+    res = magicnet_client_verify_packet_was_signed(packet_out);
+    if (res < 0)
+    {
+        magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
+        return res;
+    }
+
 out:
     buffer_free(packet_out->not_sent.tmp_buf);
     packet_out->not_sent.tmp_buf = NULL;
@@ -1364,32 +1378,46 @@ out:
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
-
     int res = 0;
-    switch (magicnet_signed_data(packet)->type)
+
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
     {
-    case MAGICNET_PACKET_TYPE_POLL_PACKETS:
-        res = magicnet_client_process_packet_poll_packets(client, packet);
-        break;
+        // Non local host clients have access to only one packet type
+        switch (magicnet_signed_data(packet)->type)
+        {
+        case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+            res = magicnet_client_process_server_sync_packet(client, packet);
+            break;
 
-    case MAGICNET_PACKET_TYPE_USER_DEFINED:
-        res = magicnet_client_process_user_defined_packet(client, packet);
-        break;
+        default:
+            res = -1;
+            magicnet_log("%s invalid packet type of %i please note as this is not a localhost client the commands it can access are limited\n", __FUNCTION__, magicnet_signed_data(packet)->type);
+        }
+    }
+    else
+    {
 
-    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
-        res = magicnet_client_process_verifier_signup(client, packet);
-        break;
+        switch (magicnet_signed_data(packet)->type)
+        {
+        case MAGICNET_PACKET_TYPE_POLL_PACKETS:
+            res = magicnet_client_process_packet_poll_packets(client, packet);
+            break;
 
-    case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-        res = magicnet_client_process_server_sync_packet(client, packet);
-        break;
-    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
-        // empty..
-        res = 0;
-        break;
-    default:
-        magicnet_log("%s Illegal packet provided\n", __FUNCTION__);
-        res = -1;
+        case MAGICNET_PACKET_TYPE_USER_DEFINED:
+            res = magicnet_client_process_user_defined_packet(client, packet);
+            break;
+
+        case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+            res = magicnet_client_process_server_sync_packet(client, packet);
+            break;
+        case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+            // empty..
+            res = 0;
+            break;
+        default:
+            magicnet_log("%s Illegal packet provided\n", __FUNCTION__);
+            res = -1;
+        }
     }
 
     // We have seen this packet now.
@@ -1710,20 +1738,10 @@ const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *se
     return conn_ip;
 }
 
-bool magicnet_client_have_we_offered_to_make_next_block(struct magicnet_client *client)
+void magicnet_server_client_signup_as_verifier(struct magicnet_client *client)
 {
-    return client->flags & MAGICNET_CLIENT_FLAG_WE_OFFERED_TO_VERIFY_NEXT_BLOCK;
-}
-
-int magicnet_offer_to_client_to_verify_next_block(struct magicnet_client *client)
-{
-    int res = 0;
-    struct magicnet_packet *packet = magicnet_packet_new();
-    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
-    res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
-    magicnet_free_packet(packet);
-    client->flags |= MAGICNET_CLIENT_FLAG_WE_OFFERED_TO_VERIFY_NEXT_BLOCK;
-    return res;
+    // struct magicnet_packet* packet = magicnet_packet_new();
+    //  packet->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
 }
 void *magicnet_server_client_thread(void *_client)
 {
@@ -1736,11 +1754,8 @@ void *magicnet_server_client_thread(void *_client)
         // After half time we must send our key to be a verifier.
         if ((time(NULL) % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS) > MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 2)
         {
-            if (magicnet_client_have_we_offered_to_make_next_block(client))
-            {
-                // Okay lets offer this
-                magicnet_offer_to_client_to_verify_next_block(client);
-            }
+            // Alright lets deal with this
+            magicnet_server_client_signup_as_verifier(client);
         }
         // We must ask the server to relay packets to us
         magicnet_server_poll(client);

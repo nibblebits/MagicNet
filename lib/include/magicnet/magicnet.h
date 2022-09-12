@@ -238,8 +238,6 @@ enum
     MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
     // True if this connection is from an IP address on our local machine.
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
-    // Bit is set if we sent to the connected client that we wish to verify the next block
-    MAGICNET_CLIENT_FLAG_WE_OFFERED_TO_VERIFY_NEXT_BLOCK = 0b00001000,
 
 };
 struct signed_data* magicnet_signed_data(struct magicnet_packet* packet);
