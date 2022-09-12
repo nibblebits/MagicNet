@@ -772,7 +772,6 @@ out:
     buffer_free(packet_out->not_sent.tmp_buf);
     packet_out->not_sent.tmp_buf = NULL;
 
-
     return res;
 }
 
@@ -1650,12 +1649,15 @@ int magicnet_server_poll(struct magicnet_client *client)
         magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
         magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
         magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
-        res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
-        if (res < 0)
-        {
-            goto out;
-        }
     }
+
+    // Project is getting messy, needs a cleanup.
+    res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    if (res < 0)
+    {
+        goto out;
+    }
+
     packet = magicnet_recv_next_packet(client, &res);
     if (packet == NULL)
     {
