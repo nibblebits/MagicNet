@@ -215,6 +215,10 @@ int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, b
         if (magicnet_signed_data(packet)->type == MAGICNET_PACKET_TYPE_NOT_FOUND)
         {
             packet_found = false;
+        }
+
+        if (!packet_found)
+        {
             // We've to wait a bit.. lets not do damage.
             usleep(5000000);
         }
