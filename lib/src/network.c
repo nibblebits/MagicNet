@@ -1371,66 +1371,8 @@ out:
     return res;
 }
 
-bool magicnet_server_verifier_is_signed_up(struct magicnet_server *server, struct key *key)
-{
-    vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
-    struct key *key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
-    while (key_in_vec)
-    {
-        if (key_cmp(key_in_vec, key))
-        {
-            return true;
-        }
-        key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
-    }
 
-    return false;
-}
 
-int magicnet_server_verifier_signup(struct magicnet_server *server, struct key *pub_key)
-{
-    int res = 0;
-    // Already signed up.
-    if (magicnet_server_verifier_is_signed_up(server, pub_key))
-    {
-        res = MAGICNET_ERROR_ALREADY_EXISTANT;
-        goto out;
-    }
-
-    // We allow a maximum of 20480 verifiers if we have too many we will reject this signup
-    if (vector_count(server->next_block.signed_up_verifiers) > MAGICNET_MAX_VERIFIER_CONTESTANTS)
-    {
-        res = MAGICNET_ERROR_QUEUE_FULL;
-        goto out;
-    }
-
-    // We must now add this verifier to the vector
-    // Clone the key
-    struct key *cloned_key = calloc(1, sizeof(struct key));
-    memcpy(cloned_key, pub_key, sizeof(struct key));
-    vector_push(server->next_block.signed_up_verifiers, &cloned_key);
-
-    magicnet_log("%s new verifier signup %s\n", __FUNCTION__, pub_key->key);
-out:
-    return res;
-}
-int magicnet_client_process_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
-{
-    int res = 0;
-    if (!client->server)
-    {
-        magicnet_log("%s no server instance for this client to use for verifier signup\n", __FUNCTION__);
-        res = -1;
-        goto out;
-    }
-
-    magicnet_server_lock(client->server);
-    res = magicnet_server_verifier_signup(client->server, &packet->pub_key);
-    magicnet_server_unlock(client->server);
-
-out:
-    return res;
-}
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
@@ -1619,10 +1561,57 @@ int magicnet_server_poll_process_user_defined_packet(struct magicnet_client *cli
     return res;
 }
 
+bool magicnet_server_verifier_is_signed_up(struct magicnet_server *server, struct key *key)
+{
+    vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
+    struct key *key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while (key_in_vec)
+    {
+        if (key_cmp(key_in_vec, key))
+        {
+            return true;
+        }
+        key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    }
+
+    return false;
+}
+
+
+
+int magicnet_server_verifier_signup(struct magicnet_server *server, struct key *pub_key)
+{
+    int res = 0;
+    // Already signed up.
+    if (magicnet_server_verifier_is_signed_up(server, pub_key))
+    {
+        res = MAGICNET_ERROR_ALREADY_EXISTANT;
+        goto out;
+    }
+
+    // We allow a maximum of 20480 verifiers if we have too many we will reject this signup
+    if (vector_count(server->next_block.signed_up_verifiers) > MAGICNET_MAX_VERIFIER_CONTESTANTS)
+    {
+        res = MAGICNET_ERROR_QUEUE_FULL;
+        goto out;
+    }
+
+    // We must now add this verifier to the vector
+    // Clone the key
+    struct key *cloned_key = calloc(1, sizeof(struct key));
+    memcpy(cloned_key, pub_key, sizeof(struct key));
+    vector_push(server->next_block.signed_up_verifiers, &cloned_key);
+
+    magicnet_log("%s new verifier signup %s\n", __FUNCTION__, pub_key->key);
+out:
+    return res;
+}
+
 int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     magicnet_log("%s client has asked to signup as a verifier for the next block: %s\n", __FUNCTION__, inet_ntoa(client->client_info.sin_addr));
+    res = magicnet_server_verifier_signup(client->server, &packet->pub_key);
     return res;
 }
 
@@ -1949,7 +1938,10 @@ void magicnet_server_block_creation_sequence(struct magicnet_server* server)
     }
     else if(current_block_sequence_time >= block_time_third_quarter_end && current_block_sequence_time <= block_time_fourth_quarter_end)
     {
-        magicnet_log("%s clearing block sequence\n", __FUNCTION__);
+        // We dont check for the step in this IF statement, just in case a peer doesnt keep up
+        // we dont want them stuck forever out of being able to make block sequences, therefore we allow this one to always run
+        // yes it will run every few seconds for ages but its fine as then we can reject people
+        // sending verifier packets when they shouldnt be since they will be discarded.
         magicnet_server_reset_block_sequence(server);
     }
     magicnet_server_unlock(server);
