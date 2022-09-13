@@ -205,6 +205,7 @@ struct magicnet_server *magicnet_server_start()
 
     server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
+    server->server_started = time(NULL);
     return server;
 }
 
@@ -1876,6 +1877,29 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
 
 
 /**
+ * @brief Resets the block sequence, clearing all signed up verifiers and votes for whome should make the next block
+ * steps are all reset as well.
+ * 
+ * @param server 
+ */
+void magicnet_server_reset_block_sequence(struct magicnet_server* server)
+{
+    vector_clear(server->next_block.verifier_votes.votes);
+
+    vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
+    struct key* verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while(verifier_key)
+    {
+        free(verifier_key);
+        verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    }
+
+    vector_clear(server->next_block.signed_up_verifiers);
+
+    server->next_block.step = BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS;
+}
+
+/**
  * @brief Block creation is always happening every second, there is a special block sequence where certain steps
  * need to be followed over a period of a few minutes. The total seconds to make a block is split into four
  * operations, each will run within each quarter of the total seconds to make a block
@@ -1916,8 +1940,24 @@ void magicnet_server_block_creation_sequence(struct magicnet_server* server)
         magicnet_server_client_signup_as_verifier(server);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;
     }
+    else if(current_block_sequence_time >= block_time_second_quarter_end 
+            && current_block_sequence_time <= block_time_third_quarter_end && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
+    {
+        magicnet_log("%s second quarter in the block sequence, lets create a random vote\n", __FUNCTION__);
+        server->next_block.step = BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK;
+    }
+    else if(current_block_sequence_time >= block_time_third_quarter_end && current_block_sequence_time <= block_time_fourth_quarter_end)
+    {
+        magicnet_log("%s clearing block sequence\n", __FUNCTION__);
+        magicnet_server_reset_block_sequence(server);
+    }
     magicnet_server_unlock(server);
 }
+bool magicnet_server_alive_for_at_least_one_block_cycle(struct magicnet_server* server)
+{
+    return time(NULL) - server->server_started > MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS;
+}
+
 int magicnet_server_process(struct magicnet_server *server)
 {
     int res = 0;
@@ -1927,7 +1967,14 @@ int magicnet_server_process(struct magicnet_server *server)
         server->last_new_connection_attempt = time(NULL);
     }
 
-    magicnet_server_block_creation_sequence(server);
+    // We can only work with a block creation sequence if we have existed longer than one sequence
+    // this is to prevent abuse such as clients starting mid way through a sequence, voting with very little informaton
+    // and so on.
+    if (magicnet_server_alive_for_at_least_one_block_cycle(server))
+    {
+        magicnet_server_block_creation_sequence(server);
+    }
+
     return res;
 }
 void *magicnet_server_thread(void *_server)
