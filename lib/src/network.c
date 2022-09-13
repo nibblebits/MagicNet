@@ -1902,7 +1902,7 @@ struct key* magicnet_server_get_random_block_verifier(struct magicnet_server* se
         return NULL;
     }
 
-    int random_key_index = rand() % vector_count(server->next_block.signed_up_verifiers)-1;
+    int random_key_index = rand() % vector_count(server->next_block.signed_up_verifiers);
     return vector_peek_ptr_at(server->next_block.signed_up_verifiers, random_key_index);
 }
 
