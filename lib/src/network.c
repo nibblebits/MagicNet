@@ -273,6 +273,39 @@ void magicnet_server_unlock(struct magicnet_server *server)
     pthread_mutex_unlock(&server->lock);
 }
 
+bool magicnet_server_has_voted(struct magicnet_server* server, struct key* voter_key)
+{
+    vector_set_peek_pointer(server->next_block.verifier_votes.votes, 0);
+    struct magicnet_key_vote* key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    while(key_vote)
+    {
+        if (key_cmp(voter_key, &key_vote->vote_from))
+        {
+            return true;
+        }
+        key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    }
+
+    return false;
+}
+
+int magicnet_server_cast_verifier_vote(struct magicnet_server* server, struct key* voter_key, struct key* vote_for_key)
+{
+    if (magicnet_server_has_voted(server, voter_key))
+    {
+        // Cheeky trying to cast a vote twice! We dont allow change of votes all future votes REJECTED!
+        return MAGICNET_ERROR_ALREADY_EXISTANT;
+    }
+
+    struct magicnet_key_vote* key_vote = calloc(1, sizeof(struct magicnet_key_vote));
+    key_vote->vote_from = *voter_key;
+    key_vote->voted_for = *vote_for_key;
+    vector_push(server->next_block.verifier_votes.votes, &key_vote);
+
+    magicnet_log("%s new verifier vote. Voter(%s) votes for (%s) to make the next block\n", __FUNCTION__, voter_key->key, vote_for_key->key);
+
+    return 0;
+}
 void magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in)
 {
     memset(client, 0, sizeof(struct magicnet_client));
@@ -1862,6 +1895,36 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     }
 }
 
+struct key* magicnet_server_get_random_block_verifier(struct magicnet_server* server)
+{
+    if (vector_count(server->next_block.signed_up_verifiers) == 0)
+    {
+        return NULL;
+    }
+
+    int random_key_index = rand() % vector_count(server->next_block.signed_up_verifiers)-1;
+    return vector_peek_ptr_at(server->next_block.signed_up_verifiers, random_key_index);
+}
+
+void magicnet_server_client_vote_for_verifier(struct magicnet_server* server)
+{
+    struct key* verifier_key = magicnet_server_get_random_block_verifier(server);
+    if(!verifier_key)
+    {
+        magicnet_log("%s we went to cast a vote for a verifier but their isnt any verifiers available\n", __FUNCTION__);
+        return;
+    }
+
+    int res = magicnet_server_cast_verifier_vote(server, MAGICNET_public_key(), verifier_key);
+    if (res < 0)
+    {
+        magicnet_log("%s we failed to cast a vote on our local client\n", __FUNCTION__);
+        return;
+    }
+
+    // Let us create a new vote packet to relay.
+}
+
 /**
  * @brief Resets the block sequence, clearing all signed up verifiers and votes for whome should make the next block
  * steps are all reset as well.
@@ -1870,6 +1933,14 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
  */
 void magicnet_server_reset_block_sequence(struct magicnet_server *server)
 {
+    vector_set_peek_pointer(server->next_block.verifier_votes.votes, 0);
+    struct magicnet_key_vote* key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    while(key_vote)
+    {
+        free(key_vote);
+        key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    }
+
     vector_clear(server->next_block.verifier_votes.votes);
 
     vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
@@ -1928,6 +1999,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     else if (current_block_sequence_time >= block_time_second_quarter_end && current_block_sequence_time <= block_time_third_quarter_end && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
     {
         magicnet_log("%s second quarter in the block sequence, lets create a random vote\n", __FUNCTION__);
+        magicnet_server_client_vote_for_verifier(server);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK;
     }
     else if (current_block_sequence_time >= block_time_third_quarter_end && current_block_sequence_time <= block_time_fourth_quarter_end)
