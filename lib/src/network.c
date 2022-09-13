@@ -848,7 +848,7 @@ int magicnet_client_write_packet_server_poll(struct magicnet_client *client, str
         // Packet might not be signed if its not we need to sign it
 
         int flags = 0;
-        struct magicnet_packet* sync_packet = magicnet_signed_data(packet)->payload.sync.packet;
+        struct magicnet_packet *sync_packet = magicnet_signed_data(packet)->payload.sync.packet;
         if (MAGICNET_nulled_signature(&sync_packet->signature) && magicnet_signed_data(sync_packet)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
         {
             // We have been instructed to sign this packet we have to do this for it to work on the network.
@@ -975,7 +975,7 @@ out:
         // Invalid res? We need to kill this client connection as we
         // just broke the protocol, receiver is waiting on data from us we didnt send.
         // Its too late to send more data we will be out of sync
-        magicnet_close(client);
+        close(client->sock);
     }
     buffer_free(packet->not_sent.tmp_buf);
     packet->not_sent.tmp_buf = NULL;
@@ -1443,7 +1443,7 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
             res = magicnet_client_process_server_sync_packet(client, packet);
             break;
 
-     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+        case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
             // empty..
             res = 0;
             break;
@@ -1617,7 +1617,7 @@ int magicnet_server_poll_process_user_defined_packet(struct magicnet_client *cli
     return res;
 }
 
-int  magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     magicnet_log("%s client has asked to signup as a verifier for the next block: %s\n", __FUNCTION__, inet_ntoa(client->client_info.sin_addr));
@@ -1674,7 +1674,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     {
         magicnet_log("non empty packet to send\n");
     }
-    
+
     magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
     if (flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
     {
@@ -1814,27 +1814,7 @@ const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *se
     return conn_ip;
 }
 
-void magicnet_server_client_signup_as_verifier(struct magicnet_client *client)
-{
-    // struct magicnet_packet* packet = magicnet_packet_new();
-    //  packet->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
 
-    // Lets create verifier signups for the block
-    // peers can ask to be elected to make the next block
-
-    struct magicnet_packet* packet = magicnet_packet_new();
-    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
-    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-
-    // Let's add this packet to the server relay so all connected hosts will find it and relay it
-    // to millions
-    int res = magicnet_server_add_packet_to_relay(client->server, packet);
-    if (res < 0)
-    {
-        magicnet_log("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
-    }
-
-}
 void *magicnet_server_client_thread(void *_client)
 {
     struct magicnet_client *client = _client;
@@ -1843,12 +1823,6 @@ void *magicnet_server_client_thread(void *_client)
     int res = 0;
     while (res >= 0)
     {
-        // After half time we must send our key to be a verifier.
-        if ((time(NULL) % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS) > MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 2)
-        {
-            // Alright lets deal with this
-            magicnet_server_client_signup_as_verifier(client);
-        }
         // We must ask the server to relay packets to us
         magicnet_server_poll(client);
         usleep(2000000);
@@ -1880,6 +1854,64 @@ bool magicnet_server_should_make_new_connections(struct magicnet_server *server)
 {
     return (time(NULL) - server->last_new_connection_attempt) >= MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS;
 }
+
+void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
+{
+
+    // Lets create verifier signups for the block
+    // peers can ask to be elected to make the next block
+
+    struct magicnet_packet *packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+
+    // Let's add this packet to the server relay so all connected hosts will find it and relay it
+    // to millions
+    int res = magicnet_server_add_packet_to_relay(server, packet);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
+    }
+}
+
+
+/**
+ * @brief Block creation is always happening every second, there is a special block sequence where certain steps
+ * need to be followed over a period of a few minutes. The total seconds to make a block is split into four
+ * operations, each will run within each quarter of the total seconds to make a block
+ * 
+ * First quarter: Verifiers are signed up and received
+ * Second quarter: Everybody casts a random vote for the verifier they want to make the next block
+ * Third quarter: We wait to receive the signed block
+ * Fourth quarter: We reset all block rules, clear all verifiers and votes ready for the next block.
+ * 
+ * Then the process repeats forever.
+ * @param server 
+ */
+void magicnet_server_block_creation_sequence(struct magicnet_server* server)
+{
+  // Lets say we create a block every 256 seconds
+    // the first quarter of that time we will be signing up as a verifier and receving new verifiers
+    // the second quarter we will be casting votes
+    // third quarter we wait to receive the block
+    // final quarter we reset the block creation rules, clearing all the verifiers and votes wether
+    // we receive a block or not this will happen
+    time_t block_time_first_quarter_end = MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 4;
+    time_t block_time_second_quarter_end = block_time_first_quarter_end * 2;
+    time_t block_time_third_quarter_end = block_time_first_quarter_end * 3;
+    time_t block_time_fourth_quarter_end = block_time_first_quarter_end * 4;
+
+    // This gives us what second into the sequence we are I.e 15 seconds into the block sequence
+    // it cannot be greater than the MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS
+    time_t current_block_sequence_time = time(NULL) % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS;
+
+    // First quarter, signup as a verifier.
+    if (current_block_sequence_time >= block_time_first_quarter_end && current_block_sequence_time <= block_time_second_quarter_end)
+    {
+        // Alright lets deal with this
+        magicnet_server_client_signup_as_verifier(server);
+    }
+}
 int magicnet_server_process(struct magicnet_server *server)
 {
     int res = 0;
@@ -1889,6 +1921,7 @@ int magicnet_server_process(struct magicnet_server *server)
         server->last_new_connection_attempt = time(NULL);
     }
 
+    magicnet_server_block_creation_sequence(server);
     return res;
 }
 void *magicnet_server_thread(void *_server)
