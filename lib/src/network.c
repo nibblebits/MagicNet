@@ -1905,12 +1905,18 @@ void magicnet_server_block_creation_sequence(struct magicnet_server* server)
     // it cannot be greater than the MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS
     time_t current_block_sequence_time = time(NULL) % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS;
 
-    // First quarter, signup as a verifier.
-    if (current_block_sequence_time >= block_time_first_quarter_end && current_block_sequence_time <= block_time_second_quarter_end)
+    magicnet_server_lock(server);
+
+    // First quarter, signup as a verifier. (Note we check that the step is correct for clients that came online too late.. or did not complete a vital step on time)
+    int step = server->next_block.step;
+    if (current_block_sequence_time >= block_time_first_quarter_end 
+        && current_block_sequence_time <= block_time_second_quarter_end && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
     {
         // Alright lets deal with this
         magicnet_server_client_signup_as_verifier(server);
+        server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;
     }
+    magicnet_server_unlock(server);
 }
 int magicnet_server_process(struct magicnet_server *server)
 {

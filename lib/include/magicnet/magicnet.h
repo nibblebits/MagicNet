@@ -65,6 +65,8 @@ enum
     MAGICNET_ERROR_CRITICAL_ERROR = -1,
     MAGICNET_ACKNOWLEGED_ALL_OKAY = 0
 };
+
+
 struct magicnet_packet
 {
 
@@ -178,6 +180,15 @@ struct magicnet_key_vote
     struct key voted_for;
 };
 
+
+enum
+{
+    BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS,
+    BLOCK_CREATION_SEQUENCE_CAST_VOTES,
+    BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK,
+    BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE
+};
+
 struct magicnet_server
 {
     int sock;
@@ -220,6 +231,10 @@ struct magicnet_server
         // Vector of struct key* . Everybody in this vector can be voted on to make the next block
         // do not vote on people who are not signed up to sign the next block!
         struct vector* signed_up_verifiers;
+
+        // The step in the block creation sequence we are currently in.
+        int step;
+        
     } next_block;
 
     pthread_mutex_t lock;
