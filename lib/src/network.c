@@ -1371,8 +1371,6 @@ out:
     return res;
 }
 
-
-
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
@@ -1577,8 +1575,6 @@ bool magicnet_server_verifier_is_signed_up(struct magicnet_server *server, struc
     return false;
 }
 
-
-
 int magicnet_server_verifier_signup(struct magicnet_server *server, struct key *pub_key)
 {
     int res = 0;
@@ -1611,7 +1607,9 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
 {
     int res = 0;
     magicnet_log("%s client has asked to signup as a verifier for the next block: %s\n", __FUNCTION__, inet_ntoa(client->client_info.sin_addr));
+    magicnet_server_lock(client->server);
     res = magicnet_server_verifier_signup(client->server, &packet->pub_key);
+    magicnet_server_unlock(client->server);
     return res;
 }
 
@@ -1805,7 +1803,6 @@ const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *se
     return conn_ip;
 }
 
-
 void *magicnet_server_client_thread(void *_client)
 {
     struct magicnet_client *client = _client;
@@ -1865,20 +1862,19 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     }
 }
 
-
 /**
  * @brief Resets the block sequence, clearing all signed up verifiers and votes for whome should make the next block
  * steps are all reset as well.
- * 
- * @param server 
+ *
+ * @param server
  */
-void magicnet_server_reset_block_sequence(struct magicnet_server* server)
+void magicnet_server_reset_block_sequence(struct magicnet_server *server)
 {
     vector_clear(server->next_block.verifier_votes.votes);
 
     vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
-    struct key* verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
-    while(verifier_key)
+    struct key *verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while (verifier_key)
     {
         free(verifier_key);
         verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
@@ -1893,18 +1889,18 @@ void magicnet_server_reset_block_sequence(struct magicnet_server* server)
  * @brief Block creation is always happening every second, there is a special block sequence where certain steps
  * need to be followed over a period of a few minutes. The total seconds to make a block is split into four
  * operations, each will run within each quarter of the total seconds to make a block
- * 
+ *
  * First quarter: Verifiers are signed up and received
  * Second quarter: Everybody casts a random vote for the verifier they want to make the next block
  * Third quarter: We wait to receive the signed block
  * Fourth quarter: We reset all block rules, clear all verifiers and votes ready for the next block.
- * 
+ *
  * Then the process repeats forever.
- * @param server 
+ * @param server
  */
-void magicnet_server_block_creation_sequence(struct magicnet_server* server)
+void magicnet_server_block_creation_sequence(struct magicnet_server *server)
 {
-  // Lets say we create a block every 256 seconds
+    // Lets say we create a block every 256 seconds
     // the first quarter of that time we will be signing up as a verifier and receving new verifiers
     // the second quarter we will be casting votes
     // third quarter we wait to receive the block
@@ -1923,20 +1919,18 @@ void magicnet_server_block_creation_sequence(struct magicnet_server* server)
 
     // First quarter, signup as a verifier. (Note we check that the step is correct for clients that came online too late.. or did not complete a vital step on time)
     int step = server->next_block.step;
-    if (current_block_sequence_time >= block_time_first_quarter_end 
-        && current_block_sequence_time <= block_time_second_quarter_end && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
+    if (current_block_sequence_time >= block_time_first_quarter_end && current_block_sequence_time <= block_time_second_quarter_end && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
     {
         // Alright lets deal with this
         magicnet_server_client_signup_as_verifier(server);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;
     }
-    else if(current_block_sequence_time >= block_time_second_quarter_end 
-            && current_block_sequence_time <= block_time_third_quarter_end && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
+    else if (current_block_sequence_time >= block_time_second_quarter_end && current_block_sequence_time <= block_time_third_quarter_end && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
     {
         magicnet_log("%s second quarter in the block sequence, lets create a random vote\n", __FUNCTION__);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK;
     }
-    else if(current_block_sequence_time >= block_time_third_quarter_end && current_block_sequence_time <= block_time_fourth_quarter_end)
+    else if (current_block_sequence_time >= block_time_third_quarter_end && current_block_sequence_time <= block_time_fourth_quarter_end)
     {
         // We dont check for the step in this IF statement, just in case a peer doesnt keep up
         // we dont want them stuck forever out of being able to make block sequences, therefore we allow this one to always run
@@ -1946,7 +1940,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server* server)
     }
     magicnet_server_unlock(server);
 }
-bool magicnet_server_alive_for_at_least_one_block_cycle(struct magicnet_server* server)
+bool magicnet_server_alive_for_at_least_one_block_cycle(struct magicnet_server *server)
 {
     return time(NULL) >= server->first_block_cycle;
 }
