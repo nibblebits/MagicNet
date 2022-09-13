@@ -239,6 +239,8 @@ struct magicnet_server
 
     // The timestamp the server started
     time_t server_started;
+    // THe first time the block cycle begins for this server instance
+    time_t first_block_cycle;
     pthread_mutex_t lock;
 
     // BELOW MUST BE PROCESSED ONLY BY THE SERVER THREAD

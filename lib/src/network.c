@@ -206,6 +206,7 @@ struct magicnet_server *magicnet_server_start()
     server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
     server->server_started = time(NULL);
+    server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
     return server;
 }
 
@@ -1955,7 +1956,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server* server)
 }
 bool magicnet_server_alive_for_at_least_one_block_cycle(struct magicnet_server* server)
 {
-    return time(NULL) - server->server_started > MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS;
+    return time(NULL) >= server->first_block_cycle;
 }
 
 int magicnet_server_process(struct magicnet_server *server)
