@@ -683,6 +683,19 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
     return 0;
 }
 
+int magicnet_client_read_vote_for_verifier_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+
+    // Let us read the key we are voting for
+    res = magicnet_read_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key, sizeof(struct key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        magicnet_log("%s could not read key for verifier packet\n", __FUNCTION__);
+    }
+    return res;
+}
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -723,6 +736,10 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
         res = magicnet_client_read_verifier_signup_packet(client, packet_out);
+        break;
+
+    case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+        res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
         break;
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
         res = magicnet_client_read_not_found_packet(client, packet_out);
@@ -1646,6 +1663,16 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
     return res;
 }
 
+int magicnet_server_vote_for_verifier_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    struct key* voteing_for_key = &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key;
+    int res = magicnet_server_cast_verifier_vote(client->server, &packet->pub_key, voteing_for_key );
+    if (res < 0)
+    {
+        magicnet_log("%s Failed to cast vote from key = %s voting for key %s\n", __FUNCTION__, &packet->pub_key.key, voteing_for_key->key);
+    }
+    return res;
+}
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -1665,6 +1692,10 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
         res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+        res = magicnet_server_vote_for_verifier_packet(client, packet);
         break;
     };
 
@@ -1923,6 +1954,13 @@ void magicnet_server_client_vote_for_verifier(struct magicnet_server* server)
     }
 
     // Let us create a new vote packet to relay.
+    struct magicnet_packet* packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER;
+    magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key = *verifier_key;
+    magicnet_server_add_packet_to_relay(server, packet);
+
+    magicnet_free_packet(packet);
 }
 
 /**
