@@ -1429,12 +1429,12 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
             goto out;
         }
 
-        // Since we have a packet from them we also want to relay it again
-        res = magicnet_server_add_packet_to_relay(client->server, magicnet_signed_data(packet)->payload.sync.packet);
-        if (res < 0)
-        {
-            goto out;
-        }
+        // // Since we have a packet from them we also want to relay it again
+        // res = magicnet_server_add_packet_to_relay(client->server, magicnet_signed_data(packet)->payload.sync.packet);
+        // if (res < 0)
+        // {
+        //     goto out;
+        // }
     }
 
 out:
