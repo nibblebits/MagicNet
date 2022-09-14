@@ -1790,11 +1790,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     }
 
     // Now let us relay this packet to everyone else
-    res = magicnet_server_add_packet_to_relay(client->server, packet);
-    if (res < 0)
-    {
-        goto out;
-    }
+    magicnet_server_add_packet_to_relay(client->server, packet);
 
 out:
     magicnet_free_packet(packet_to_send);
