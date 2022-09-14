@@ -924,6 +924,15 @@ int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client,
     return 0;
 }
 
+int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key, sizeof(struct key), packet->not_sent.tmp_buf);
+    return res;
+}
+
+
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -961,6 +970,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
         res = magicnet_client_write_packet_verifier_signup(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+        res = magicnet_client_write_packet_vote_for_verifier(client, packet);
         break;
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_write_packet_server_poll(client, packet);
