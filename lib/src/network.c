@@ -928,6 +928,7 @@ int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *clien
 {
     int res = 0;
     res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key, sizeof(struct key), packet->not_sent.tmp_buf);
+    
     return res;
 }
 
@@ -1428,13 +1429,6 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
         {
             goto out;
         }
-
-        // // Since we have a packet from them we also want to relay it again
-        // res = magicnet_server_add_packet_to_relay(client->server, magicnet_signed_data(packet)->payload.sync.packet);
-        // if (res < 0)
-        // {
-        //     goto out;
-        // }
     }
 
 out:
@@ -1788,9 +1782,6 @@ int magicnet_server_poll(struct magicnet_client *client)
     {
         goto out;
     }
-
-    // Now let us relay this packet to everyone else
-    magicnet_server_add_packet_to_relay(client->server, packet);
 
 out:
     magicnet_free_packet(packet_to_send);
