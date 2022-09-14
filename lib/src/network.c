@@ -1428,6 +1428,13 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
         {
             goto out;
         }
+
+        // Since we have a packet from them we also want to relay it again
+        res = magicnet_server_add_packet_to_relay(client->server, magicnet_signed_data(packet)->payload.sync.packet);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
 
 out:
@@ -1777,6 +1784,13 @@ int magicnet_server_poll(struct magicnet_client *client)
 
     // Alright we got a packet to relay.. Lets deal with it
     res = magicnet_server_poll_process(client, packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Now let us relay this packet to everyone else
+    res = magicnet_server_add_packet_to_relay(client->server, packet);
     if (res < 0)
     {
         goto out;
