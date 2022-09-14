@@ -273,11 +273,11 @@ void magicnet_server_unlock(struct magicnet_server *server)
     pthread_mutex_unlock(&server->lock);
 }
 
-bool magicnet_server_has_voted(struct magicnet_server* server, struct key* voter_key)
+bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter_key)
 {
     vector_set_peek_pointer(server->next_block.verifier_votes.votes, 0);
-    struct magicnet_key_vote* key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
-    while(key_vote)
+    struct magicnet_key_vote *key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    while (key_vote)
     {
         if (key_cmp(voter_key, &key_vote->vote_from))
         {
@@ -289,7 +289,7 @@ bool magicnet_server_has_voted(struct magicnet_server* server, struct key* voter
     return false;
 }
 
-int magicnet_server_cast_verifier_vote(struct magicnet_server* server, struct key* voter_key, struct key* vote_for_key)
+int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct key *voter_key, struct key *vote_for_key)
 {
     if (magicnet_server_has_voted(server, voter_key))
     {
@@ -297,7 +297,7 @@ int magicnet_server_cast_verifier_vote(struct magicnet_server* server, struct ke
         return MAGICNET_ERROR_ALREADY_EXISTANT;
     }
 
-    struct magicnet_key_vote* key_vote = calloc(1, sizeof(struct magicnet_key_vote));
+    struct magicnet_key_vote *key_vote = calloc(1, sizeof(struct magicnet_key_vote));
     key_vote->vote_from = *voter_key;
     key_vote->voted_for = *vote_for_key;
     vector_push(server->next_block.verifier_votes.votes, &key_vote);
@@ -683,7 +683,7 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
     return 0;
 }
 
-int magicnet_client_read_vote_for_verifier_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_read_vote_for_verifier_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
 
@@ -1382,7 +1382,8 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     {
         // We have a packet lets send to the client
         int flags = 0;
-        if (magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+        if (MAGICNET_nulled_signature(&packet_to_relay->signature) &&
+            magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
         {
             // We got to sign this packet we are about to relay.
             flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
@@ -1663,10 +1664,10 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
     return res;
 }
 
-int magicnet_server_vote_for_verifier_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_server_vote_for_verifier_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    struct key* voteing_for_key = &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key;
-    int res = magicnet_server_cast_verifier_vote(client->server, &packet->pub_key, voteing_for_key );
+    struct key *voteing_for_key = &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key;
+    int res = magicnet_server_cast_verifier_vote(client->server, &packet->pub_key, voteing_for_key);
     if (res < 0)
     {
         magicnet_log("%s Failed to cast vote from key = %s voting for key %s\n", __FUNCTION__, &packet->pub_key.key, voteing_for_key->key);
@@ -1714,6 +1715,7 @@ int magicnet_server_poll(struct magicnet_client *client)
 
     struct magicnet_packet *packet_to_send = magicnet_packet_new();
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
+    magicnet_signed_data(packet_to_relay)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     struct magicnet_packet *packet = NULL;
     magicnet_server_lock(client->server);
     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
@@ -1735,8 +1737,14 @@ int magicnet_server_poll(struct magicnet_client *client)
         magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
     }
 
-    // Project is getting messy, needs a cleanup.
-    res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    int write_packet_flags = 0;
+    if (MAGICNET_nulled_signature(&packet_to_relay->signature) &&
+        magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+    {
+        write_packet_flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    }
+
+    res = magicnet_client_write_packet(client, packet_to_send, write_packet_flags);
     if (res < 0)
     {
         goto out;
@@ -1926,7 +1934,7 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     }
 }
 
-struct key* magicnet_server_get_random_block_verifier(struct magicnet_server* server)
+struct key *magicnet_server_get_random_block_verifier(struct magicnet_server *server)
 {
     if (vector_count(server->next_block.signed_up_verifiers) == 0)
     {
@@ -1937,10 +1945,10 @@ struct key* magicnet_server_get_random_block_verifier(struct magicnet_server* se
     return vector_peek_ptr_at(server->next_block.signed_up_verifiers, random_key_index);
 }
 
-void magicnet_server_client_vote_for_verifier(struct magicnet_server* server)
+void magicnet_server_client_vote_for_verifier(struct magicnet_server *server)
 {
-    struct key* verifier_key = magicnet_server_get_random_block_verifier(server);
-    if(!verifier_key)
+    struct key *verifier_key = magicnet_server_get_random_block_verifier(server);
+    if (!verifier_key)
     {
         magicnet_log("%s we went to cast a vote for a verifier but their isnt any verifiers available\n", __FUNCTION__);
         return;
@@ -1954,7 +1962,7 @@ void magicnet_server_client_vote_for_verifier(struct magicnet_server* server)
     }
 
     // Let us create a new vote packet to relay.
-    struct magicnet_packet* packet = magicnet_packet_new();
+    struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER;
     magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key = *verifier_key;
@@ -1972,8 +1980,8 @@ void magicnet_server_client_vote_for_verifier(struct magicnet_server* server)
 void magicnet_server_reset_block_sequence(struct magicnet_server *server)
 {
     vector_set_peek_pointer(server->next_block.verifier_votes.votes, 0);
-    struct magicnet_key_vote* key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
-    while(key_vote)
+    struct magicnet_key_vote *key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    while (key_vote)
     {
         free(key_vote);
         key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
