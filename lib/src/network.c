@@ -376,8 +376,10 @@ struct key *magicnet_server_verifier_who_won(struct magicnet_server *server)
         {
             if (winning_key_vote_count->voters == key_vote_count->voters)
             {
-                vector_push(tied_voters, &winning_key_vote_count->key);
-                vector_push(tied_voters, &key_vote_count->key);
+                struct key* winning_key = &winning_key_vote_count->key;
+                struct key* key_vote_count_key = &key_vote_count->key;
+                vector_push(tied_voters, &winning_key);
+                vector_push(tied_voters, &key_vote_count_key);
             }
 
             if (winning_key_vote_count->voters < key_vote_count->voters)
