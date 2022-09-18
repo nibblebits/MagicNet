@@ -424,6 +424,32 @@ struct key *magicnet_server_verifier_who_won(struct magicnet_server *server)
     return winning_key;
 }
 
+struct magicnet_vote_count* magicnet_vote_count_key_get(struct magicnet_server* server, struct key* voting_for_key)
+{
+    vector_set_peek_pointer(server->next_block.verifier_votes.vote_counts, 0);
+    struct magicnet_vote_count* vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+    while(vote_count)
+    {
+        if (key_cmp(&vote_count->key, voting_for_key))
+        {
+            return vote_count;
+        }
+        vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+    }
+
+    return NULL;
+}
+void magicnet_vote_count_create_or_increment(struct magicnet_server* server, struct key* voting_for_key)
+{
+    struct magicnet_vote_count* vote_count = magicnet_vote_count_key_get(server, voting_for_key);
+    if (!vote_count)
+    {
+        vote_count = calloc(1, sizeof(struct magicnet_vote_count));
+        vote_count->key = *voting_for_key;
+        vote_count->voters = 0;
+    }
+    vote_count->voters++;
+}
 int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct key *voter_key, struct key *vote_for_key)
 {
     if (magicnet_server_has_voted(server, voter_key))
@@ -436,6 +462,8 @@ int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct ke
     key_vote->vote_from = *voter_key;
     key_vote->voted_for = *vote_for_key;
     vector_push(server->next_block.verifier_votes.votes, &key_vote);
+
+    magicnet_vote_count_create_or_increment(server, vote_for_key);
 
     magicnet_log("%s new verifier vote. Voter(%s) votes for (%s) to make the next block\n", __FUNCTION__, voter_key->key, vote_for_key->key);
 
