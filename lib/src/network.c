@@ -2043,7 +2043,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     // final quarter we reset the block creation rules, clearing all the verifiers and votes wether
     // we receive a block or not this will happen
     time_t one_quarter_seconds = MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 4;
-    time_t block_time_first_quarter_start = one_quarter_seconds;
+    time_t block_time_first_quarter_start = 0;
     time_t block_time_second_quarter_start = one_quarter_seconds * 1;
     time_t block_time_third_quarter_start = one_quarter_seconds * 2;
     time_t block_time_fourth_quarter_start = one_quarter_seconds * 3;
