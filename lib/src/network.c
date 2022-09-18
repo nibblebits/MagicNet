@@ -2073,6 +2073,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     {
         
         magicnet_log("%s awaiting for new block from voted verifier: \n", __FUNCTION__);
+        server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
     } 
     else if(current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end)
     {
