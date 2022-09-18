@@ -928,7 +928,7 @@ int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *clien
 {
     int res = 0;
     res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key, sizeof(struct key), packet->not_sent.tmp_buf);
-    
+
     return res;
 }
 
@@ -1752,6 +1752,11 @@ int magicnet_server_poll(struct magicnet_client *client)
     }
 
     int write_packet_flags = 0;
+
+    // Only in the case where the signature is NULL and the MUST_BE_SIGNED flag is true will we sign the packet
+    // Since to read a packet from the remote network it has to go through the security procedures
+    // it is possible for the relay to have an unsigned packet that was sent from a remote server
+    // since to even read the packet from a non-localhost it has to be signed.
     if (MAGICNET_nulled_signature(&packet_to_relay->signature) &&
         magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
     {
@@ -2037,10 +2042,12 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     // third quarter we wait to receive the block
     // final quarter we reset the block creation rules, clearing all the verifiers and votes wether
     // we receive a block or not this will happen
-    time_t block_time_first_quarter_end = MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 4;
-    time_t block_time_second_quarter_end = block_time_first_quarter_end * 2;
-    time_t block_time_third_quarter_end = block_time_first_quarter_end * 3;
-    time_t block_time_fourth_quarter_end = block_time_first_quarter_end * 4;
+    time_t one_quarter_seconds = MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 4;
+    time_t block_time_first_quarter_start = one_quarter_seconds;
+    time_t block_time_second_quarter_start = one_quarter_seconds * 1;
+    time_t block_time_third_quarter_start = one_quarter_seconds * 2;
+    time_t block_time_fourth_quarter_start = one_quarter_seconds * 3;
+    time_t block_cycle_end = one_quarter_seconds * 4;
 
     // This gives us what second into the sequence we are I.e 15 seconds into the block sequence
     // it cannot be greater than the MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS
@@ -2050,19 +2057,24 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
 
     // First quarter, signup as a verifier. (Note we check that the step is correct for clients that came online too late.. or did not complete a vital step on time)
     int step = server->next_block.step;
-    if (current_block_sequence_time >= block_time_first_quarter_end && current_block_sequence_time <= block_time_second_quarter_end && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
+    if (current_block_sequence_time >= block_time_first_quarter_start && current_block_sequence_time < block_time_second_quarter_start && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
     {
         // Alright lets deal with this
         magicnet_server_client_signup_as_verifier(server);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;
     }
-    else if (current_block_sequence_time >= block_time_second_quarter_end && current_block_sequence_time <= block_time_third_quarter_end && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
+    else if (current_block_sequence_time >= block_time_second_quarter_start && current_block_sequence_time < block_time_third_quarter_start && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
     {
         magicnet_log("%s second quarter in the block sequence, lets create a random vote\n", __FUNCTION__);
         magicnet_server_client_vote_for_verifier(server);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK;
     }
-    else if (current_block_sequence_time >= block_time_third_quarter_end && current_block_sequence_time <= block_time_fourth_quarter_end)
+    else if (current_block_sequence_time >= block_time_third_quarter_start && current_block_sequence_time < block_time_fourth_quarter_start && step == BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK)
+    {
+        
+        magicnet_log("%s awaiting for new block from voted verifier: \n", __FUNCTION__);
+    } 
+    else if(current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end)
     {
         // We dont check for the step in this IF statement, just in case a peer doesnt keep up
         // we dont want them stuck forever out of being able to make block sequences, therefore we allow this one to always run
