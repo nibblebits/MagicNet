@@ -204,6 +204,7 @@ struct magicnet_server *magicnet_server_start()
     MAGICNET_load_keypair();
 
     server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
+    server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count*));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
     server->server_started = time(NULL);
     server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
@@ -287,6 +288,63 @@ bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter
     }
 
     return false;
+}
+
+/**
+ * @brief All peers vote on who should make the next block, this function returns the current winner whome should
+ * make the next block. Only call this at the right time because it takes time for votes to sync around the network.
+ * 
+ * @param server 
+ * @return struct key* 
+ */
+struct key* magicnet_server_verifier_who_won(struct magicnet_server* server)
+{
+    struct key* winning_key = NULL;
+    struct magicnet_vote_count* winning_key_vote_count = NULL;
+    vector_set_peek_pointer(server->next_block.verifier_votes.vote_counts, 0);
+    struct magicnet_vote_count * key_vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+    struct vector* tied_voters = vector_create(sizeof(struct key*));
+    while(key_vote_count)
+    {
+        if (winning_key_vote_count != NULL)
+        {
+            if (winning_key_vote_count->voters == key_vote_count->voters)
+            {
+                vector_push(tied_voters, &winning_key_vote_count->key);
+                vector_push(tied_voters, &key_vote_count->key);
+
+            }
+
+            if (winning_key_vote_count->voters < key_vote_count->voters)
+            {
+                winning_key_vote_count = key_vote_count;
+            }
+            
+        }
+        key_vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+    }
+
+    if (winning_key_vote_count)
+    {
+        winning_key = &winning_key_vote_count->key;
+    }
+
+    // Let us see if their is a tie with the winning key
+    struct key* tied_key = vector_peek_ptr(tied_voters);
+    while(tied_key)
+    {
+        // If we have a tied key then their can be no winner. This would allow the network to fork and divide.
+        // we cant allow that where it can be stopped it will.
+        if (key_cmp(winning_key, tied_key))
+        {
+            winning_key = NULL;
+            break;
+        }
+        tied_key = vector_peek_ptr(tied_voters);
+    }
+
+    vector_free(tied_voters);
+    return winning_key;
 }
 
 int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct key *voter_key, struct key *vote_for_key)
@@ -2008,6 +2066,17 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
 
     vector_clear(server->next_block.verifier_votes.votes);
 
+
+  vector_set_peek_pointer(server->next_block.verifier_votes.vote_counts, 0);
+    struct magicnet_vote_count *vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+    while (vote_count)
+    {
+        free(vote_count);
+        vote_count = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    }
+
+    vector_clear(server->next_block.verifier_votes.vote_counts);
+
     vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
     struct key *verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
     while (verifier_key)
@@ -2071,8 +2140,16 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     }
     else if (current_block_sequence_time >= block_time_third_quarter_start && current_block_sequence_time < block_time_fourth_quarter_start && step == BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK)
     {
-        
-        magicnet_log("%s awaiting for new block from voted verifier: \n", __FUNCTION__);
+        // We must select a verifier who won the vote.
+        struct key* key_who_won = magicnet_server_verifier_who_won(server);
+        if (!key_who_won)
+        {
+            magicnet_log("%s no verifier key won the vote.\n", __FUNCTION__);
+        }
+        else
+        {
+            magicnet_log("%s awaiting for new block from voted verifier: %s \n", __FUNCTION__, key_who_won->key);
+        }
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
     } 
     else if(current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end)

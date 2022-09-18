@@ -180,6 +180,13 @@ struct magicnet_key_vote
     struct key voted_for;
 };
 
+struct magicnet_vote_count
+{
+    struct key key;
+    // The number of voters whome voted for this key.
+    size_t voters;
+};
+
 
 enum
 {
@@ -226,6 +233,9 @@ struct magicnet_server
         {
             // vector of struct magicnet_key_vote*
             struct vector* votes;
+
+            // vector of struct magicnet_vote_count*
+            struct vector* vote_counts;
         } verifier_votes;
 
         // Vector of struct key* . Everybody in this vector can be voted on to make the next block
