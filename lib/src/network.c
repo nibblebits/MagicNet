@@ -447,6 +447,7 @@ void magicnet_vote_count_create_or_increment(struct magicnet_server* server, str
         vote_count = calloc(1, sizeof(struct magicnet_vote_count));
         vote_count->key = *voting_for_key;
         vote_count->voters = 0;
+        vector_push(server->next_block.verifier_votes.vote_counts, &vote_count);
     }
     vote_count->voters++;
 }
