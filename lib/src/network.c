@@ -291,6 +291,71 @@ bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter
 }
 
 /**
+ * @brief Converts the first 8 bytes of this key into a long.
+ * 
+ * @param key 
+ * @return long 
+ */
+long magicnet_key_number(struct key* key)
+{
+    char eight_bytes[9] = {};
+    char* ptr = NULL;
+    strncpy(eight_bytes, key->key, 8);
+
+    return strtol(eight_bytes, &ptr, 16);
+}
+/**
+ * @brief This function attempts to break a tie between votes to create the next block
+ * if it fails to break the tie then NULL is returned. The algorithm for how the function breaks a tie will work across
+ * all peers as we do not rely on verifier signup order.
+ *  *
+ * @param vector_of_keys
+ * @return struct key*
+ */
+struct key *magicnet_verifier_tie_breaker(struct vector *vector_of_keys)
+{
+    if (vector_empty(vector_of_keys))
+    {
+        return NULL;
+    }
+
+    if (vector_count(vector_of_keys) == 1)
+    {
+        return vector_back_ptr(vector_of_keys);
+    }
+
+    /**
+     * The algorithm will work by taking the first 8 bytes of each key, which ever key has the largest first 8 bytes converted to a long
+     * will win and the tie will be broken.
+     */
+
+    struct key *key_winner = NULL;
+    vector_set_peek_pointer(vector_of_keys, 0);
+    struct key *key = vector_peek_ptr(vector_of_keys);
+    while (key)
+    {
+        if (key_winner)
+        {
+            if (magicnet_key_number(key) == magicnet_key_number(key_winner))
+            {
+                // We can't break this tie what incredibly circumstances..
+                return NULL;
+            }
+            else if(magicnet_key_number(key) > magicnet_key_number(key_winner))
+            {
+                key_winner = key;
+            }
+        }
+        if (!key_winner)
+        {
+            key_winner = key;
+        }
+        key = vector_peek_ptr(vector_of_keys);
+    }
+
+    return key_winner;
+}
+/**
  * @brief All peers vote on who should make the next block, this function returns the current winner whome should
  * make the next block. Only call this at the right time because it takes time for votes to sync around the network.
  *
@@ -319,12 +384,13 @@ struct key *magicnet_server_verifier_who_won(struct magicnet_server *server)
             {
                 winning_key_vote_count = key_vote_count;
             }
-
-            if (!winning_key_vote_count)
-            {
-                winning_key_vote_count = key_vote_count;
-            }
         }
+
+        if (!winning_key_vote_count)
+        {
+            winning_key_vote_count = key_vote_count;
+        }
+
         key_vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
     }
 
@@ -334,17 +400,24 @@ struct key *magicnet_server_verifier_who_won(struct magicnet_server *server)
     }
 
     // Let us see if their is a tie with the winning key
+    bool was_tie = false;
     struct key *tied_key = vector_peek_ptr(tied_voters);
     while (tied_key)
     {
-        // If we have a tied key then their can be no winner. This would allow the network to fork and divide.
+        // If we have a tied key with the winning key then their can be no winner. This would allow the network to fork and divide.
         // we cant allow that where it can be stopped it will.
         if (key_cmp(winning_key, tied_key))
         {
-            winning_key = NULL;
+            was_tie = true;
             break;
         }
         tied_key = vector_peek_ptr(tied_voters);
+    }
+
+    if (was_tie)
+    {
+        // Lets see if we can break the tie
+        winning_key = magicnet_verifier_tie_breaker(tied_voters);
     }
 
     vector_free(tied_voters);
