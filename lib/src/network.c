@@ -462,7 +462,7 @@ int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct ke
         return MAGICNET_ERROR_ALREADY_EXISTANT;
     }
 
-    struct magicnet_key_vote *key_vote = calloc(1, sizeof(struct magicnet_key_vote));he 
+    struct magicnet_key_vote *key_vote = calloc(1, sizeof(struct magicnet_key_vote));
     key_vote->vote_from = *voter_key;
     key_vote->voted_for = *vote_for_key;
     vector_push(server->next_block.verifier_votes.votes, &key_vote);
