@@ -7,6 +7,12 @@ int main(int argc, char** argv)
 {
     printf("Starting MagicNet server\n");
     magicnet_log_initialize();
+    int res = magicnet_database_load();
+    if (res < 0)
+    {
+        return -1;
+    }
+
     struct magicnet_server* server = magicnet_server_start();
     if (!server)
     {
@@ -14,7 +20,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    int res = magicnet_network_thread_start(server);
+    res = magicnet_network_thread_start(server);
     if (res < 0)
     {
         printf("failed to start magic server thread\n");

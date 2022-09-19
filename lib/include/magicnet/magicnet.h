@@ -269,8 +269,8 @@ enum
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
 
 };
+int magicnet_database_load();
 struct signed_data* magicnet_signed_data(struct magicnet_packet* packet);
-
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
