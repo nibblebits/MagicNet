@@ -44,25 +44,7 @@ struct magicnet_packet *magicnet_packet_new()
     return packet;
 }
 
-void magicnet_server_create_files()
-{
-    // We should setup the seeder for when we use random.
 
-    struct timespec time_seed;
-    // CLOCK_MONOTONIC: absolute elapsed wall-clock time since // an arbitrary point in the past.
-    clock_gettime(CLOCK_MONOTONIC, &time_seed);
-    // use nanoseconds to seed RNG.
-    srand((time_t)time_seed.tv_nsec);
-
-    char data_directory[PATH_MAX];
-    sprintf(data_directory, "%s/%s", getenv("HOME"), ".magicnet");
-    DIR *dir = opendir(data_directory);
-    if (!dir)
-    {
-        // First time setup
-        mkdir(data_directory, 0775);
-    }
-}
 bool magicnet_loaded_ips_full(struct magicnet_server *server)
 {
     return server->total_loaded_ips >= MAGICNET_MAX_LOADED_IP_ADDRESSES;
@@ -135,8 +117,6 @@ struct magicnet_server *magicnet_server_start()
 {
     int sockfd, len;
     struct sockaddr_in servaddr, cli;
-
-    magicnet_server_create_files();
 
     // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);

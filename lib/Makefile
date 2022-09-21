@@ -1,4 +1,4 @@
-OBJECTS= ./build/vector.o ./build/magicnet.o ./build/log.o ./build/network.o ./build/database.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
+OBJECTS= ./build/vector.o ./build/magicnet.o ./build/init.o ./build/block.o ./build/log.o ./build/network.o ./build/database.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
 INCLUDES= -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector
 ADDITIONAL_FLAGS= -g -fPIC
 all: ${OBJECTS}
@@ -8,6 +8,11 @@ all: ${OBJECTS}
 ./build/magicnet.o:./src/magicnet.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/magicnet.c -c -o ./build/magicnet.o 
 
+./build/init.o:./src/init.c
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/init.c -c -o ./build/init.o 
+
+./build/block.o:./src/block.c
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/block.c -c -o ./build/block.o 
 
 
 ./build/network.o:./src/network.c

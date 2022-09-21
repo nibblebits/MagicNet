@@ -1,16 +1,19 @@
 #include "magicnet/log.h"
 #include "magicnet/magicnet.h"
+#include "magicnet/database.h"
+#include "magicnet/init.h"
 #include <time.h>
 #include <stdio.h>
 
 int main(int argc, char** argv)
 {
+    int res = 0;
     printf("Starting MagicNet server\n");
-    magicnet_log_initialize();
-    int res = magicnet_database_load();
+    res = magicnet_server_init();
     if (res < 0)
     {
-        return -1;
+        printf("could not initialize the magicnet server\n");
+        return res;
     }
 
     struct magicnet_server* server = magicnet_server_start();

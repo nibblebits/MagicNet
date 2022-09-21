@@ -261,6 +261,22 @@ struct magicnet_server
     // END
 };
 
+
+struct block
+{
+
+    // Hash of this block
+    char hash[SHA256_STRING_LENGTH];
+    // Hash of the previous block
+    char prev_hash[SHA256_STRING_LENGTH];
+    
+    // The block URI of the filename thatrepresents the block.
+    char block_uri[SHA256_STRING_LENGTH+3];
+
+    // Pointer to the loaded block data in memory
+    char* data;
+};
+
 enum
 {
     MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,
@@ -269,7 +285,6 @@ enum
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
 
 };
-int magicnet_database_load();
 struct signed_data* magicnet_signed_data(struct magicnet_packet* packet);
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
@@ -289,5 +304,9 @@ int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
+
+
+// Block
+void magicnet_get_block_path(struct block* block, char* block_path_out);
 
 #endif
