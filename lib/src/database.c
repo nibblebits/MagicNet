@@ -9,7 +9,14 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"hash\"	TEXT,\
                                                 \"prev_hash\"	TEXT,\
                                                 \"block_uri\"	INTEGER\
-                                                );", NULL};
+                                                );",
+                               "CREATE TABLE \"ip_addresses\" ("
+                               "\"id\"	INTEGER,"
+                               "\"found_at\"	REAL,"
+                               "\"ip_address\"	TEXT,"
+                               "PRIMARY KEY(\"id\") "
+                               ");",
+                               NULL};
 
 const char *magicnet_database_path()
 {
@@ -21,17 +28,18 @@ const char *magicnet_database_path()
 int magicnet_database_create()
 {
     int res = 0;
-    const char* sql = NULL;
+    const char *sql = NULL;
     int index = 0;
-    while((sql = create_tables[index]) != NULL)
+    while ((sql = create_tables[index]) != NULL)
     {
-        char* err_msg = NULL;
+        char *err_msg = NULL;
         res = sqlite3_exec(db, sql, 0, 0, &err_msg);
         if (res < 0)
         {
             magicnet_log("%s issue creating database %s\n", __FUNCTION__, err_msg);
             break;
         }
+        index++;
     }
 
     return res;
