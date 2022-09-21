@@ -8,6 +8,7 @@
         "config.h": "c",
         "fcntl.h": "c",
         "stdbool.h": "c",
-        "type_traits": "c"
+        "type_traits": "c",
+        "dirent.h": "c"
     }
 }

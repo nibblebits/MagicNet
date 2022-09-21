@@ -36,6 +36,7 @@ enum
     MAGICNET_PACKET_TYPE_SERVER_SYNC,
     MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP,
     MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER,
+    MAGICNET_PACKET_TYPE_BLOCK_SEND,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
@@ -66,6 +67,7 @@ enum
     MAGICNET_ACKNOWLEGED_ALL_OKAY = 0
 };
 
+struct block;
 
 struct magicnet_packet
 {
@@ -83,7 +85,7 @@ struct magicnet_packet
     /**
      * @brief The not_sent structure contains values that will not be sent to any peers
      * or clients at all. It is used for our own internal information regarding the packet we are dealing with.
-     * 
+     *
      */
     struct
     {
@@ -91,14 +93,13 @@ struct magicnet_packet
          * @brief This tmp_buf is NULL until we send this packet. When the packet is being sent
          * the buffer is initialized and filled with every byte we send to the peer. Once we are done sending the packet
          * it is freed and NULLED Once more.
-         * 
+         *
          * It is used for debugging purposes and also to ensure packet integrity through the use of signatures.
          * The datahash further above is based off the buffer of tmp_buf. tmp_buf contains every single byte
          * sent to the client in regards to this packet.
          */
-        struct buffer* tmp_buf;
+        struct buffer *tmp_buf;
     } not_sent;
-
 
     struct signed_data
     {
@@ -131,13 +132,12 @@ struct magicnet_packet
                     struct magicnet_packet *packet;
                 } sync;
 
-
                 /**
                  * This packet describes a VOTE of the key who should verify the next block.
                  * SOme better abstraction would be better i think, come back to revise...
                  */
                 struct magicnet_vote
-                {       
+                {
                     // Contains the public key of whome this vote is for.
                     // If enough people vote for this key they will create the next block
                     // all blocks signed whome are not the winner will be rejected.
@@ -154,6 +154,11 @@ struct magicnet_packet
                 {
                     // Empty... We will use the key that signed this block.
                 } verifier_signup;
+
+                struct magicnet_block_send
+                {
+                    struct block *block;
+                } block_send;
             };
         } payload;
     } signed_data;
@@ -176,7 +181,7 @@ struct magicnet_key_vote
 {
     // THe key who voted
     struct key vote_from;
-    // The key voted for  
+    // The key voted for
     struct key voted_for;
 };
 
@@ -186,7 +191,6 @@ struct magicnet_vote_count
     // The number of voters whome voted for this key.
     size_t voters;
 };
-
 
 enum
 {
@@ -219,32 +223,31 @@ struct magicnet_server
         off_t pos;
     } seen_packets;
 
-
     /**
      * @brief Rules on how the next block will be created
-     * 
+     *
      */
     struct next_block
     {
         /**
-         * The votes for the verifier who will make the next block. 
+         * The votes for the verifier who will make the next block.
          */
         struct votes
         {
             // vector of struct magicnet_key_vote*
-            struct vector* votes;
+            struct vector *votes;
 
             // vector of struct magicnet_vote_count*
-            struct vector* vote_counts;
+            struct vector *vote_counts;
         } verifier_votes;
 
         // Vector of struct key* . Everybody in this vector can be voted on to make the next block
         // do not vote on people who are not signed up to sign the next block!
-        struct vector* signed_up_verifiers;
+        struct vector *signed_up_verifiers;
 
         // The step in the block creation sequence we are currently in.
         int step;
-        
+
     } next_block;
 
     // The timestamp the server started
@@ -261,6 +264,13 @@ struct magicnet_server
     // END
 };
 
+struct block_data
+{
+    // Pointer to the loaded block data in memory
+    char *data;
+    // The block data length
+    size_t len;
+};
 
 struct block
 {
@@ -269,12 +279,11 @@ struct block
     char hash[SHA256_STRING_LENGTH];
     // Hash of the previous block
     char prev_hash[SHA256_STRING_LENGTH];
-    
-    // The block URI of the filename thatrepresents the block.
-    char block_uri[SHA256_STRING_LENGTH+3];
 
-    // Pointer to the loaded block data in memory
-    char* data;
+    // The block URI of the filename thatrepresents the block.
+    char block_uri[SHA256_STRING_LENGTH + 3];
+
+    struct block_data* data;
 };
 
 enum
@@ -285,7 +294,7 @@ enum
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
 
 };
-struct signed_data* magicnet_signed_data(struct magicnet_packet* packet);
+struct signed_data *magicnet_signed_data(struct magicnet_packet *packet);
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
@@ -304,9 +313,21 @@ int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
-
-
-// Block
-void magicnet_get_block_path(struct block* block, char* block_path_out);
+/**
+ * @brief Creates a new block in memory, no block is added to the chain.
+ * 
+ * @param hash 
+ * @param prev_hash 
+ * @param data 
+ * @param len 
+ * @return struct block* 
+ */
+struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data);
+void block_free(struct block *block);
+struct block_data *block_data_new(char* data, size_t len);
+char *block_data(struct block *block);
+size_t block_data_len(struct block* block);
+void magicnet_get_block_path(struct block *block, char *block_path_out);
+struct block *magicnet_block_load(const char *hash);
 
 #endif

@@ -79,12 +79,11 @@ out:
     return res;
 }
 
-int magicnet_database_load_block(const char* hash, struct block* block_out)
+int magicnet_database_load_block(const char* hash, char* prev_hash_out)
 {
-    assert(!block_out->data);
     int res = 0;
     sqlite3_stmt* stmt = NULL;
-    const char* load_block_sql = "SELECT hash, prev_hash, block_uri  FROM blocks WHERE hash = ?";
+    const char* load_block_sql = "SELECT prev_hash  FROM blocks WHERE hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, -1, &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -97,43 +96,10 @@ int magicnet_database_load_block(const char* hash, struct block* block_out)
     {
         goto out;
     }
-
-    strncpy(block_out->hash, sqlite3_column_text(stmt, 0), sizeof(block_out->hash));
-    strncpy(block_out->prev_hash, sqlite3_column_text(stmt, 1), sizeof(block_out->prev_hash));
-    strncpy(block_out->block_uri, sqlite3_column_text(stmt, 2), sizeof(block_out->block_uri));
-
-    char block_path[PATH_MAX];
-    magicnet_get_block_path(block_out, block_path);
-
-    if (!file_exists(block_path))
-    {
-        magicnet_log("%s the block data with hash %s cannot be found in the filesystem this is corruption\n", __FUNCTION__, block_out->hash);
-        res = -1;
-        goto out;
-    }
-
-    // We have the block path lets load it into memory
-    FILE* block_fp = fopen(block_path, "r");
-    if (!block_fp)
-    {
-        res = -1;
-        goto out;
-    }
-
-    fseek(block_fp, 0, SEEK_END);
-    size_t block_size= ftell(block_fp);
-    fseek(block_fp, 0, SEEK_SET);
     
-    char* block_data = calloc(1, block_size);
-    res = fread(block_data, block_size, 1, block_fp);
-    if (res != 1)
-    {
-        res = -1;
-        goto out;
-    }
 
-    // Okay we have the block data.
-    block_out->data = block_data;
+    strncpy(prev_hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH+3);
+
 out:
     if (stmt)
     {
