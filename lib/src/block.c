@@ -3,6 +3,7 @@
 #include "misc.h"
 #include "log.h"
 #include "database.h"
+#include "sha256.h"
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
@@ -36,8 +37,30 @@ struct block* block_clone(struct block* block)
     return block_create(block->hash, block->prev_hash, block_data_new(block_data(block), block_data_len(block)));
 }
 
+const char* block_hash_create(struct block_data* data, const char* prev_hash, char* hash_out)
+{
+    struct buffer* tmp_buf = buffer_create();
+    if (prev_hash)
+    {
+        buffer_write_bytes(tmp_buf, (void*)prev_hash, SHA256_STRING_LENGTH);
+    }
+    buffer_write_bytes(tmp_buf, (void*)data, data->len);
+    sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
+    buffer_free(tmp_buf);
+    return hash_out;
+}
+
 struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data)
 {
+    // Let's verify the hash provided is correct for the block we are creating. 
+    // We don't generate the hash for them to help minimize mistakes, we want them to tell us what the hash is.
+    char block_hash[SHA256_STRING_LENGTH];
+    bzero(block_hash, sizeof(block_hash));
+    if (strncmp(block_hash_create(data, prev_hash, block_hash), block_hash, sizeof(block_hash)) != 0)
+    {
+        magicnet_log("%s you tried to create a block but provided us an illegal hash for the prev_hash and data combined\n", __FUNCTION__);
+        return NULL;
+    }
     struct block *block = calloc(1, sizeof(struct block));
     strncpy(block->hash, hash, sizeof(block->hash));
     strncpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));

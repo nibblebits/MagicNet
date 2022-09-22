@@ -12,6 +12,11 @@ struct buffer* buffer_create()
     return buf;
 }
 
+int buffer_len(struct buffer* buffer)
+{
+    return buffer->len;
+}
+
 void buffer_extend(struct buffer* buffer, size_t size)
 {
     buffer->data = realloc(buffer->data, buffer->msize+size);

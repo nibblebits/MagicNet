@@ -15,10 +15,9 @@ struct buffer
 };
 
 struct buffer* buffer_create();
-
+int buffer_len(struct buffer* buffer);
 char buffer_read(struct buffer* buffer);
 char buffer_peek(struct buffer* buffer);
-
 void buffer_extend(struct buffer* buffer, size_t size);
 void buffer_printf(struct buffer* buffer, const char* fmt, ...);
 void buffer_printf_no_terminator(struct buffer* buffer, const char* fmt, ...);

@@ -319,6 +319,7 @@ struct magicnet_program *magicnet_program(const char *name);
  * @param len 
  * @return struct block* 
  */
+
 struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data);
 void block_free(struct block *block);
 struct block_data *block_data_new(char* data, size_t len);
@@ -327,6 +328,7 @@ void block_data_free(struct block_data* block_data);
 char *block_data(struct block *block);
 size_t block_data_len(struct block* block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
+const char* block_hash_create(struct block_data* data, const char* prev_hash, char* hash_out);
 struct block *magicnet_block_load(const char *hash);
 
 #endif

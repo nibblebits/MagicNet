@@ -44,7 +44,6 @@ struct magicnet_packet *magicnet_packet_new()
     return packet;
 }
 
-
 bool magicnet_loaded_ips_full(struct magicnet_server *server)
 {
     return server->total_loaded_ips >= MAGICNET_MAX_LOADED_IP_ADDRESSES;
@@ -272,14 +271,14 @@ bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter
 
 /**
  * @brief Converts the first 8 bytes of this key into a long.
- * 
- * @param key 
- * @return long 
+ *
+ * @param key
+ * @return long
  */
-long magicnet_key_number(struct key* key)
+long magicnet_key_number(struct key *key)
 {
     char eight_bytes[9] = {};
-    char* ptr = NULL;
+    char *ptr = NULL;
     strncpy(eight_bytes, key->key, 8);
 
     return strtol(eight_bytes, &ptr, 16);
@@ -321,7 +320,7 @@ struct key *magicnet_verifier_tie_breaker(struct vector *vector_of_keys)
                 // We can't break this tie what incredibly circumstances..
                 return NULL;
             }
-            else if(magicnet_key_number(key) > magicnet_key_number(key_winner))
+            else if (magicnet_key_number(key) > magicnet_key_number(key_winner))
             {
                 key_winner = key;
             }
@@ -356,8 +355,8 @@ struct key *magicnet_server_verifier_who_won(struct magicnet_server *server)
         {
             if (winning_key_vote_count->voters == key_vote_count->voters)
             {
-                struct key* winning_key = &winning_key_vote_count->key;
-                struct key* key_vote_count_key = &key_vote_count->key;
+                struct key *winning_key = &winning_key_vote_count->key;
+                struct key *key_vote_count_key = &key_vote_count->key;
                 vector_push(tied_voters, &winning_key);
                 vector_push(tied_voters, &key_vote_count_key);
             }
@@ -407,11 +406,11 @@ struct key *magicnet_server_verifier_who_won(struct magicnet_server *server)
     return winning_key;
 }
 
-struct magicnet_vote_count* magicnet_vote_count_key_get(struct magicnet_server* server, struct key* voting_for_key)
+struct magicnet_vote_count *magicnet_vote_count_key_get(struct magicnet_server *server, struct key *voting_for_key)
 {
     vector_set_peek_pointer(server->next_block.verifier_votes.vote_counts, 0);
-    struct magicnet_vote_count* vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
-    while(vote_count)
+    struct magicnet_vote_count *vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+    while (vote_count)
     {
         if (key_cmp(&vote_count->key, voting_for_key))
         {
@@ -422,9 +421,9 @@ struct magicnet_vote_count* magicnet_vote_count_key_get(struct magicnet_server* 
 
     return NULL;
 }
-void magicnet_vote_count_create_or_increment(struct magicnet_server* server, struct key* voting_for_key)
+void magicnet_vote_count_create_or_increment(struct magicnet_server *server, struct key *voting_for_key)
 {
-    struct magicnet_vote_count* vote_count = magicnet_vote_count_key_get(server, voting_for_key);
+    struct magicnet_vote_count *vote_count = magicnet_vote_count_key_get(server, voting_for_key);
     if (!vote_count)
     {
         vote_count = calloc(1, sizeof(struct magicnet_vote_count));
@@ -843,27 +842,38 @@ int magicnet_client_read_vote_for_verifier_packet(struct magicnet_client *client
     return res;
 }
 
-
-
-int magicnet_client_read_block_send_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+int magicnet_client_read_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     char hash[SHA256_STRING_LENGTH];
     char prev_hash[SHA256_STRING_LENGTH];
-    char* tmp_block_data_bytes = NULL;
+    bzero(hash, sizeof(hash));
+    bzero(prev_hash, sizeof(prev_hash));
+    char *tmp_block_data_bytes = NULL;
     int data_size = 0;
-    struct block_data* block_data = NULL;
-    struct block* block = NULL;
+    struct block_data *block_data = NULL;
+    struct block *block = NULL;
+    bool has_prev_hash = false;
     res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_read_bytes(client, prev_hash, sizeof(prev_hash), packet_out->not_sent.tmp_buf);
-    if (res < 0)
+    has_prev_hash = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (has_prev_hash < 0)
     {
+        res = -1;
         goto out;
+    }
+
+    if (has_prev_hash)
+    {
+        res = magicnet_read_bytes(client, prev_hash, sizeof(prev_hash), packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
 
     data_size = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
@@ -872,7 +882,6 @@ int magicnet_client_read_block_send_packet(struct magicnet_client* client, struc
         res = data_size;
         goto out;
     }
-
 
     tmp_block_data_bytes = malloc(data_size);
     res = magicnet_read_bytes(client, tmp_block_data_bytes, data_size, packet_out->not_sent.tmp_buf);
@@ -883,12 +892,12 @@ int magicnet_client_read_block_send_packet(struct magicnet_client* client, struc
 
     block_data = block_data_new(tmp_block_data_bytes, data_size);
     if (!block_data)
-    {   
+    {
         res = -1;
         goto out;
     }
 
-    block = block_create(hash, prev_hash, block_data);
+    block = block_create(hash, has_prev_hash ? prev_hash : NULL, block_data);
     if (!block)
     {
         res = -1;
@@ -958,7 +967,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
         res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
         break;
-    
+
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_client_read_block_send_packet(client, packet_out);
         break;
@@ -1133,7 +1142,6 @@ out:
     return res;
 }
 
-
 int magicnet_client_write_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet)
 {
 
@@ -1154,21 +1162,29 @@ int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *clien
     return res;
 }
 
-
-int magicnet_client_write_packet_block_send(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_write_packet_block_send(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    struct block* block_to_send = magicnet_signed_data(packet)->payload.block_send.block;
+    struct block *block_to_send = magicnet_signed_data(packet)->payload.block_send.block;
     res = magicnet_write_bytes(client, block_to_send->hash, sizeof(block_to_send->hash), packet->not_sent.tmp_buf);
-    if (res < 0 )
+    if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, block_to_send->prev_hash, sizeof(block_to_send->prev_hash), packet->not_sent.tmp_buf);
+    res = magicnet_write_int(client, block_to_send->prev_hash ? 1 : 0, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
+    }
+
+    if (block_to_send->prev_hash)
+    {
+        res = magicnet_write_bytes(client, block_to_send->prev_hash, sizeof(block_to_send->prev_hash), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
 
     res = magicnet_write_int(client, block_data_len(block_to_send), packet->not_sent.tmp_buf);
@@ -1446,7 +1462,7 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
 
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         magicnet_signed_data(packet_out)->payload.block_send.block = block_clone(magicnet_signed_data(packet_in)->payload.block_send.block);
-        
+
         break;
     }
 }
@@ -2213,6 +2229,8 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     {
         magicnet_log("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
     }
+
+    magicnet_free_packet(packet);
 }
 
 struct key *magicnet_server_get_random_block_verifier(struct magicnet_server *server)
@@ -2293,6 +2311,21 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
     server->next_block.step = BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS;
 }
 
+void magicnet_server_create_and_send_block(struct magicnet_server *server)
+{
+    char block_data_hash[SHA256_STRING_LENGTH];
+    bzero(block_data_hash, sizeof(block_data_hash));
+
+    struct block_data *block_data = block_data_new("Block test data hello!!", strlen("Block test data hello!!"));
+    struct block *block = block_create(block_hash_create(block_data, NULL, block_data_hash), NULL, block_data);
+
+    struct magicnet_packet *packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(packet)->payload.block_send.block = block;
+    magicnet_server_add_packet_to_relay(server, packet);
+    magicnet_free_packet(packet);
+}
 /**
  * @brief Block creation is always happening every second, there is a special block sequence where certain steps
  * need to be followed over a period of a few minutes. The total seconds to make a block is split into four
@@ -2352,6 +2385,11 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         else
         {
             magicnet_log("%s awaiting for new block from voted verifier: %s \n", __FUNCTION__, key_who_won->key);
+        }
+        if (key_cmp(key_who_won, MAGICNET_public_key()))
+        {
+            // What do you know we won the vote! Lets create this block
+            magicnet_server_create_and_send_block(server);
         }
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
     }
