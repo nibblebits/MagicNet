@@ -16,7 +16,6 @@ int main(int argc, char** argv)
         return res;
     }
 
-    magicnet_block_load("wewge");
     struct magicnet_server* server = magicnet_server_start();
     if (!server)
     {
