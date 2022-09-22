@@ -63,7 +63,10 @@ struct block *block_create(const char *hash, const char *prev_hash, struct block
     }
     struct block *block = calloc(1, sizeof(struct block));
     strncpy(block->hash, hash, sizeof(block->hash));
-    strncpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
+    if (prev_hash)
+    {
+        strncpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
+    }
     block->data = data;
     return block;
 }

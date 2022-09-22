@@ -1165,6 +1165,9 @@ int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *clien
 int magicnet_client_write_packet_block_send(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
+    char blank_hash[SHA256_STRING_LENGTH];
+    bzero(blank_hash, sizeof(blank_hash));
+    bool has_prev_hash = memcmp(block_to_send->prev_hash, blank_hash, sizeof(blank_hash)) == 0;
     struct block *block_to_send = magicnet_signed_data(packet)->payload.block_send.block;
     res = magicnet_write_bytes(client, block_to_send->hash, sizeof(block_to_send->hash), packet->not_sent.tmp_buf);
     if (res < 0)
@@ -1172,13 +1175,14 @@ int magicnet_client_write_packet_block_send(struct magicnet_client *client, stru
         goto out;
     }
 
-    res = magicnet_write_int(client, block_to_send->prev_hash ? 1 : 0, packet->not_sent.tmp_buf);
+
+    res = magicnet_write_int(client, has_prev_hash, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
 
-    if (block_to_send->prev_hash)
+    if (has_prev_hash)
     {
         res = magicnet_write_bytes(client, block_to_send->prev_hash, sizeof(block_to_send->prev_hash), packet->not_sent.tmp_buf);
         if (res < 0)
