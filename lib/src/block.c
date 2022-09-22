@@ -8,9 +8,10 @@
 #include <dirent.h>
 struct block_data *block_data_new(char* data, size_t len)
 {
-    struct block_data* block_data =  calloc(1, sizeof(struct block_data));
-    block_data->data = data;
+    struct block_data* block_data = calloc(1, sizeof(struct block_data));
+    block_data->data = malloc(len);
     block_data->len = len;
+    memcpy(block_data->data, data, len);
     return block_data;
 }
 
@@ -28,6 +29,11 @@ void block_data_free(struct block_data* block_data)
 {
     free(block_data->data);
     free(block_data);
+}
+
+struct block* block_clone(struct block* block)
+{
+    return block_create(block->hash, block->prev_hash, block_data_new(block_data(block), block_data_len(block)));
 }
 
 struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data)

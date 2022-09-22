@@ -101,6 +101,10 @@ void magicnet_free_packet_pointers(struct magicnet_packet* packet)
             free(magicnet_signed_data(packet)->payload.user_defined.data);
         break;
 
+        case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+            block_free(magicnet_signed_data(packet)->payload.block_send.block);
+            break;
+
         case MAGICNET_PACKET_TYPE_SERVER_SYNC:
             
             break;

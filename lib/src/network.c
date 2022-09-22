@@ -843,6 +843,76 @@ int magicnet_client_read_vote_for_verifier_packet(struct magicnet_client *client
     return res;
 }
 
+
+
+int magicnet_client_read_block_send_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{
+    int res = 0;
+    char hash[SHA256_STRING_LENGTH];
+    char prev_hash[SHA256_STRING_LENGTH];
+    char* tmp_block_data_bytes = NULL;
+    int data_size = 0;
+    struct block_data* block_data = NULL;
+    struct block* block = NULL;
+    res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, prev_hash, sizeof(prev_hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    data_size = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (data_size < 0)
+    {
+        res = data_size;
+        goto out;
+    }
+
+
+    tmp_block_data_bytes = malloc(data_size);
+    res = magicnet_read_bytes(client, tmp_block_data_bytes, data_size, packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    block_data = block_data_new(tmp_block_data_bytes, data_size);
+    if (!block_data)
+    {   
+        res = -1;
+        goto out;
+    }
+
+    block = block_create(hash, prev_hash, block_data);
+    if (!block)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // When we free the packet we must release this block data.
+    magicnet_signed_data(packet_out)->payload.block_send.block = block;
+out:
+    // When block data bytes has been created the data is copied, therefore we are responsible
+    // for freeing this temporary pointer we passed to block_data_new
+    if (tmp_block_data_bytes)
+    {
+        free(tmp_block_data_bytes);
+    }
+    if (res < 0)
+    {
+        if (block_data)
+        {
+            block_data_free(block_data);
+        }
+    }
+    return res;
+}
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -887,6 +957,10 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
         res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
+        break;
+    
+    case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+        res = magicnet_client_read_block_send_packet(client, packet_out);
         break;
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
         res = magicnet_client_read_not_found_packet(client, packet_out);
@@ -1059,6 +1133,7 @@ out:
     return res;
 }
 
+
 int magicnet_client_write_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet)
 {
 
@@ -1076,6 +1151,39 @@ int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *clien
     int res = 0;
     res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key, sizeof(struct key), packet->not_sent.tmp_buf);
 
+    return res;
+}
+
+
+int magicnet_client_write_packet_block_send(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    struct block* block_to_send = magicnet_signed_data(packet)->payload.block_send.block;
+    res = magicnet_write_bytes(client, block_to_send->hash, sizeof(block_to_send->hash), packet->not_sent.tmp_buf);
+    if (res < 0 )
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, block_to_send->prev_hash, sizeof(block_to_send->prev_hash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_int(client, block_data_len(block_to_send), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, block_data(block_to_send), block_data_len(block_to_send), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
     return res;
 }
 
@@ -1123,6 +1231,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_write_packet_server_poll(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+        res = magicnet_client_write_packet_block_send(client, packet);
         break;
     }
 
@@ -1330,6 +1442,11 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
         magicnet_signed_data(packet_out)->payload.user_defined.data = calloc(1, magicnet_signed_data(packet_out)->payload.user_defined.data_len);
         memcpy(magicnet_signed_data(packet_out)->payload.user_defined.data, magicnet_signed_data(packet_in)->payload.user_defined.data, magicnet_signed_data(packet_out)->payload.user_defined.data_len);
+        break;
+
+    case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+        magicnet_signed_data(packet_out)->payload.block_send.block = block_clone(magicnet_signed_data(packet_in)->payload.block_send.block);
+        
         break;
     }
 }

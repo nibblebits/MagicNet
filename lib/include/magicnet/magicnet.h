@@ -280,9 +280,6 @@ struct block
     // Hash of the previous block
     char prev_hash[SHA256_STRING_LENGTH];
 
-    // The block URI of the filename thatrepresents the block.
-    char block_uri[SHA256_STRING_LENGTH + 3];
-
     struct block_data* data;
 };
 
@@ -325,6 +322,8 @@ struct magicnet_program *magicnet_program(const char *name);
 struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data);
 void block_free(struct block *block);
 struct block_data *block_data_new(char* data, size_t len);
+struct block* block_clone(struct block* block);
+void block_data_free(struct block_data* block_data);
 char *block_data(struct block *block);
 size_t block_data_len(struct block* block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
