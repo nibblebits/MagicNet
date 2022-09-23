@@ -41,6 +41,7 @@ struct block_transaction* block_transaction_build(const char* program_name, char
     transaction->data.ptr = calloc(1, data_len);
     memcpy(transaction->data.ptr, data, data_len);
     transaction->data.time = time(NULL);
+    return transaction;
 }
 
 void block_buffer_write_transaction_data(struct block_transaction_data* data, struct buffer* buffer)
