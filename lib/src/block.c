@@ -120,17 +120,47 @@ const char *block_hash_create(struct block_data *data, const char *prev_hash, ch
     return hash_out;
 }
 
+bool block_prev_hash_exists(struct block* block)
+{
+    char empty_hash[SHA256_STRING_LENGTH];
+    bzero(empty_hash, sizeof(empty_hash));
+    return memcmp(block->prev_hash, empty_hash, sizeof(empty_hash)) != 0;
+}
+
+int block_verify(struct block* block)
+{
+    int res = 0;
+    char block_hash[SHA256_STRING_LENGTH];
+    block_hash_create(block->data, block_prev_hash_exists(block) ? block->prev_hash : NULL, block_hash);
+    if (memcmp(block->hash, block_hash, sizeof(block_hash)) != 0)
+    {
+        magicnet_log("%s the hash in the block does not match the hash it should be\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    for (int i = 0; i < block->data->total_transactions; i++)
+    {
+        struct block_transaction* transaction = block->data->transactions[i];
+        res = block_transaction_valid(transaction);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+out:
+    if (res < 0)
+    {
+        magicnet_log("%s the block is not valid\n", __FUNCTION__);
+    }
+    return res;
+}
 struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data)
 {
-    // Let's verify the hash provided is correct for the block we are creating.
-    // We don't generate the hash for them to help minimize mistakes, we want them to tell us what the hash is.
     char block_hash[SHA256_STRING_LENGTH];
     bzero(block_hash, sizeof(block_hash));
-    if (strncmp(block_hash_create(data, prev_hash, block_hash), block_hash, sizeof(block_hash)) != 0)
-    {
-        magicnet_log("%s you tried to create a block but provided us an illegal hash for the prev_hash and data combined\n", __FUNCTION__);
-        return NULL;
-    }
+
     struct block *block = calloc(1, sizeof(struct block));
     strncpy(block->hash, hash, sizeof(block->hash));
     if (prev_hash)
@@ -143,7 +173,10 @@ struct block *block_create(const char *hash, const char *prev_hash, struct block
 
 void block_free(struct block *block)
 {
-    block_data_free(block->data);
+    if (block->data)
+    {
+        block_data_free(block->data);
+    }
     free(block);
 }
 

@@ -914,7 +914,8 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
     char block_prev_hash[SHA256_STRING_LENGTH];
     bzero(block_hash, sizeof(block_hash));
     bzero(block_prev_hash, sizeof(block_prev_hash));
-
+    struct block_data* block_data = block_data_new();
+    struct block* block = NULL;
     bool has_prev_hash = false;
     int total_transactions = 0;
     res = magicnet_read_bytes(client, block_hash, sizeof(block_hash), packet_out->not_sent.tmp_buf);
@@ -952,12 +953,41 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         goto out;
     }
 
+    block = block_create(block_hash, has_prev_hash ? block_prev_hash : NULL, block_data);
     for (int i = 0; i < total_transactions; i++)
     {
-        
+        struct block_transaction* transaction = block_transaction_new();
+        res = magicnet_read_transaction(client, transaction, packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
+
+        res = block_transaction_add(block, transaction);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+    // Lets verify the whole block to make sure its right.
+    res = block_verify(block);
+    if (res < 0)
+    {
+        goto out;
     }
 
 out:
+    if (res < 0)
+    {
+        block_data_free(block_data);
+        if (block)
+        {
+            block->data = NULL;
+            block_free(block);
+        }
+    
+    }
     return res;
 }
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
