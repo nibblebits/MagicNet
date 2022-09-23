@@ -842,19 +842,82 @@ int magicnet_client_read_vote_for_verifier_packet(struct magicnet_client *client
     return res;
 }
 
+int magicnet_read_transaction(struct magicnet_client *client, struct block_transaction *transaction_out, struct buffer *store_in_buffer)
+{
+    int res = 0;
+
+    res = magicnet_read_bytes(client, transaction_out->hash, sizeof(transaction_out->hash), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    transaction_out->data.time = magicnet_read_long(client, store_in_buffer);
+    if (transaction_out->data.time < 0)
+    {
+        res= transaction_out->data.time;
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, transaction_out->data.program_name, sizeof(transaction_out->data.program_name), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    transaction_out->data.size = magicnet_read_int(client, store_in_buffer);
+    if (transaction_out->data.size < 0)
+    {
+        res = transaction_out->data.size;
+        goto out;
+    }
+
+    if (transaction_out->data.size > MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA)
+    {
+        res = -1;
+        magicnet_log("%s the transaction sent to us has too much data for this client version\n", __FUNCTION__);
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, transaction_out->data.ptr, transaction_out->data.size, store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, &transaction_out->signature, sizeof(transaction_out->signature), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = magicnet_read_bytes(client, &transaction_out->key, sizeof(transaction_out->key), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Let's verify the transaction sent is correct
+    if (block_transaction_valid(transaction_out) < 0)
+    {
+        res = -1;
+        magicnet_log("%s the transaction sent to us is invalid\n", __FUNCTION__);
+        goto out;
+    }
+out:
+    return res;
+}
+
 int magicnet_client_read_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
-    char hash[SHA256_STRING_LENGTH];
-    char prev_hash[SHA256_STRING_LENGTH];
-    bzero(hash, sizeof(hash));
-    bzero(prev_hash, sizeof(prev_hash));
-    char *tmp_block_data_bytes = NULL;
-    int data_size = 0;
-    struct block_data *block_data = NULL;
-    struct block *block = NULL;
+    char block_hash[SHA256_STRING_LENGTH];
+    char block_prev_hash[SHA256_STRING_LENGTH];
+    bzero(block_hash, sizeof(block_hash));
+    bzero(block_prev_hash, sizeof(block_prev_hash));
+
     bool has_prev_hash = false;
-    res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
+    int total_transactions = 0;
+    res = magicnet_read_bytes(client, block_hash, sizeof(block_hash), packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
@@ -863,63 +926,38 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
     has_prev_hash = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (has_prev_hash < 0)
     {
-        res = -1;
+        res = has_prev_hash;
         goto out;
     }
 
     if (has_prev_hash)
     {
-        res = magicnet_read_bytes(client, prev_hash, sizeof(prev_hash), packet_out->not_sent.tmp_buf);
+        res = magicnet_read_bytes(client, block_prev_hash, sizeof(block_prev_hash), packet_out->not_sent.tmp_buf);
         if (res < 0)
         {
             goto out;
         }
     }
-
-    data_size = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
-    if (data_size < 0)
+    total_transactions = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_transactions < 0)
     {
-        res = data_size;
+        res = total_transactions;
         goto out;
     }
 
-    tmp_block_data_bytes = malloc(data_size);
-    res = magicnet_read_bytes(client, tmp_block_data_bytes, data_size, packet_out->not_sent.tmp_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    block_data = block_data_new(tmp_block_data_bytes, data_size);
-    if (!block_data)
+    if (total_transactions > MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK)
     {
         res = -1;
+        magicnet_log("%s peer tried to send us too many transactions. This is either a poorly wrote client or a hack attmept.\n", __FUNCTION__);
         goto out;
     }
 
-    block = block_create(hash, has_prev_hash ? prev_hash : NULL, block_data);
-    if (!block)
+    for (int i = 0; i < total_transactions; i++)
     {
-        res = -1;
-        goto out;
+        
     }
 
-    // When we free the packet we must release this block data.
-    magicnet_signed_data(packet_out)->payload.block_send.block = block;
 out:
-    // When block data bytes has been created the data is copied, therefore we are responsible
-    // for freeing this temporary pointer we passed to block_data_new
-    if (tmp_block_data_bytes)
-    {
-        free(tmp_block_data_bytes);
-    }
-    if (res < 0)
-    {
-        if (block_data)
-        {
-            block_data_free(block_data);
-        }
-    }
     return res;
 }
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
@@ -1162,19 +1200,82 @@ int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *clien
     return res;
 }
 
+int magicnet_write_transaction(struct magicnet_client *client, struct block_transaction *transaction, struct buffer *store_in_buffer)
+{
+    int res = 0;
+    // Let's verify some things before we send this
+    res = block_transaction_valid(transaction);
+    if (res < 0)
+    {
+        magicnet_log("%s the transaction to write is invalid\n", __FUNCTION__);
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, transaction->hash, sizeof(transaction->hash), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_long(client, transaction->data.time, store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, transaction->data.program_name, sizeof(transaction->data.program_name), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_int(client, transaction->data.size, store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, transaction->data.ptr, transaction->data.size, store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, &transaction->signature, sizeof(transaction->signature), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = magicnet_write_bytes(client, &transaction->key, sizeof(transaction->key), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
 int magicnet_client_write_packet_block_send(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     char blank_hash[SHA256_STRING_LENGTH];
     bzero(blank_hash, sizeof(blank_hash));
+
     struct block *block_to_send = magicnet_signed_data(packet)->payload.block_send.block;
+    // Check for possible corrupted data or an attempt to cause a buffer overflow.
+    if (block_to_send->data->total_transactions >= MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK)
+    {
+        res = -1;
+        goto out;
+    }
+
     bool has_prev_hash = memcmp(block_to_send->prev_hash, blank_hash, sizeof(blank_hash)) == 0;
     res = magicnet_write_bytes(client, block_to_send->hash, sizeof(block_to_send->hash), packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
-
 
     res = magicnet_write_int(client, has_prev_hash, packet->not_sent.tmp_buf);
     if (res < 0)
@@ -1191,18 +1292,28 @@ int magicnet_client_write_packet_block_send(struct magicnet_client *client, stru
         }
     }
 
-    res = magicnet_write_int(client, block_data_len(block_to_send), packet->not_sent.tmp_buf);
+    res = magicnet_write_int(client, block_to_send->data->total_transactions, packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, block_data(block_to_send), block_data_len(block_to_send), packet->not_sent.tmp_buf);
-    if (res < 0)
+    for (int i = 0; i < block_to_send->data->total_transactions; i++)
     {
-        goto out;
-    }
+        struct block_transaction *transaction = block_to_send->data->transactions[i];
+        if (!transaction)
+        {
+            // We aren't allowed NULL transactions inbetween valid ones.
+            res = -1;
+            goto out;
+        }
 
+        res = magicnet_write_transaction(client, transaction, packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
 out:
     return res;
 }
@@ -2325,7 +2436,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     char block_data_hash[SHA256_STRING_LENGTH];
     bzero(block_data_hash, sizeof(block_data_hash));
 
-    struct block_data *block_data = block_data_new("Block test data hello!!", strlen("Block test data hello!!"));
+    struct block_data *block_data = block_data_new();
     struct block *block = block_create(block_hash_create(block_data, NULL, block_data_hash), NULL, block_data);
 
     struct magicnet_packet *packet = magicnet_packet_new();

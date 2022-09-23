@@ -264,12 +264,33 @@ struct magicnet_server
     // END
 };
 
+struct block_transaction_data
+{
+    // The program name who this transaction is intended for.. All listening to this program
+    // will have access to the transaction
+    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
+    time_t time;
+    char *ptr;
+    size_t size;
+};
+
+struct block_transaction
+{
+    char hash[SHA256_STRING_LENGTH];
+    // Signed signature of the creator of the transaction.
+    struct signature signature;
+    // The public key of the creator of the transaction
+    struct key key;
+    // Pointer to raw data of the transacton known only by the application using the network
+    struct block_transaction_data data;
+};
+
 struct block_data
 {
-    // Pointer to the loaded block data in memory
-    char *data;
-    // The block data length
-    size_t len;
+    // Pointer arrayto the loaded transactions data in memory
+    struct block_transaction* transactions[MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK];
+    // The total transactions in this block
+    size_t total_transactions;
 };
 
 struct block
@@ -280,7 +301,7 @@ struct block
     // Hash of the previous block
     char prev_hash[SHA256_STRING_LENGTH];
 
-    struct block_data* data;
+    struct block_data *data;
 };
 
 enum
@@ -312,23 +333,24 @@ int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
 /**
  * @brief Creates a new block in memory, no block is added to the chain.
- * 
- * @param hash 
- * @param prev_hash 
- * @param data 
- * @param len 
- * @return struct block* 
+ *
+ * @param hash
+ * @param prev_hash
+ * @param data
+ * @param len
+ * @return struct block*
  */
 
 struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data);
 void block_free(struct block *block);
-struct block_data *block_data_new(char* data, size_t len);
-struct block* block_clone(struct block* block);
+
+struct block *block_clone(struct block *block);
+struct block_data *block_data_new();
 void block_data_free(struct block_data* block_data);
-char *block_data(struct block *block);
-size_t block_data_len(struct block* block);
+struct block_transaction* block_transaction_new();
+int block_transaction_valid(struct block_transaction* transaction);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
-const char* block_hash_create(struct block_data* data, const char* prev_hash, char* hash_out);
+const char *block_hash_create(struct block_data *data, const char *prev_hash, char *hash_out);
 struct block *magicnet_block_load(const char *hash);
 
 #endif
