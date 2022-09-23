@@ -1994,6 +1994,11 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
         res = magicnet_server_vote_for_verifier_packet(client, packet);
         break;
+
+    case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+        res = 0;
+        magicnet_log("%s block send packet discovered\n", __FUNCTION__);
+        break;
     };
 
     magicnet_server_lock(client->server);
