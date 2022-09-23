@@ -953,7 +953,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         goto out;
     }
 
-    block = block_create(block_hash, has_prev_hash ? block_prev_hash : NULL, block_data);
+    block = block_create_with_data(block_hash, has_prev_hash ? block_prev_hash : NULL, block_data);
     for (int i = 0; i < total_transactions; i++)
     {
         struct block_transaction* transaction = block_transaction_new();
@@ -2468,6 +2468,11 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
 
     struct block_data *block_data = block_data_new();
     struct block *block = block_create(block_hash_create(block_data, NULL, block_data_hash), NULL, block_data);
+
+    // Let's add a dummy transaction to test this
+    struct block_transaction* transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
+    block_transaction_hash_and_sign(transaction);
+    block_transaction_add(block, transaction);
 
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;

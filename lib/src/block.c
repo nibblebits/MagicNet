@@ -29,7 +29,66 @@ void block_data_free(struct block_data *block_data)
 
 struct block_transaction *block_transaction_new()
 {
-    return calloc(1, sizeof(struct block_transaction));
+    struct block_transaction* transaction = calloc(1, sizeof(struct block_transaction));
+    return transaction;
+}
+
+struct block_transaction* block_transaction_build(const char* program_name, char* data, size_t data_len)
+{
+    struct block_transaction* transaction = block_transaction_new();
+    strncpy(transaction->data.program_name, program_name, sizeof(transaction->data.program_name));
+    transaction->data.size = data_len;
+    transaction->data.ptr = calloc(1, data_len);
+    memcpy(transaction->data.ptr, data, data_len);
+    transaction->data.time = time(NULL);
+}
+
+void block_buffer_write_transaction_data(struct block_transaction_data* data, struct buffer* buffer)
+{
+  buffer_write_bytes(buffer, data->program_name, sizeof(data->program_name));
+    buffer_write_long(buffer, data->size);
+    buffer_write_long(buffer, data->time);
+
+    if (data->ptr)
+    {
+        buffer_write_bytes(buffer,data->ptr, data->size);
+    }
+}
+
+void block_buffer_write_transaction(struct block_transaction *block_transaction, struct buffer *buffer)
+{
+    buffer_write_bytes(buffer, block_transaction->hash, sizeof(block_transaction->hash));
+    buffer_write_bytes(buffer, &block_transaction->key, sizeof(block_transaction->key));
+    buffer_write_bytes(buffer, &block_transaction->signature, sizeof(block_transaction->signature));
+    block_buffer_write_transaction_data(&block_transaction->data, buffer);
+}
+
+
+
+int block_transaction_hash_and_sign(struct block_transaction *transaction)
+{
+    if (transaction->data.size > MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA)
+    {
+        return -1;
+    }
+
+    char transaction_hash[SHA256_STRING_LENGTH];
+    struct buffer* buffer = buffer_create();
+    block_buffer_write_transaction_data(&transaction->data, buffer);
+    sha256_data(buffer_ptr(buffer), transaction_hash, buffer_len(buffer));
+    buffer_free(buffer);
+
+    int res = 0;
+    res = private_sign(transaction_hash, sizeof(transaction_hash),&transaction->signature);
+    if (res < 0)
+    {
+        return res;
+    }
+
+    transaction->key = *MAGICNET_public_key();
+    memcpy(transaction->hash, transaction_hash, sizeof(transaction->hash));
+
+    return 0;
 }
 
 int block_transaction_add(struct block *block, struct block_transaction *transaction)
@@ -55,7 +114,10 @@ int block_transaction_valid(struct block_transaction *transaction)
     }
 
     char transaction_hash[SHA256_STRING_LENGTH];
-    sha256_data(&transaction->data, transaction_hash, sizeof(transaction->data));
+    struct buffer* buffer = buffer_create();
+    block_buffer_write_transaction_data(&transaction->data, buffer);
+    sha256_data(buffer_ptr(buffer), transaction_hash, buffer_len(buffer));
+    buffer_free(buffer);
 
     if (memcmp(transaction_hash, transaction->hash, sizeof(transaction_hash)) != 0)
     {
@@ -103,31 +165,21 @@ const char *block_hash_create(struct block_data *data, const char *prev_hash, ch
     buffer_write_long(tmp_buf, data->total_transactions);
     for (int i = 0; i < data->total_transactions; i++)
     {
-        buffer_write_bytes(tmp_buf, data->transactions[i]->hash, sizeof(data->transactions[i]->hash));
-        buffer_write_bytes(tmp_buf, &data->transactions[i]->key, sizeof(data->transactions[i]->key));
-        buffer_write_bytes(tmp_buf, &data->transactions[i]->signature, sizeof(data->transactions[i]->signature));
-        buffer_write_bytes(tmp_buf, data->transactions[i]->data.program_name, sizeof(data->transactions[i]->data.program_name));
-        buffer_write_long(tmp_buf, data->transactions[i]->data.size);
-        buffer_write_long(tmp_buf, data->transactions[i]->data.time);
-
-        if (data->transactions[i]->data.ptr)
-        {
-            buffer_write_bytes(tmp_buf, data->transactions[i]->data.ptr, data->transactions[i]->data.size);
-        }
+        block_buffer_write_transaction(data->transactions[i], tmp_buf);
     }
     sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
     buffer_free(tmp_buf);
     return hash_out;
 }
 
-bool block_prev_hash_exists(struct block* block)
+bool block_prev_hash_exists(struct block *block)
 {
     char empty_hash[SHA256_STRING_LENGTH];
     bzero(empty_hash, sizeof(empty_hash));
     return memcmp(block->prev_hash, empty_hash, sizeof(empty_hash)) != 0;
 }
 
-int block_verify(struct block* block)
+int block_verify(struct block *block)
 {
     int res = 0;
     char block_hash[SHA256_STRING_LENGTH];
@@ -141,7 +193,7 @@ int block_verify(struct block* block)
 
     for (int i = 0; i < block->data->total_transactions; i++)
     {
-        struct block_transaction* transaction = block->data->transactions[i];
+        struct block_transaction *transaction = block->data->transactions[i];
         res = block_transaction_valid(transaction);
         if (res < 0)
         {
@@ -156,7 +208,7 @@ out:
     }
     return res;
 }
-struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data)
+struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data)
 {
     char block_hash[SHA256_STRING_LENGTH];
     bzero(block_hash, sizeof(block_hash));
@@ -171,8 +223,18 @@ struct block *block_create(const char *hash, const char *prev_hash, struct block
     return block;
 }
 
+struct block *block_create()
+{
+    return calloc(1, sizeof(struct block));
+}
+
 void block_free(struct block *block)
 {
+    if (!block)
+    {
+        return;
+    }
+
     if (block->data)
     {
         block_data_free(block->data);

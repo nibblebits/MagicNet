@@ -341,15 +341,18 @@ struct magicnet_program *magicnet_program(const char *name);
  * @return struct block*
  */
 
-struct block *block_create(const char *hash, const char *prev_hash, struct block_data *data);
+struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data);
+struct block *block_create();
 void block_free(struct block *block);
 
 struct block *block_clone(struct block *block);
 struct block_data *block_data_new();
 void block_data_free(struct block_data* block_data);
 struct block_transaction* block_transaction_new();
+struct block_transaction* block_transaction_build(const char* program_name, char* data, size_t data_len);
 int block_transaction_add(struct block *block, struct block_transaction *transaction);
 int block_transaction_valid(struct block_transaction* transaction);
+int block_transaction_hash_and_sign(struct block_transaction *transaction);
 int block_verify(struct block* block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
 const char *block_hash_create(struct block_data *data, const char *prev_hash, char *hash_out);
