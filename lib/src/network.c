@@ -1302,7 +1302,7 @@ int magicnet_client_write_packet_block_send(struct magicnet_client *client, stru
         goto out;
     }
 
-    bool has_prev_hash = memcmp(block_to_send->prev_hash, blank_hash, sizeof(blank_hash)) == 0;
+    bool has_prev_hash = memcmp(block_to_send->prev_hash, blank_hash, sizeof(blank_hash)) != 0;
     res = magicnet_write_bytes(client, block_to_send->hash, sizeof(block_to_send->hash), packet->not_sent.tmp_buf);
     if (res < 0)
     {
