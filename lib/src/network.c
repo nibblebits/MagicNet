@@ -1017,32 +1017,64 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
         res = magicnet_client_read_packet_empty(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read empty packet failed\n", __FUNCTION__);
+        }
         break;
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
         res = magicnet_client_read_user_defined_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s user defined packet failed\n", __FUNCTION__);
+        }
         break;
 
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_read_poll_packets_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s poll packets failed", __FUNCTION__);
+        }
         break;
 
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_read_server_sync_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s sync packet failed\n", __FUNCTION__);
+        }
         break;
 
     case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
         res = magicnet_client_read_verifier_signup_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read signup packet failed\n", __FUNCTION__);
+        }
         break;
 
     case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
         res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read verifier packet failed\n", __FUNCTION__);
+        }
         break;
 
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_client_read_block_send_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read block send packet failed\n", __FUNCTION__);
+        }
         break;
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
         res = magicnet_client_read_not_found_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read not found packet failed\n", __FUNCTION__);
+        }
         break;
     default:
         magicnet_log("%s unexpected packet was provided %i\n", __FUNCTION__, packet_type);
@@ -2482,7 +2514,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
     block_transaction_hash_and_sign(transaction);
     block_transaction_add(block, transaction);
-    if(block_hash_sign_verify(block) < 0)
+    if (block_hash_sign_verify(block) < 0)
     {
         magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
         block_data_free(block_data);
