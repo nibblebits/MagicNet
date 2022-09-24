@@ -2487,7 +2487,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->payload.block_send.block = block;
     magicnet_server_add_packet_to_relay(server, packet);
-    magicnet_free_packet(packet);
+    //magicnet_free_packet(packet);
 
 out:   
     block_data_free(block_data);
