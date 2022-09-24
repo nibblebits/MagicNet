@@ -855,7 +855,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     transaction_out->data.time = magicnet_read_long(client, store_in_buffer);
     if (transaction_out->data.time < 0)
     {
-        res= transaction_out->data.time;
+        res = transaction_out->data.time;
         goto out;
     }
 
@@ -914,8 +914,8 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
     char block_prev_hash[SHA256_STRING_LENGTH];
     bzero(block_hash, sizeof(block_hash));
     bzero(block_prev_hash, sizeof(block_prev_hash));
-    struct block_data* block_data = block_data_new();
-    struct block* block = NULL;
+    struct block_data *block_data = block_data_new();
+    struct block *block = NULL;
     bool has_prev_hash = false;
     int total_transactions = 0;
     res = magicnet_read_bytes(client, block_hash, sizeof(block_hash), packet_out->not_sent.tmp_buf);
@@ -956,7 +956,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
     block = block_create_with_data(block_hash, has_prev_hash ? block_prev_hash : NULL, block_data);
     for (int i = 0; i < total_transactions; i++)
     {
-        struct block_transaction* transaction = block_transaction_new();
+        struct block_transaction *transaction = block_transaction_new();
         res = magicnet_read_transaction(client, transaction, packet_out->not_sent.tmp_buf);
         if (res < 0)
         {
@@ -986,7 +986,6 @@ out:
             block->data = NULL;
             block_free(block);
         }
-    
     }
     return res;
 }
@@ -2467,10 +2466,10 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     bzero(block_data_hash, sizeof(block_data_hash));
 
     struct block_data *block_data = block_data_new();
-    struct block *block = block_create(block_hash_create(block_data, NULL, block_data_hash), NULL, block_data);
+    struct block *block = block_create_with_data(block_hash_create(block_data, NULL, block_data_hash), NULL, block_data);
 
     // Let's add a dummy transaction to test this
-    struct block_transaction* transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
+    struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
     block_transaction_hash_and_sign(transaction);
     block_transaction_add(block, transaction);
 
