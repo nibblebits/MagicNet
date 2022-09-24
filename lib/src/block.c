@@ -22,7 +22,7 @@ void block_data_free(struct block_data *block_data)
         {
             continue;
         }
-        
+
         if (block_data->transactions[i]->data.ptr)
         {
             free(block_data->transactions[i]->data.ptr);
@@ -158,7 +158,7 @@ struct block *block_clone(struct block *block)
     {
         block_data->transactions[i] = block_transaction_clone(block->data->transactions[i]);
     }
-    return block_create(block->hash, block->prev_hash, block_data);
+    return block_create_with_data(block->hash, block->prev_hash, block_data);
 }
 
 const char *block_hash_create(struct block_data *data, const char *prev_hash, char *hash_out)
