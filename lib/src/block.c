@@ -18,6 +18,11 @@ void block_data_free(struct block_data *block_data)
 {
     for (int i = 0; i < block_data->total_transactions; i++)
     {
+        if (!block_data->transactions[i])
+        {
+            continue;
+        }
+        
         if (block_data->transactions[i]->data.ptr)
         {
             free(block_data->transactions[i]->data.ptr);
