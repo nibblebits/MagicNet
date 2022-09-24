@@ -250,7 +250,7 @@ void block_free(struct block *block)
 
     if (block->data)
     {
-        block_data_free(block->data);
+       // block_data_free(block->data);
     }
     free(block);
 }
