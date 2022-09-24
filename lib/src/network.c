@@ -2479,21 +2479,21 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     if(block_hash_sign_verify(block) < 0)
     {
         magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
-        goto out;
+        block_data_free(block_data);
+        block->data = NULL;
+        block_free(block);
+        return;
     }
 
+    #warning "May need to come back to this to improve this because the block set here when packet free is called it gets deleted. Easy to have a double free"
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->payload.block_send.block = block;
     magicnet_server_add_packet_to_relay(server, packet);
     magicnet_free_packet(packet);
-
-out:   
-    block_data_free(block_data);
-    block->data = NULL;
-    block_free(block);
 }
+
 /**
  * @brief Block creation is always happening every second, there is a special block sequence where certain steps
  * need to be followed over a period of a few minutes. The total seconds to make a block is split into four
