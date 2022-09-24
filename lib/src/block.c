@@ -158,6 +158,7 @@ struct block *block_clone(struct block *block)
     {
         block_data->transactions[i] = block_transaction_clone(block->data->transactions[i]);
     }
+    block_data->total_transactions = block->data->total_transactions;
     return block_create_with_data(block->hash, block->prev_hash, block_data);
 }
 
