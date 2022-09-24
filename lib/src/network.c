@@ -977,6 +977,9 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         goto out;
     }
 
+    // Final thing to do is to attach the block to the packet
+    magicnet_signed_data(packet_out)->payload.block_send.block = block;
+
 out:
     if (res < 0)
     {
