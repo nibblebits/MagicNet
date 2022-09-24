@@ -1049,6 +1049,12 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         res = -1;
         break;
     }
+
+    // Has the packet failed to be read?
+    if (res < 0)
+    {
+        goto out;
+    }
     magicnet_signed_data(packet_out)->id = packet_id;
     magicnet_signed_data(packet_out)->type = packet_type;
 
