@@ -180,6 +180,13 @@ bool block_prev_hash_exists(struct block *block)
     return memcmp(block->prev_hash, empty_hash, sizeof(empty_hash)) != 0;
 }
 
+int block_hash_sign_verify(struct block* block)
+{
+    int res = 0;
+    block_hash_create(block->data, NULL, block->hash);
+    res = block_verify(block);
+    return res;
+}
 int block_verify(struct block *block)
 {
     int res = 0;

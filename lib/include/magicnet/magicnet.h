@@ -354,6 +354,7 @@ int block_transaction_add(struct block *block, struct block_transaction *transac
 int block_transaction_valid(struct block_transaction* transaction);
 int block_transaction_hash_and_sign(struct block_transaction *transaction);
 int block_verify(struct block* block);
+int block_hash_sign_verify(struct block* block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
 const char *block_hash_create(struct block_data *data, const char *prev_hash, char *hash_out);
 struct block *magicnet_block_load(const char *hash);

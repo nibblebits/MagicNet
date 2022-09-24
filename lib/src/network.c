@@ -2469,12 +2469,18 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     bzero(block_data_hash, sizeof(block_data_hash));
 
     struct block_data *block_data = block_data_new();
-    struct block *block = block_create_with_data(block_hash_create(block_data, NULL, block_data_hash), NULL, block_data);
+    struct block *block = block_create();
+    block->data = block_data;
 
     // Let's add a dummy transaction to test this
     struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
     block_transaction_hash_and_sign(transaction);
     block_transaction_add(block, transaction);
+    if(block_hash_sign_verify(block) < 0)
+    {
+        magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
+        goto out;
+    }
 
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
@@ -2482,6 +2488,11 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_signed_data(packet)->payload.block_send.block = block;
     magicnet_server_add_packet_to_relay(server, packet);
     magicnet_free_packet(packet);
+
+out:   
+    block_data_free(block_data);
+    block->data = NULL;
+    block_free(block);
 }
 /**
  * @brief Block creation is always happening every second, there is a special block sequence where certain steps
