@@ -2485,7 +2485,6 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
         return;
     }
 
-    #warning "May need to come back to this to improve this because the block set here when packet free is called it gets deleted. Easy to have a double free"
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;

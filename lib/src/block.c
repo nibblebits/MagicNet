@@ -223,14 +223,11 @@ out:
 }
 struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data)
 {
-    char block_hash[SHA256_STRING_LENGTH];
-    bzero(block_hash, sizeof(block_hash));
-
     struct block *block = calloc(1, sizeof(struct block));
-    strncpy(block->hash, hash, sizeof(block->hash));
+    memcpy(block->hash, hash, sizeof(block->hash));
     if (prev_hash)
     {
-        strncpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
+        memcpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
     }
     block->data = data;
     return block;
