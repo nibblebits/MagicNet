@@ -981,6 +981,8 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         }
     }
 
+    packet_out->signature.pr_sig[3] = 0xf8;
+    
     // Lets verify the whole block to make sure its right.
     res = block_verify(block);
     if (res < 0)
