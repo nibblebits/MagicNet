@@ -884,6 +884,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
         goto out;
     }
 
+    transaction_out->data.ptr = malloc(transaction_out->data.size);
     res = magicnet_read_bytes(client, transaction_out->data.ptr, transaction_out->data.size, store_in_buffer);
     if (res < 0)
     {
