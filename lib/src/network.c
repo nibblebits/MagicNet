@@ -811,10 +811,12 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
     }
 
     // Let's ensure that they signed the hash that was given to us
+    packet->datahash[0] = 0xff;
+    packet->datahash[1] = 0xf3;
     int res = public_verify(&packet->pub_key, packet->datahash, sizeof(packet->datahash), &packet->signature);
     if (res < 0)
     {
-        magicnet_log("%s the signatuure was not signed with the public key provided\n", __FUNCTION__);
+        magicnet_log("%s the signature was not signed with the public key provided\n", __FUNCTION__);
         return -1;
     }
 
@@ -981,8 +983,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         }
     }
 
-    packet_out->signature.pr_sig[3] = 0xf8;
-    
+
     // Lets verify the whole block to make sure its right.
     res = block_verify(block);
     if (res < 0)
