@@ -849,6 +849,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     res = magicnet_read_bytes(client, transaction_out->hash, sizeof(transaction_out->hash), store_in_buffer);
     if (res < 0)
     {
+        magicnet_log("%s failed to read transaction hash \n", __FUNCTION__);
         goto out;
     }
 
@@ -856,12 +857,14 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     if (transaction_out->data.time < 0)
     {
         res = transaction_out->data.time;
+        magicnet_log("%s failed to read datatime \n", __FUNCTION__);
         goto out;
     }
 
     res = magicnet_read_bytes(client, transaction_out->data.program_name, sizeof(transaction_out->data.program_name), store_in_buffer);
     if (res < 0)
     {
+        magicnet_log("%s failed to read program name \n", __FUNCTION__);
         goto out;
     }
 
@@ -869,6 +872,8 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     if (transaction_out->data.size < 0)
     {
         res = transaction_out->data.size;
+        magicnet_log("%s failed to read integer \n", __FUNCTION__);
+
         goto out;
     }
 
@@ -882,17 +887,22 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     res = magicnet_read_bytes(client, transaction_out->data.ptr, transaction_out->data.size, store_in_buffer);
     if (res < 0)
     {
+        magicnet_log("%s failed to read data \n", __FUNCTION__);
         goto out;
     }
 
     res = magicnet_read_bytes(client, &transaction_out->signature, sizeof(transaction_out->signature), store_in_buffer);
     if (res < 0)
     {
+        magicnet_log("%s failed to read signature \n", __FUNCTION__);
+
         goto out;
     }
     res = magicnet_read_bytes(client, &transaction_out->key, sizeof(transaction_out->key), store_in_buffer);
     if (res < 0)
     {
+        magicnet_log("%s failed to read key \n", __FUNCTION__);
+
         goto out;
     }
 
