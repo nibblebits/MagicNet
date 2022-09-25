@@ -2511,9 +2511,9 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     block->data = block_data;
 
     // Let's add a dummy transaction to test this
-    struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
-    block_transaction_hash_and_sign(transaction);
-    block_transaction_add(block, transaction);
+   // struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
+    // block_transaction_hash_and_sign(transaction);
+    // block_transaction_add(block, transaction);
     if (block_hash_sign_verify(block) < 0)
     {
         magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
