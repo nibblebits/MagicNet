@@ -32,6 +32,7 @@ void block_data_free(struct block_data *block_data)
     free(block_data);
 }
 
+
 struct block_transaction *block_transaction_new()
 {
     struct block_transaction* transaction = calloc(1, sizeof(struct block_transaction));
@@ -151,6 +152,13 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
     return cloned_transaction;
 }
 
+int block_save(struct block* block)
+{
+    int res = 0;
+    res = magicnet_database_save_block(block);
+    return res;
+}
+
 struct block *block_clone(struct block *block)
 {
     struct block_data *block_data = block_data_new();
@@ -263,54 +271,28 @@ void magicnet_get_block_path_for_hash(const char *hash, char *block_path_out)
     sprintf(block_path_out, "%s/%s/%s/%s.blk", getenv("HOME"), ".magicnet", MAGICNET_BLOCK_DIRECTORY, hash);
 }
 
-struct block *magicnet_block_load(const char *hash)
+struct block *block_load(const char *hash)
 {
     int res = 0;
-    return NULL;
-    // FILE *block_fp = NULL;
-    // char block_path[PATH_MAX];
-    // char prev_hash[SHA256_STRING_LENGTH];
-    // res = magicnet_database_load_block(hash, prev_hash);
-    // if (res < 0)
-    // {
-    //     goto out;
-    // }
+    struct block* block = NULL;
+    FILE *block_fp = NULL;
+    char block_path[PATH_MAX];
+    char prev_hash[SHA256_STRING_LENGTH];
+    res = magicnet_database_load_block(hash, prev_hash);
+    if (res < 0)
+    {
+        goto out;
+    }
 
-    // magicnet_get_block_path_for_hash(hash, block_path);
+out:
+    if (res < 0)
+    {   
+        if (block)
+        {
+            block_free(block);
+            block = NULL;
+        }
+    }
 
-    // if (!file_exists(block_path))
-    // {
-    //     magicnet_log("%s the block data with hash %s cannot be found in the filesystem this is corruption\n", __FUNCTION__, hash);
-    //     res = -1;
-    //     goto out;
-    // }
-
-    // // We have the block path lets load it into memory
-    // block_fp = fopen(block_path, "r");
-    // if (!block_fp)
-    // {
-    //     res = -1;
-    //     goto out;
-    // }
-
-    // fseek(block_fp, 0, SEEK_END);
-    // size_t block_size = ftell(block_fp);
-    // fseek(block_fp, 0, SEEK_SET);
-
-    // char *block_data = calloc(1, block_size);
-    // res = fread(block_data, block_size, 1, block_fp);
-    // if (res != 1)
-    // {
-    //     res = -1;
-    //     goto out;
-    // }
-
-    // out:
-    //     fclose(block_fp);
-    //     if (res < 0)
-    //     {
-    //         return NULL;
-    //     }
-
-    //     return block_create(hash, prev_hash, block_data_new(block_data, block_size));
-}
+    return block;
+}   

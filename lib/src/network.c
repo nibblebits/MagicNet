@@ -811,8 +811,6 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
     }
 
     // Let's ensure that they signed the hash that was given to us
-    packet->datahash[0] = 0xff;
-    packet->datahash[1] = 0xf3;
     int res = public_verify(&packet->pub_key, packet->datahash, sizeof(packet->datahash), &packet->signature);
     if (res < 0)
     {
@@ -820,6 +818,9 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
         return -1;
     }
 
+
+    // Okay the signature signed the datahash, so as long as the data hash of the buffer network stream equals the same hash
+    // as the one in the packet, we are golden. They signed the payload!
     char tmp_buf[SHA256_STRING_LENGTH];
     sha256_data(buffer_ptr(packet->not_sent.tmp_buf), tmp_buf, packet->not_sent.tmp_buf->len);
     if (strncmp(tmp_buf, packet->datahash, sizeof(tmp_buf)) != 0)
@@ -2155,7 +2156,7 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
     return res;
 }
 
-int magicnet_server_vote_for_verifier_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     struct key *voteing_for_key = &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key;
     int res = magicnet_server_cast_verifier_vote(client->server, &packet->pub_key, voteing_for_key);
@@ -2164,6 +2165,13 @@ int magicnet_server_vote_for_verifier_packet(struct magicnet_client *client, str
         magicnet_log("%s Failed to cast vote from key = %s voting for key %s\n", __FUNCTION__, &packet->pub_key.key, voteing_for_key->key);
     }
     return res;
+}
+
+int magicnet_server_process_block_send_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    magicnet_log("%s block send packet discovered\n", __FUNCTION__);
+    block_save(magicnet_signed_data(packet)->payload.block_send.block);
+    return 0;
 }
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -2187,12 +2195,11 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
         break;
 
     case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
-        res = magicnet_server_vote_for_verifier_packet(client, packet);
+        res = magicnet_server_process_vote_for_verifier_packet(client, packet);
         break;
 
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
-        res = 0;
-        magicnet_log("%s block send packet discovered\n", __FUNCTION__);
+        res = magicnet_server_process_block_send_packet(client, packet);
         break;
     };
 
@@ -2537,6 +2544,10 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
         return;
     }
 
+    // Save the block 
+    block_save(block);
+
+    // Send the block to the rest of the network through relay system.
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;

@@ -6,11 +6,23 @@
 #include <limits.h>
 
 sqlite3 *db = NULL;
+
 const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
+                                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT \
                                                 \"hash\"	TEXT,\
                                                 \"prev_hash\"	TEXT,\
-                                                \"block_uri\"	TEXT\
                                                 );",
+
+                               "CREATE TABLE \"transactions\" ( \
+                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+                                \"hash\"	TEXT,  \
+                                \"signature\"	BLOB,  \
+                                \"key\"	BLOB,  \
+                                \"program_name\"	TEXT,  \
+                                \"time\"	REAL,   \
+                                \"data\"	BLOB,  \
+                                \"data_size\"	INTEGER);",
+
                                "CREATE TABLE \"ip_addresses\" ("
                                "\"id\"	INTEGER,"
                                "\"found_at\"	REAL,"
@@ -79,11 +91,63 @@ out:
     return res;
 }
 
-int magicnet_database_load_block(const char* hash, char* prev_hash_out)
+int magicnet_database_save_block(struct block *block)
 {
     int res = 0;
-    sqlite3_stmt* stmt = NULL;
-    const char* load_block_sql = "SELECT prev_hash  FROM blocks WHERE hash = ?";
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_transaction_sql = "INSERT INTO  transactions (hash, signature, key, program_name, time, data, data_size) VALUES (?,?,?,?,?,?,?,?);";
+    for (int i = 0; i < MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK; i++)
+    {
+        struct block_transaction *transaction = block->data->transactions[i];
+        sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
+        sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), SQLITE_TRANSIENT);
+        sqlite3_bind_blob(stmt, 3, &transaction->key, sizeof(transaction->key), SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 4, transaction->data.program_name, strlen(transaction->data.program_name), NULL);
+        sqlite3_bind_int64(stmt, 5, transaction->data.time);
+        sqlite3_bind_blob(stmt, 6, transaction->data.ptr, transaction->data.size, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 7, transaction->data.size);
+        res = sqlite3_prepare_v2(db, insert_transaction_sql, -1, &stmt, 0);
+        if (res != SQLITE_OK)
+        {
+            goto out;
+        }
+
+        int step = sqlite3_step(stmt);
+        if (step != SQLITE_ROW)
+        {
+            goto out;
+        }
+
+        sqlite3_finalize(stmt);
+        stmt = NULL;
+    }
+
+    const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash) VALUES(?, ?)";
+    sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
+    sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->hash), NULL);
+    res = sqlite3_prepare_v2(db, insert_transaction_sql, -1, &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        goto out;
+    }
+
+    sqlite3_finalize(stmt);
+
+out:
+    return res;
+}
+
+int magicnet_database_load_block(const char *hash, char *prev_hash_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *load_block_sql = "SELECT prev_hash  FROM blocks WHERE hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, -1, &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -96,9 +160,9 @@ int magicnet_database_load_block(const char* hash, char* prev_hash_out)
     {
         goto out;
     }
-    
 
-    strncpy(prev_hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH+3);
+    bzero(prev_hash_out, SHA256_STRING_LENGTH);
+    strncpy(prev_hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
 
 out:
     if (stmt)

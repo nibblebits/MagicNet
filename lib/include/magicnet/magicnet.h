@@ -331,6 +331,8 @@ int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
+int magicnet_database_save_block(struct block *block);
+
 /**
  * @brief Creates a new block in memory, no block is added to the chain.
  *
@@ -343,6 +345,7 @@ struct magicnet_program *magicnet_program(const char *name);
 
 struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data);
 struct block *block_create();
+int block_save(struct block* block);
 void block_free(struct block *block);
 
 struct block *block_clone(struct block *block);
