@@ -97,13 +97,14 @@ int magicnet_database_save_block(struct block *block)
     sqlite3_stmt *stmt = NULL;
 
     const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash) VALUES(?, ?)";
-    sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
-    sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->hash), NULL);
-    res = sqlite3_prepare_v2(db, insert_block_sql, -1, &stmt, 0);
+    res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
         goto out;
     }
+    
+    sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
+    sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->hash), NULL);
 
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
