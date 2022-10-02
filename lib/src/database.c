@@ -107,7 +107,7 @@ int magicnet_database_save_block(struct block *block)
     sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->hash), NULL);
 
     int step = sqlite3_step(stmt);
-    if (step != SQLITE_ROW)
+    if (step != SQLITE_DONE)
     {
         goto out;
     }
@@ -133,7 +133,7 @@ int magicnet_database_save_block(struct block *block)
         }
 
         int step = sqlite3_step(stmt);
-        if (step != SQLITE_ROW)
+        if (step != SQLITE_DONE)
         {
             res = -1;
             goto out;
