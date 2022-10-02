@@ -119,10 +119,10 @@ int magicnet_database_save_block(struct block *block)
     for (int i = 0; i < block->data->total_transactions; i++)
     {
         struct block_transaction *transaction = block->data->transactions[i];
-        sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
+        sqlite3_bind_text(stmt, 1, transaction->hash, sizeof(transaction->hash), SQLITE_TRANSIENT);
         sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), SQLITE_TRANSIENT);
         sqlite3_bind_blob(stmt, 3, &transaction->key, sizeof(transaction->key), SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 4, transaction->data.program_name, strlen(transaction->data.program_name), NULL);
+        sqlite3_bind_text(stmt, 4, transaction->data.program_name, sizeof(transaction->data.program_name), SQLITE_TRANSIENT);
         sqlite3_bind_int64(stmt, 5, transaction->data.time);
         sqlite3_bind_blob(stmt, 6, transaction->data.ptr, transaction->data.size, SQLITE_TRANSIENT);
         sqlite3_bind_int(stmt, 7, transaction->data.size);
