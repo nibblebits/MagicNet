@@ -8,9 +8,9 @@
 sqlite3 *db = NULL;
 
 const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
-                                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT \
+                                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
                                                 \"hash\"	TEXT,\
-                                                \"prev_hash\"	TEXT,\
+                                                \"prev_hash\"	TEXT\
                                                 );",
 
                                "CREATE TABLE \"transactions\" ( \
@@ -95,8 +95,8 @@ int magicnet_database_save_block(struct block *block)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    const char *insert_transaction_sql = "INSERT INTO  transactions (hash, signature, key, program_name, time, data, data_size) VALUES (?,?,?,?,?,?,?,?);";
-    for (int i = 0; i < MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK; i++)
+    const char *insert_transaction_sql = "INSERT INTO  transactions (hash, signature, key, program_name, time, data, data_size) VALUES (?,?,?,?,?,?,?);";
+    for (int i = 0; i < block->data->total_transactions; i++)
     {
         struct block_transaction *transaction = block->data->transactions[i];
         sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
@@ -115,6 +115,7 @@ int magicnet_database_save_block(struct block *block)
         int step = sqlite3_step(stmt);
         if (step != SQLITE_ROW)
         {
+            res = -1;
             goto out;
         }
 
