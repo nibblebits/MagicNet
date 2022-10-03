@@ -61,6 +61,7 @@ enum
     MAGICNET_ERROR_ALREADY_EXISTANT = -1003,
     MAGICNET_ERROR_UNKNOWN = -1004,
     MAGICNET_ERROR_SECURITY_RISK = -1005,
+    MAGICNET_ERROR_NO_BLOCK_FOUND = -1006,
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
     MAGICNET_ERROR_CRITICAL_ERROR = -1,
@@ -332,6 +333,7 @@ int magicnet_get_structure(int type, struct magicnet_registered_structure *struc
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
 int magicnet_database_save_block(struct block *block);
+int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out);
 
 /**
  * @brief Creates a new block in memory, no block is added to the chain.

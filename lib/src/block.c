@@ -244,7 +244,16 @@ struct block *block_create_with_data(const char *hash, const char *prev_hash, st
 
 struct block *block_create()
 {
-    return calloc(1, sizeof(struct block));
+    char last_hash[SHA256_STRING_LENGTH] = {0};
+    struct block* block = calloc(1, sizeof(struct block));
+
+    // Consider instead cacheing it..
+    if(magicnet_database_load_last_block(last_hash, NULL) >= 0)
+    {
+        memcpy(block->prev_hash, last_hash, sizeof(block->prev_hash));
+    }
+
+    return block;
 }
 
 void block_free(struct block *block)

@@ -91,10 +91,86 @@ out:
     return res;
 }
 
+int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *load_last_block_sql = "SELECT hash, prev_hash from blocks ORDER BY blocks.id DESC LIMIT 1";
+    res = sqlite3_prepare_v2(db, load_last_block_sql, strlen(load_last_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        goto out;
+    }
+
+    if (hash_out)
+    {
+        bzero(hash_out, SHA256_STRING_LENGTH);
+        strncpy(hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
+    }
+
+
+    if (prev_hash_out)
+    {
+        bzero(prev_hash_out, SHA256_STRING_LENGTH);
+        strncpy(prev_hash_out, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
+    }
+
+
+out:
+    return res;
+}
+int magicnet_database_load_block(const char *hash, char *prev_hash_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *load_block_sql = "SELECT prev_hash  FROM blocks WHERE hash = ?";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, hash, strlen(hash), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        goto out;
+    }
+
+    if (prev_hash_out)
+    {
+        bzero(prev_hash_out, SHA256_STRING_LENGTH);
+        strncpy(prev_hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
+    }
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+
 int magicnet_database_save_block(struct block *block)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
+
+    // Let's see if we already have the block saved
+    res = magicnet_database_load_block(block->hash, NULL);
+    if (res >= 0)
+    {
+        // The block was already saved before
+        res = MAGICNET_ERROR_ALREADY_EXISTANT;
+        goto out;
+    }
 
     const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash) VALUES(?, ?)";
     res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
@@ -144,34 +220,5 @@ int magicnet_database_save_block(struct block *block)
     }
 
 out:
-    return res;
-}
-
-int magicnet_database_load_block(const char *hash, char *prev_hash_out)
-{
-    int res = 0;
-    sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT prev_hash  FROM blocks WHERE hash = ?";
-    res = sqlite3_prepare_v2(db, load_block_sql, -1, &stmt, 0);
-    if (res != SQLITE_OK)
-    {
-        goto out;
-    }
-
-    sqlite3_bind_text(stmt, 1, hash, strlen(hash), NULL);
-    int step = sqlite3_step(stmt);
-    if (step != SQLITE_ROW)
-    {
-        goto out;
-    }
-
-    bzero(prev_hash_out, SHA256_STRING_LENGTH);
-    strncpy(prev_hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
-
-out:
-    if (stmt)
-    {
-        sqlite3_finalize(stmt);
-    }
     return res;
 }
