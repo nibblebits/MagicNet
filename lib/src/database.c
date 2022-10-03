@@ -93,6 +93,7 @@ out:
 
 int magicnet_database_save_block(struct block *block)
 {
+    magicnet_server_lock();
     int res = 0;
     sqlite3_stmt *stmt = NULL;
 
@@ -103,8 +104,8 @@ int magicnet_database_save_block(struct block *block)
         goto out;
     }
     
-    sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
-    sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->hash), NULL);
+    sqlite3_bind_text(stmt, 1, block->hash, sizeof(block->hash), NULL);
+    sqlite3_bind_text(stmt, 2, block->prev_hash, sizeof(block->hash), NULL);
 
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
@@ -134,7 +135,7 @@ int magicnet_database_save_block(struct block *block)
 
         int step = sqlite3_step(stmt);
         if (step != SQLITE_DONE)
-        {
+        {  
             res = -1;
             goto out;
         }
@@ -145,6 +146,7 @@ int magicnet_database_save_block(struct block *block)
 
 
 out:
+magicnet_server_unlock();
     return res;
 }
 
