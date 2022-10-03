@@ -967,7 +967,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         goto out;
     }
 
-    block = block_create_with_data(block_hash, has_prev_hash ? block_prev_hash : NULL, block_data);
+    block = block_create_with_data(block_hash, block_prev_hash, block_data);
     for (int i = 0; i < total_transactions; i++)
     {
         struct block_transaction *transaction = block_transaction_new();

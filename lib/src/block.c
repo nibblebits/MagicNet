@@ -197,7 +197,7 @@ bool block_prev_hash_exists(struct block *block)
 int block_hash_sign_verify(struct block* block)
 {
     int res = 0;
-    block_hash_create(block->data, NULL, block->hash);
+    block_hash_create(block->data, block->prev_hash, block->hash);
     res = block_verify(block);
     return res;
 }
@@ -205,7 +205,7 @@ int block_verify(struct block *block)
 {
     int res = 0;
     char block_hash[SHA256_STRING_LENGTH];
-    block_hash_create(block->data, block_prev_hash_exists(block) ? block->prev_hash : NULL, block_hash);
+    block_hash_create(block->data, block->prev_hash, block_hash);
     if (memcmp(block->hash, block_hash, sizeof(block_hash)) != 0)
     {
         magicnet_log("%s the hash in the block does not match the hash it should be\n", __FUNCTION__);
