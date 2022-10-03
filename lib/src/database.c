@@ -102,7 +102,7 @@ int magicnet_database_save_block(struct block *block)
     {
         goto out;
     }
-    
+
     sqlite3_bind_text(stmt, 1, block->hash, sizeof(block->hash), NULL);
     sqlite3_bind_text(stmt, 2, block->prev_hash, sizeof(block->hash), NULL);
 
@@ -114,8 +114,13 @@ int magicnet_database_save_block(struct block *block)
 
     sqlite3_finalize(stmt);
 
-
     const char *insert_transaction_sql = "INSERT INTO  transactions (hash, signature, key, program_name, time, data, data_size) VALUES (?,?,?,?,?,?,?);";
+    res = sqlite3_prepare_v2(db, insert_transaction_sql, strlen(insert_transaction_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
     for (int i = 0; i < block->data->total_transactions; i++)
     {
         struct block_transaction *transaction = block->data->transactions[i];
@@ -126,15 +131,10 @@ int magicnet_database_save_block(struct block *block)
         sqlite3_bind_int64(stmt, 5, transaction->data.time);
         sqlite3_bind_blob(stmt, 6, transaction->data.ptr, transaction->data.size, NULL);
         sqlite3_bind_int(stmt, 7, transaction->data.size);
-        res = sqlite3_prepare_v2(db, insert_transaction_sql, -1, &stmt, 0);
-        if (res != SQLITE_OK)
-        {
-            goto out;
-        }
 
         int step = sqlite3_step(stmt);
         if (step != SQLITE_DONE)
-        {  
+        {
             res = -1;
             goto out;
         }
@@ -142,7 +142,6 @@ int magicnet_database_save_block(struct block *block)
         sqlite3_finalize(stmt);
         stmt = NULL;
     }
-
 
 out:
     return res;
