@@ -93,7 +93,6 @@ out:
 
 int magicnet_database_save_block(struct block *block)
 {
-    magicnet_server_lock();
     int res = 0;
     sqlite3_stmt *stmt = NULL;
 
@@ -146,7 +145,6 @@ int magicnet_database_save_block(struct block *block)
 
 
 out:
-magicnet_server_unlock();
     return res;
 }
 
