@@ -104,7 +104,7 @@ out:
 int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
 {
     int res = 0;
-  //  pthread_mutex_lock(&db_lock);
+    pthread_mutex_lock(&db_lock);
     sqlite3_stmt *stmt = NULL;
     const char *load_last_block_sql = "SELECT hash, prev_hash from blocks ORDER BY blocks.id DESC LIMIT 1";
     res = sqlite3_prepare_v2(db, load_last_block_sql, strlen(load_last_block_sql), &stmt, 0);
@@ -135,13 +135,13 @@ int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
 
 
 out:
-   // pthread_mutex_unlock(&db_lock);
+    pthread_mutex_unlock(&db_lock);
     return res;
 }
 int magicnet_database_load_block(const char *hash, char *prev_hash_out)
 {
     int res = 0;
-    //pthread_mutex_lock(&db_lock);
+    pthread_mutex_lock(&db_lock);
     sqlite3_stmt *stmt = NULL;
     const char *load_block_sql = "SELECT prev_hash  FROM blocks WHERE hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
@@ -168,14 +168,14 @@ out:
     {
         sqlite3_finalize(stmt);
     }
-   // pthread_mutex_unlock(&db_lock);
+    pthread_mutex_unlock(&db_lock);
     return res;
 }
 
 int magicnet_database_save_block(struct block *block)
 {
     int res = 0;
-   // pthread_mutex_lock(&db_lock);
+    pthread_mutex_lock(&db_lock);
 
     sqlite3_stmt *stmt = NULL;
 
@@ -236,6 +236,6 @@ int magicnet_database_save_block(struct block *block)
     }
 
 out:
-   // pthread_mutex_unlock(&db_lock);
+    pthread_mutex_unlock(&db_lock);
     return res;
 }
