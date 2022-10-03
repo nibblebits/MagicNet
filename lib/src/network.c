@@ -2524,6 +2524,7 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
 
 void magicnet_server_create_and_send_block(struct magicnet_server *server)
 {
+    magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
     char block_data_hash[SHA256_STRING_LENGTH];
     bzero(block_data_hash, sizeof(block_data_hash));
 
