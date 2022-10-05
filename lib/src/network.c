@@ -1965,7 +1965,9 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
     }
 
     // We have seen this packet now.
+    magicnet_server_lock(client->server);
     magicnet_server_add_seen_packet(client->server, packet);
+    magicnet_server_unlock(client->server);
     return res;
 }
 
@@ -2632,6 +2634,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         // sending verifier packets when they shouldnt be since they will be discarded.
         magicnet_server_reset_block_sequence(server);
     }
+    
     magicnet_server_unlock(server);
 }
 bool magicnet_server_alive_for_at_least_one_block_cycle(struct magicnet_server *server)

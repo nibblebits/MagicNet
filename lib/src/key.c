@@ -13,15 +13,27 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <assert.h>
+#include <pthread.h>
 #include "log.h"
 #include "config.h"
 #include "sha256.h"
 #include "misc.h"
 #include "string.h"
 
+
+pthread_mutex_t key_lock;
 struct key public_key = {};
 struct key private_key = {};
 
+void MAGICNET_keys_init()
+{
+    if (pthread_mutex_init(&key_lock, NULL) != 0)
+    {
+        magicnet_log("Failed to initialize the key lock\n");
+        return;
+    }
+
+}
 struct key *MAGICNET_public_key()
 {
     return &public_key;
@@ -49,6 +61,7 @@ bool key_cmp(struct key *key, struct key *key2)
 
 int public_verify(struct key* public_key, const char *data, size_t size, struct signature *sig_in)
 {
+    pthread_mutex_lock(&key_lock);
     int res = 0;
     ECDSA_SIG *sig = NULL;
     BIGNUM *pr_sig = NULL;
@@ -119,6 +132,7 @@ out:
         EC_POINT_free(point);
     }
 
+    pthread_mutex_unlock(&key_lock);
 
     return res;
 }
@@ -157,6 +171,7 @@ int private_sign_key_sig_hash(struct key_signature_hash* key_sig_hash, void* has
 
 int private_sign(const char *data, size_t size, struct signature *sig_out)
 {
+    pthread_mutex_lock(&key_lock);
     int res = 0;
     ECDSA_SIG *sig = NULL;
     EC_KEY *eckey = EC_KEY_new();
@@ -233,6 +248,8 @@ out:
         EC_POINT_free(point);
     }
 
+    pthread_mutex_unlock(&key_lock);
+
     return res;
 }
 
@@ -252,11 +269,13 @@ const char *MAGICNET_public_key_filepath()
 
 int MAGICNET_write_private_key(const char *key, size_t size)
 {
+    pthread_mutex_lock(&key_lock);
     int res = 0;
     FILE *f = fopen(MAGICNET_private_key_filepath(), "w");
     if (!f)
     {
-        return -1;
+        res = -1;
+        goto out;
     }
 
     res = fwrite(key, size, 1, f);
@@ -265,17 +284,21 @@ int MAGICNET_write_private_key(const char *key, size_t size)
         res = -1;
     }
 
+out:
     fclose(f);
+    pthread_mutex_unlock(&key_lock);
     return res;
 }
 
 int MAGICNET_write_public_key(const char *key, size_t size)
 {
     int res = 0;
+    pthread_mutex_lock(&key_lock);
     FILE *f = fopen(MAGICNET_public_key_filepath(), "w");
     if (!f)
     {
-        return -1;
+        res = -1;
+        goto out;
     }
 
     res = fwrite(key, size, 1, f);
@@ -283,8 +306,9 @@ int MAGICNET_write_public_key(const char *key, size_t size)
     {
         res = -1;
     }
-
+out:
     fclose(f);
+    pthread_mutex_unlock(&key_lock);
     return res;
 }
 
@@ -337,12 +361,13 @@ bool MAGICNET_nulled_signature(struct signature* signature)
 
 void MAGICNET_load_public_key()
 {
+    pthread_mutex_lock(&key_lock);
     memset(&public_key, 0, sizeof(public_key));
     FILE *fp = fopen(MAGICNET_public_key_filepath(), "r");
     if (!fp)
     {
         magicnet_log("Failed to open public key file\n");
-        return;
+        goto out;
     }
 
     fseek(fp, 0, SEEK_END);
@@ -356,17 +381,21 @@ void MAGICNET_load_public_key()
     }
     // -1 because of null terminator
     public_key.size = size - 1;
+out:
+    pthread_mutex_unlock(&key_lock);
+    return;
 }
 
 void MAGICNET_load_private_key()
 {
+    pthread_mutex_lock(&key_lock);
     memset(&private_key, 0, sizeof(private_key));
 
     FILE *fp = fopen(MAGICNET_private_key_filepath(), "r");
     if (!fp)
     {
         magicnet_log("Failed to open private key file\n");
-        return;
+        goto out;
     }
 
     fseek(fp, 0, SEEK_END);
@@ -382,10 +411,16 @@ void MAGICNET_load_private_key()
 
     // -1 because of null terminator
     private_key.size = size - 1;
+out:
+    pthread_mutex_unlock(&key_lock);
+
+    return;
 }
 
 void MAGICNET_load_keypair()
 {
+    MAGICNET_keys_init();
+    
     if (!file_exists(MAGICNET_private_key_filepath()))
     {
         generate_key();
