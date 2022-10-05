@@ -8,7 +8,6 @@
 sqlite3 *db = NULL;
 pthread_mutex_t db_lock;
 
-
 const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
                                                 \"hash\"	TEXT,\
@@ -89,22 +88,20 @@ int magicnet_database_load()
             goto out;
         }
     }
-    
+
     if (pthread_mutex_init(&db_lock, NULL) != 0)
     {
         magicnet_log("Failed to initialize the database lock\n");
         goto out;
     }
 
-
 out:
     return res;
 }
 
-int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
+int magicnet_database_load_last_block_no_locks(char *hash_out, char *prev_hash_out)
 {
     int res = 0;
-    pthread_mutex_lock(&db_lock);
     sqlite3_stmt *stmt = NULL;
     const char *load_last_block_sql = "SELECT hash, prev_hash from blocks ORDER BY blocks.id DESC LIMIT 1";
     res = sqlite3_prepare_v2(db, load_last_block_sql, strlen(load_last_block_sql), &stmt, 0);
@@ -126,22 +123,26 @@ int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
         strncpy(hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
     }
 
-
     if (prev_hash_out)
     {
         bzero(prev_hash_out, SHA256_STRING_LENGTH);
         strncpy(prev_hash_out, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
     }
-
-
 out:
-    pthread_mutex_unlock(&db_lock);
     return res;
 }
-int magicnet_database_load_block(const char *hash, char *prev_hash_out)
+int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_last_block_no_locks(hash_out, prev_hash_out);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out)
+{
+    int res = 0;
     sqlite3_stmt *stmt = NULL;
     const char *load_block_sql = "SELECT prev_hash  FROM blocks WHERE hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
@@ -168,6 +169,13 @@ out:
     {
         sqlite3_finalize(stmt);
     }
+    return res;
+}
+int magicnet_database_load_block(const char *hash, char *prev_hash_out)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_block_no_locks(hash, prev_hash_out);
     pthread_mutex_unlock(&db_lock);
     return res;
 }
@@ -180,7 +188,7 @@ int magicnet_database_save_block(struct block *block)
     sqlite3_stmt *stmt = NULL;
 
     // Let's see if we already have the block saved
-    res = magicnet_database_load_block(block->hash, NULL);
+    res = magicnet_database_load_block_no_locks(block->hash, NULL);
     if (res >= 0)
     {
         // The block was already saved before
