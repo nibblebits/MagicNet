@@ -2161,7 +2161,9 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
 int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     struct key *voteing_for_key = &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key;
+    magicnet_server_lock(client->server);
     int res = magicnet_server_cast_verifier_vote(client->server, &packet->pub_key, voteing_for_key);
+    magicnet_server_unlock(client->server);
     if (res < 0)
     {
         magicnet_log("%s Failed to cast vote from key = %s voting for key %s\n", __FUNCTION__, &packet->pub_key.key, voteing_for_key->key);
