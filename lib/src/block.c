@@ -32,11 +32,15 @@ void block_data_free(struct block_data *block_data)
     free(block_data);
 }
 
-
 struct block_transaction *block_transaction_new()
 {
     struct block_transaction* transaction = calloc(1, sizeof(struct block_transaction));
     return transaction;
+}
+
+void block_transaction_free(struct block_transaction* transaction)
+{
+    free(transaction);
 }
 
 struct block_transaction* block_transaction_build(const char* program_name, char* data, size_t data_len)

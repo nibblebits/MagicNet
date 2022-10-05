@@ -36,6 +36,7 @@ enum
     MAGICNET_PACKET_TYPE_SERVER_SYNC,
     MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP,
     MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER,
+    MAGICNET_PACKET_TYPE_TRANSACTION_SEND,
     MAGICNET_PACKET_TYPE_BLOCK_SEND,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
@@ -62,6 +63,7 @@ enum
     MAGICNET_ERROR_UNKNOWN = -1004,
     MAGICNET_ERROR_SECURITY_RISK = -1005,
     MAGICNET_ERROR_NO_BLOCK_FOUND = -1006,
+    MAGICNET_ERROR_TOO_LARGE = 1007,
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
     MAGICNET_ERROR_CRITICAL_ERROR = -1,
@@ -156,6 +158,11 @@ struct magicnet_packet
                     // Empty... We will use the key that signed this block.
                 } verifier_signup;
 
+
+                struct magicnet_transaction_send
+                {
+                    struct block_transaction* transaction;
+                } transaction_send;
                 struct magicnet_block_send
                 {
                     struct block *block;
@@ -201,6 +208,7 @@ enum
     BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE
 };
 
+struct block_transaction;
 struct magicnet_server
 {
     int sock;
@@ -245,6 +253,9 @@ struct magicnet_server
         // Vector of struct key* . Everybody in this vector can be voted on to make the next block
         // do not vote on people who are not signed up to sign the next block!
         struct vector *signed_up_verifiers;
+
+        // The pending transactions that should be added to the next block. struct block_transaction*
+        struct vector* block_transactions;
 
         // The step in the block creation sequence we are currently in.
         int step;
@@ -353,7 +364,10 @@ void block_free(struct block *block);
 struct block *block_clone(struct block *block);
 struct block_data *block_data_new();
 void block_data_free(struct block_data* block_data);
+
 struct block_transaction* block_transaction_new();
+struct block_transaction* block_transaction_clone(struct block_transaction* transaction);
+void block_transaction_free(struct block_transaction* transaction);
 struct block_transaction* block_transaction_build(const char* program_name, char* data, size_t data_len);
 int block_transaction_add(struct block *block, struct block_transaction *transaction);
 int block_transaction_valid(struct block_transaction* transaction);

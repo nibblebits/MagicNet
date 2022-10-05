@@ -185,6 +185,7 @@ struct magicnet_server *magicnet_server_start()
     server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
     server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count *));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
+    server->next_block.block_transactions = vector_create(sizeof(struct block_transaction *));
     server->server_started = time(NULL);
     server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
     return server;
@@ -818,7 +819,6 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
         return -1;
     }
 
-
     // Okay the signature signed the datahash, so as long as the data hash of the buffer network stream equals the same hash
     // as the one in the packet, we are golden. They signed the payload!
     char tmp_buf[SHA256_STRING_LENGTH];
@@ -984,7 +984,6 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         }
     }
 
-
     // Lets verify the whole block to make sure its right.
     res = block_verify(block);
     if (res < 0)
@@ -1007,6 +1006,15 @@ out:
     }
     return res;
 }
+
+int magicnet_client_read_tansaction_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = 0;
+    magicnet_signed_data(packet_out)->payload.transaction_send.transaction = block_transaction_new();
+    res = magicnet_read_transaction(client, magicnet_signed_data(packet_out)->payload.transaction_send.transaction, packet_out->not_sent.tmp_buf);
+    return res;
+}
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1077,6 +1085,13 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         }
         break;
 
+    case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+        res = magicnet_client_read_tansaction_send_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read transaction send packet failed\n", __FUNCTION__);
+        }
+        break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_client_read_block_send_packet(client, packet_out);
         if (res < 0)
@@ -1288,6 +1303,11 @@ int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *clien
 int magicnet_write_transaction(struct magicnet_client *client, struct block_transaction *transaction, struct buffer *store_in_buffer)
 {
     int res = 0;
+    if (transaction->data.size > MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA)
+    {
+        return MAGICNET_ERROR_TOO_LARGE;
+    }
+
     // Let's verify some things before we send this
     res = block_transaction_valid(transaction);
     if (res < 0)
@@ -1403,6 +1423,19 @@ out:
     return res;
 }
 
+int magicnet_client_write_packet_transaction_send(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    res = magicnet_write_transaction(client, magicnet_signed_data(packet)->payload.transaction_send.transaction, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -1447,6 +1480,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
         res = magicnet_client_write_packet_server_poll(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+        res = magicnet_client_write_packet_transaction_send(client, packet);
         break;
 
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
@@ -1660,6 +1697,9 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         memcpy(magicnet_signed_data(packet_out)->payload.user_defined.data, magicnet_signed_data(packet_in)->payload.user_defined.data, magicnet_signed_data(packet_out)->payload.user_defined.data_len);
         break;
 
+    case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+        magicnet_signed_data(packet_out)->payload.transaction_send.transaction = block_transaction_clone(magicnet_signed_data(packet_in)->payload.transaction_send.transaction);
+        break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         magicnet_signed_data(packet_out)->payload.block_send.block = block_clone(magicnet_signed_data(packet_in)->payload.block_send.block);
 
@@ -1954,6 +1994,7 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         case MAGICNET_PACKET_TYPE_SERVER_SYNC:
             res = magicnet_client_process_server_sync_packet(client, packet);
             break;
+
         case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
             // empty..
             res = 0;
@@ -2171,7 +2212,7 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
     return res;
 }
 
-int magicnet_server_process_block_send_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
     block_save(magicnet_signed_data(packet)->payload.block_send.block);
@@ -2204,6 +2245,10 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_server_process_block_send_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+        magicnet_log("transaction send packet example\n");
         break;
     };
 
@@ -2521,7 +2566,16 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
         verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
     }
 
-    vector_clear(server->next_block.signed_up_verifiers);
+    vector_clear(server->next_block.block_transactions);
+
+    vector_set_peek_pointer(server->next_block.block_transactions, 0);
+    struct block_transaction *block_transaction = vector_peek_ptr(server->next_block.block_transactions);
+    while (block_transaction)
+    {
+        block_transaction_free(block_transaction);
+        block_transaction = vector_peek_ptr(server->next_block.block_transactions);
+    }
+    vector_clear(server->next_block.block_transactions);
 
     server->next_block.step = BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS;
 }
@@ -2539,26 +2593,34 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     // Let's add a dummy transaction to test this
     struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
     block_transaction_hash_and_sign(transaction);
-    block_transaction_add(block, transaction);
-    if (block_hash_sign_verify(block) < 0)
-    {
-        magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
-        block_data_free(block_data);
-        block->data = NULL;
-        block_free(block);
-        return;
-    }
+    // block_transaction_add(block, transaction);
+    // if (block_hash_sign_verify(block) < 0)
+    // {
+    //     magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
+    //     block_data_free(block_data);
+    //     block->data = NULL;
+    //     block_free(block);
+    //     return;
+    // }
 
-    // Save the block 
-    block_save(block);
+    // // Save the block
+    // block_save(block);
 
     // Send the block to the rest of the network through relay system.
-    struct magicnet_packet *packet = magicnet_packet_new();
-    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
+    // struct magicnet_packet *packet = magicnet_packet_new();
+    // magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
+    // magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    // magicnet_signed_data(packet)->payload.block_send.block = block;
+    // magicnet_server_add_packet_to_relay(server, packet);
+    // magicnet_free_packet(packet);
+
+      struct magicnet_packet *packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_TRANSACTION_SEND;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    magicnet_signed_data(packet)->payload.block_send.block = block;
+    magicnet_signed_data(packet)->payload.transaction_send.transaction = transaction;
     magicnet_server_add_packet_to_relay(server, packet);
     magicnet_free_packet(packet);
+
 }
 
 /**
@@ -2636,7 +2698,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         // sending verifier packets when they shouldnt be since they will be discarded.
         magicnet_server_reset_block_sequence(server);
     }
-    
+
     magicnet_server_unlock(server);
 }
 bool magicnet_server_alive_for_at_least_one_block_cycle(struct magicnet_server *server)
