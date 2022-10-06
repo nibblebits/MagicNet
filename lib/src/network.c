@@ -2390,19 +2390,7 @@ int magicnet_server_poll(struct magicnet_client *client)
         magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
     }
 
-    int write_packet_flags = 0;
-
-    // Only in the case where the signature is NULL and the MUST_BE_SIGNED flag is true will we sign the packet
-    // Since to read a packet from the remote network it has to go through the security procedures
-    // it is possible for the relay to have an unsigned packet that was sent from a remote server
-    // since to even read the packet from a non-localhost it has to be signed.
-    if (MAGICNET_nulled_signature(&packet_to_relay->signature) &&
-        magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
-    {
-        write_packet_flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    }
-
-    res = magicnet_client_write_packet(client, packet_to_send, write_packet_flags);
+    res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     if (res < 0)
     {
         goto out;
