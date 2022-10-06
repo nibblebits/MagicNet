@@ -254,6 +254,42 @@ void magicnet_server_unlock(struct magicnet_server *server)
     pthread_mutex_unlock(&server->lock);
 }
 
+bool magicnet_server_awaiting_transaction_exists(struct magicnet_server *server, struct block_transaction *transaction)
+{
+    vector_set_peek_pointer(server->next_block.block_transactions, 0);
+    struct block_transaction *current_trans = vector_peek_ptr(server->next_block.block_transactions);
+    while (current_trans)
+    {
+        if (strncmp(current_trans->hash, transaction->hash, sizeof(current_trans->hash)) == 0)
+        {
+            return true;
+        }
+        current_trans = vector_peek_ptr(server->next_block.block_transactions);
+    }
+
+    return false;
+}
+
+int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, struct block_transaction *transaction)
+{
+    int res = 0;
+    if (vector_count(server->next_block.block_transactions) > 0)
+    {
+        res = MAGICNET_ERROR_QUEUE_FULL;
+        goto out;
+    }
+
+    if (magicnet_server_awaiting_transaction_exists(server, transaction))
+    {
+        res = MAGICNET_ERROR_ALREADY_EXISTANT;
+        goto out;
+    }
+
+    vector_push(server->next_block.block_transactions, &transaction);
+out:
+    return res;
+}
+
 bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter_key)
 {
     vector_set_peek_pointer(server->next_block.verifier_votes.votes, 0);
@@ -911,12 +947,20 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     }
 
     // Let's verify the transaction sent is correct
-    if (block_transaction_valid(transaction_out) < 0)
+    // Only check if the transaction is valid if this is not a localhost client
+    // localhost clients can send us data that is not signed with our keys because they dont know what our keys are
+    // its our responsibility to take it then sign it.
+    // If we fail to sign it then we know not to pass it to others. This is all done in the packet processing stage.
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
     {
-        res = -1;
-        magicnet_log("%s the transaction sent to us is invalid\n", __FUNCTION__);
-        goto out;
+        if (block_transaction_valid(transaction_out) < 0)
+        {
+            res = -1;
+            magicnet_log("%s the transaction sent to us is invalid\n", __FUNCTION__);
+            goto out;
+        }
     }
+
 out:
     return res;
 }
@@ -985,10 +1029,16 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
     }
 
     // Lets verify the whole block to make sure its right.
-    res = block_verify(block);
-    if (res < 0)
+    // If its local host we can assume its not been signed yet since local host clients
+    // have no access to our keypair.
+    // Therefore theirs no need to verify for incoming local host clients.
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
     {
-        goto out;
+        res = block_verify(block);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
 
     // Final thing to do is to attach the block to the packet
@@ -1308,14 +1358,18 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
         return MAGICNET_ERROR_TOO_LARGE;
     }
 
-    // Let's verify some things before we send this
-    res = block_transaction_valid(transaction);
-    if (res < 0)
+    // Let's verify some things before we send this but only if we are not local host.
+    // If we are a localhost client its impossible for us to know our keypair
+    // so nothing has been signed.
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
     {
-        magicnet_log("%s the transaction to write is invalid\n", __FUNCTION__);
-        goto out;
+        res = block_transaction_valid(transaction);
+        if (res < 0)
+        {
+            magicnet_log("%s the transaction to write is invalid\n", __FUNCTION__);
+            goto out;
+        }
     }
-
     res = magicnet_write_bytes(client, transaction->hash, sizeof(transaction->hash), store_in_buffer);
     if (res < 0)
     {
@@ -1619,6 +1673,13 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
     mclient->sock = sockfd;
     mclient->server = NULL;
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+
+    // Bit crappy, convert to integer then test...
+    if (strcmp(ip_address, "127.0.0.1") == 0)
+    {
+        mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
+    }
+
     if (program_name)
     {
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
@@ -1954,6 +2015,36 @@ out:
     return res;
 }
 
+int magicnet_client_process_transaction_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+
+    // We must sign the transaction with our public key
+    res = block_transaction_hash_and_sign(magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // All we do with a packet like this is add it to the relay so the server can relay to all other peers.
+    res = magicnet_server_add_packet_to_relay(client->server, packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+    // Oh and we add the transaction to our own queue as well.
+    res = magicnet_server_awaiting_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    magicnet_log("%s proceessed transaction send packet successfully. Added to relay and to our transaction queue\n", __FUNCTION__);
+
+out:
+    return res;
+}
+
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
@@ -1993,6 +2084,10 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
 
         case MAGICNET_PACKET_TYPE_SERVER_SYNC:
             res = magicnet_client_process_server_sync_packet(client, packet);
+            break;
+
+        case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+            res = magicnet_client_process_transaction_send_packet(client, packet);
             break;
 
         case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
@@ -2593,34 +2688,26 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     // Let's add a dummy transaction to test this
     struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
     block_transaction_hash_and_sign(transaction);
-    // block_transaction_add(block, transaction);
-    // if (block_hash_sign_verify(block) < 0)
-    // {
-    //     magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
-    //     block_data_free(block_data);
-    //     block->data = NULL;
-    //     block_free(block);
-    //     return;
-    // }
+    block_transaction_add(block, transaction);
+    if (block_hash_sign_verify(block) < 0)
+    {
+        magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
+        block_data_free(block_data);
+        block->data = NULL;
+        block_free(block);
+        return;
+    }
 
-    // // Save the block
-    // block_save(block);
+    // Save the block
+    block_save(block);
 
     // Send the block to the rest of the network through relay system.
-    // struct magicnet_packet *packet = magicnet_packet_new();
-    // magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
-    // magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    // magicnet_signed_data(packet)->payload.block_send.block = block;
-    // magicnet_server_add_packet_to_relay(server, packet);
-    // magicnet_free_packet(packet);
-
-      struct magicnet_packet *packet = magicnet_packet_new();
-    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_TRANSACTION_SEND;
+    struct magicnet_packet *packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    magicnet_signed_data(packet)->payload.transaction_send.transaction = transaction;
+    magicnet_signed_data(packet)->payload.block_send.block = block;
     magicnet_server_add_packet_to_relay(server, packet);
     magicnet_free_packet(packet);
-
 }
 
 /**

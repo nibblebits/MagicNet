@@ -3,6 +3,7 @@ all:
 	cd ./server && $(MAKE) all
 	cd ./example/MessageListenerApplication && $(MAKE) all
 	cd ./example/MessageSenderApplication && $(MAKE) all
+	cd ./example/BlockchainWriterApplication && $(MAKE) all
 
 
 clean:
@@ -10,6 +11,5 @@ clean:
 	cd ./server && $(MAKE) clean
 	cd ./example/MessageListenerApplication && $(MAKE) clean
 	cd ./example/MessageSenderApplication && $(MAKE) clean
-
-#	cd ./example/ChatApplication && $(MAKE) clean
+	cd ./example/BlockchainWriterApplication && $(MAKE) clean
 

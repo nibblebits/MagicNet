@@ -104,7 +104,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet* packet)
         case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
             block_transaction_free(magicnet_signed_data(packet)->payload.transaction_send.transaction);
             break;
-            
+
         case MAGICNET_PACKET_TYPE_BLOCK_SEND:
             block_free(magicnet_signed_data(packet)->payload.block_send.block);
             break;
@@ -189,6 +189,38 @@ out:
     }
     return res;
 }
+
+int _magicnet_make_transaction(struct magicnet_program* program, void* data, size_t size, bool reconnect_if_required)
+{
+    int res = 0;
+    struct magicnet_packet* packet = magicnet_packet_new();
+    struct block_transaction* transaction = block_transaction_build(program->name, data, size);
+
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_TRANSACTION_SEND;
+    magicnet_signed_data(packet)->payload.transaction_send.transaction = transaction;
+    res = magicnet_client_write_packet(program->client, packet, 0);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    if (res < 0)
+    {
+        if (reconnect_if_required)
+        {
+            res = _magicnet_make_transaction(program, data, size, false);
+        }
+    }
+    magicnet_free_packet(packet);
+    return res;
+}
+
+int magicnet_make_transaction(struct magicnet_program* program, void* data, size_t size)
+{
+    return _magicnet_make_transaction(program, data, size, true);
+}
+
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet)
 {
    return _magicnet_send_packet(program, packet_type, packet, true);

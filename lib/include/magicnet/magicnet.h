@@ -335,6 +335,17 @@ int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
+
+/**
+ * @brief Makes a transaction on the network which will eventually be put into a block.
+ * 
+ * @param program 
+ * @param data 
+ * @param size 
+ * @return int 
+ */
+int magicnet_make_transaction(struct magicnet_program* program, void* data, size_t size);
+
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
 void magicnet_free_packet_pointers(struct magicnet_packet *packet);

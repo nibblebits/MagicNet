@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <string.h>
 #include "magicnet/magicnet.h"
 
 
@@ -15,6 +16,15 @@ int main()
         return -1;
     }
     
-    
+    int res = magicnet_make_transaction(decentralized_program, 
+            "hello this is a cup of tea stored forever", 
+            strlen("hello this is a cup of tea stored forever"));
 
+    if (res == 0)
+    {
+        printf("Created the transaction\n");
+    }
+    
+    
+    return 0;
 }
