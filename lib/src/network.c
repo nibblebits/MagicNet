@@ -1226,7 +1226,9 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
             return -1;
         }
 
+
         magicnet_log("%s unsigned packet from localhost has now been signed with our signature\n", __FUNCTION__);
+        has_signature = true;
     }
 
     // Now the packet is constructed lets verify its contents if it has been signed.
@@ -1569,6 +1571,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     // Its possible packet was already signed
     bool has_signature = !MAGICNET_nulled_signature(&packet->signature);
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) && !has_signature)
+    {   
+        magicnet_log("%s attempting to send unsigned packet\n", __FUNCTION__);
+    }
     res = magicnet_write_int(client, has_signature, NULL);
     if (res < 0)
     {
