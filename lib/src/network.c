@@ -44,6 +44,21 @@ struct magicnet_packet *magicnet_packet_new()
     return packet;
 }
 
+/**
+ * @brief Clears the signature and hash of this packet, sets the MAGICNET_PACKET_FLAG_MUST_BE_SIGNED flag
+ * to ensure it gets signed when we send this packet.
+ * 
+ * @param packet 
+ * @return int 
+ */
+int magicnet_packet_resign_on_send(struct magicnet_packet* packet)
+{
+    memset(packet->datahash, 0, sizeof(packet->datahash));
+    memset(&packet->signature, 0, sizeof(packet->signature));
+    packet->signed_data.flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    return 0;
+}
+
 bool magicnet_loaded_ips_full(struct magicnet_server *server)
 {
     return server->total_loaded_ips >= MAGICNET_MAX_LOADED_IP_ADDRESSES;
@@ -1571,7 +1586,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     // Its possible packet was already signed
     bool has_signature = !MAGICNET_nulled_signature(&packet->signature);
-    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) && !has_signature)
+    if (!has_signature)
     {   
         magicnet_log("%s attempting to send unsigned packet\n", __FUNCTION__);
     }
@@ -2025,13 +2040,20 @@ int magicnet_client_process_transaction_send_packet(struct magicnet_client *clie
 {
     int res = 0;
 
-    // We must sign the transaction with our public key
+    // We must sign the transaction in the packet
     res = block_transaction_hash_and_sign(magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
     {
         goto out;
     }
 
+    res = magicnet_packet_resign_on_send(packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Now we signed the transaction we must resign the packet.
     // All we do with a packet like this is add it to the relay so the server can relay to all other peers.
     res = magicnet_server_add_packet_to_relay(client->server, packet);
     if (res < 0)
