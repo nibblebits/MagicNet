@@ -2040,6 +2040,7 @@ int magicnet_client_process_transaction_send_packet(struct magicnet_client *clie
 {
     int res = 0;
 
+    magicnet_server_lock(client->server);
     // We must sign the transaction in the packet
     res = block_transaction_hash_and_sign(magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
@@ -2067,9 +2068,10 @@ int magicnet_client_process_transaction_send_packet(struct magicnet_client *clie
         goto out;
     }
 
-    magicnet_log("%s proceessed transaction send packet successfully. Added to relay and to our transaction queue\n", __FUNCTION__);
+    magicnet_log("%s Processed our self-signed transaction packet. RELAYING\n", __FUNCTION__);
 
 out:
+    magicnet_server_unlock(client->server);
     return res;
 }
 
@@ -2341,6 +2343,30 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
     block_save(magicnet_signed_data(packet)->payload.block_send.block);
     return 0;
 }
+
+int magicnet_server_process_transaction_send_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    magicnet_server_lock(client->server);
+    // Relay to others.
+    res = magicnet_server_add_packet_to_relay(client->server, packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+    // Oh and we add the transaction to our own queue as well.
+    res = magicnet_server_awaiting_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    magicnet_log("%s added new transaction from %s\n", __FUNCTION__, packet->pub_key.key);
+
+out:
+    magicnet_server_unlock(client->server);
+    return res;
+}
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -2371,7 +2397,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
         break;
 
     case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
-        magicnet_log("transaction send packet example\n");
+        res = magicnet_server_process_transaction_send_packet(client, packet);
         break;
     };
 
