@@ -134,7 +134,7 @@ struct magicnet_server *magicnet_server_start()
 
     // Ignore all SIGPIPE
     signal(SIGPIPE, SIG_IGN);
-    
+
     // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1)
@@ -2730,13 +2730,17 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     bzero(block_data_hash, sizeof(block_data_hash));
 
     struct block_data *block_data = block_data_new();
-    struct block *block = block_create();
-    block->data = block_data;
+    struct block *block = block_create(block_data);
 
-    // Let's add a dummy transaction to test this
-    struct block_transaction *transaction = block_transaction_build("test_program", "hello world", strlen("hello world"));
-    block_transaction_hash_and_sign(transaction);
-    block_transaction_add(block, transaction);
+    // Let's loop through all of the block transactions that we are aware of and add them to the block
+    vector_set_peek_pointer(server->next_block.block_transactions, 0);
+    struct block_transaction* transaction = vector_peek_ptr(server->next_block.block_transactions);
+    while(transaction)
+    {
+        block_transaction_add(block, transaction);
+        transaction = vector_peek_ptr(server->next_block.block_transactions);
+    }
+    
     if (block_hash_sign_verify(block) < 0)
     {
         magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);

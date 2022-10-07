@@ -246,11 +246,11 @@ struct block *block_create_with_data(const char *hash, const char *prev_hash, st
     return block;
 }
 
-struct block *block_create()
+struct block *block_create(struct block_data* data)
 {
     char last_hash[SHA256_STRING_LENGTH] = {0};
     struct block* block = calloc(1, sizeof(struct block));
-
+    block->data = data;
     // Consider instead cacheing it..
     if(magicnet_database_load_last_block(last_hash, NULL) >= 0)
     {

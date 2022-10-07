@@ -368,7 +368,7 @@ int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out);
  */
 
 struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data);
-struct block *block_create();
+struct block *block_create(struct block_data* data);
 int block_save(struct block* block);
 void block_free(struct block *block);
 
