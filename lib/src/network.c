@@ -2703,7 +2703,7 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
         verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
     }
 
-    vector_clear(server->next_block.block_transactions);
+    vector_clear(server->next_block.signed_up_verifiers);
 
     vector_set_peek_pointer(server->next_block.block_transactions, 0);
     struct block_transaction *block_transaction = vector_peek_ptr(server->next_block.block_transactions);
