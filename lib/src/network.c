@@ -300,7 +300,10 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
         goto out;
     }
 
-    vector_push(server->next_block.block_transactions, &transaction);
+    // Let us clone the transaction because we aren't responsible for the memory of the one passed to us.
+    // the clone will be deleted when the block sequence completes
+    struct block_transaction* cloned_transaction = block_transaction_clone(transaction);
+    vector_push(server->next_block.block_transactions, &cloned_transaction);
 out:
     return res;
 }
