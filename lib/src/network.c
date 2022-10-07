@@ -2326,6 +2326,8 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
     magicnet_log("%s client has asked to signup as a verifier for the next block: %s\n", __FUNCTION__, inet_ntoa(client->client_info.sin_addr));
     magicnet_server_lock(client->server);
     res = magicnet_server_verifier_signup(client->server, &packet->pub_key);
+    magicnet_server_add_packet_to_relay(client->server, packet);
+
     magicnet_server_unlock(client->server);
     return res;
 }
@@ -2340,6 +2342,8 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
     {
         magicnet_log("%s Failed to cast vote from key = %s voting for key %s\n", __FUNCTION__, &packet->pub_key.key, voteing_for_key->key);
     }
+
+    magicnet_server_add_packet_to_relay(client->server, packet);
     return res;
 }
 
@@ -2347,6 +2351,7 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
 {
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
     block_save(magicnet_signed_data(packet)->payload.block_send.block);
+    magicnet_server_add_packet_to_relay(client->server, packet);
     return 0;
 }
 
@@ -2354,12 +2359,6 @@ int magicnet_server_process_transaction_send_packet(struct magicnet_client* clie
 {
     int res = 0;
     magicnet_server_lock(client->server);
-    // Relay to others.
-    res = magicnet_server_add_packet_to_relay(client->server, packet);
-    if (res < 0)
-    {
-        goto out;
-    }
     // Oh and we add the transaction to our own queue as well.
     res = magicnet_server_awaiting_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
@@ -2369,6 +2368,13 @@ int magicnet_server_process_transaction_send_packet(struct magicnet_client* clie
 
     magicnet_log("%s added new transaction from %s\n", __FUNCTION__, packet->pub_key.key);
 
+    // Relay to others.
+    res = magicnet_server_add_packet_to_relay(client->server, packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
 out:
     magicnet_server_unlock(client->server);
     return res;
@@ -2740,7 +2746,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
         block_transaction_add(block, transaction);
         transaction = vector_peek_ptr(server->next_block.block_transactions);
     }
-    
+
     if (block_hash_sign_verify(block) < 0)
     {
         magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
