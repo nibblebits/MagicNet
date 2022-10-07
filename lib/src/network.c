@@ -132,6 +132,9 @@ struct magicnet_server *magicnet_server_start()
     int sockfd, len;
     struct sockaddr_in servaddr, cli;
 
+    // Ignore all SIGPIPE
+    signal(SIGPIPE, SIG_IGN);
+    
     // socket create and verification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1)
