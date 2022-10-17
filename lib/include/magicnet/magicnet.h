@@ -305,6 +305,16 @@ struct block_data
     size_t total_transactions;
 };
 
+struct blockchain
+{
+    int id;
+
+    char begin_hash[SHA256_STRING_LENGTH];
+
+    // The blockchain with the highest count is the active chain.
+    size_t proved_verified_blocks;
+};
+
 struct block
 {
 
@@ -314,6 +324,10 @@ struct block
     char prev_hash[SHA256_STRING_LENGTH];
 
     struct block_data *data;
+
+
+    // LOCAL DATA ONLY The below data is not sent across the network
+    const struct blockchain* blockchain;
 };
 
 enum

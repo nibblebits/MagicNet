@@ -156,9 +156,40 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
     return cloned_transaction;
 }
 
+bool blockchain_should_create_new(struct block* block)
+{
+   char empty_hash[SHA256_STRING_LENGTH] = {0};
+    if (memcmp(block->prev_hash, empty_hash, sizeof(empty_hash)) == 0)
+    {
+    	// Previous hash is NULL, then this means a new blockchain has been created. We should ensure that we create this chain
+    	return true;
+    }
+    
+    return false;
+}
+
+int blockchain_create_new(struct block* block)
+{
+    int res = 0;
+    
+    return res;
+}
+
+int blockchain_create_new_if_required(struct block* block)
+{
+    int res = 0;
+    if (blockchain_should_create_new(block))
+    {
+        res = blockchain_create_new(block);
+    }
+    return res;
+}
+
 int block_save(struct block* block)
 {
     int res = 0;
+ 	
+    
     res = magicnet_database_save_block(block);
     return res;
 }

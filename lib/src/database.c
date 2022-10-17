@@ -5,15 +5,24 @@
 #include <assert.h>
 #include <limits.h>
 #include <pthread.h>
+#include <vector.h>
 sqlite3 *db = NULL;
 pthread_mutex_t db_lock;
+
+// Cacheing.. Contains many struct blockchain*
+struct vector* blockchains;
 
 const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
                                                 \"hash\"	TEXT,\
-                                                \"prev_hash\"	TEXT\
+                                                \"prev_hash\"	TEXT,\
+                                                \"blockchain_id\" INTEGER \
                                                 );",
 
+                "CREATE TABLE \"blockchains\" ( \
+                                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
+                                                \"begin_hash\"	TEXT,\
+                                                \"proven_verified_blocks\"  INTEGER);",
                                "CREATE TABLE \"transactions\" ( \
                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
                                 \"hash\"	TEXT,  \
@@ -55,6 +64,8 @@ int magicnet_database_create()
         }
         index++;
     }
+
+    blockchains = vector_create(sizeof(struct blockchain*));
 
     return res;
 }
@@ -178,6 +189,15 @@ int magicnet_database_load_block(const char *hash, char *prev_hash_out)
     res = magicnet_database_load_block_no_locks(hash, prev_hash_out);
     pthread_mutex_unlock(&db_lock);
     return res;
+}
+
+int magicnet_database_save_chains()
+{
+    pthread_mutex_lock(&db_lock);
+
+    pthread_mutex_unlock(&db_lock);
+
+    return 0;
 }
 
 int magicnet_database_save_block(struct block *block)
