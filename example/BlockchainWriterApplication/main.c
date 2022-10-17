@@ -17,8 +17,8 @@ int main()
     }
     
     int res = magicnet_make_transaction(decentralized_program, 
-            "hello this is a cup of tea stored forever", 
-            strlen("hello this is a cup of tea stored forever"));
+            "Beer from UK", 
+            strlen("Beer from UK"));
 
     if (res == 0)
     {
