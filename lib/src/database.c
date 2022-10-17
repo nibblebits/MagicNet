@@ -223,8 +223,8 @@ int magicnet_database_save_block(struct block *block)
         goto out;
     }
 
-    sqlite3_bind_text(stmt, 1, block->hash, sizeof(block->hash), NULL);
-    sqlite3_bind_text(stmt, 2, block->prev_hash, sizeof(block->prev_hash), NULL);
+    sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
+    sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->prev_hash), NULL);
 
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
@@ -244,7 +244,7 @@ int magicnet_database_save_block(struct block *block)
     for (int i = 0; i < block->data->total_transactions; i++)
     {
         struct block_transaction *transaction = block->data->transactions[i];
-        sqlite3_bind_text(stmt, 1, transaction->hash, sizeof(transaction->hash), NULL);
+        sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
         sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
         sqlite3_bind_blob(stmt, 3, &transaction->key, sizeof(transaction->key), NULL);
         sqlite3_bind_text(stmt, 4, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
