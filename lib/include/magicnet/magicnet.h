@@ -305,10 +305,20 @@ struct block_data
     size_t total_transactions;
 };
 
+enum
+{
+    // MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN - specifies that this chain has no shared history with any other chain, it is unique.
+    MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN,
+    // MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN - specifies that this chain was created from a previous existing chain that split into two directions
+    MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN,
+    // MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE - specifies an incomplete blockchain that should not be taken serioiusly until the chain is completed. Once that happens its type will change to the appropaite new type for the completed blockchain.
+    MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE,
+};
+typedef int BLOCKCHAIN_TYPE;
 struct blockchain
 {
     int id;
-
+    BLOCKCHAIN_TYPE type;
     char begin_hash[SHA256_STRING_LENGTH];
 
     // The blockchain with the highest count is the active chain.
@@ -349,6 +359,12 @@ int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
+/**
+ * Creates a new blockchain due to the block provided.
+ * No checks are preformed you must ensure this is what you want to do before you call this function
+ */
+int magicnet_database_blockchain_create(struct block *block);
+
 
 /**
  * @brief Makes a transaction on the network which will eventually be put into a block.

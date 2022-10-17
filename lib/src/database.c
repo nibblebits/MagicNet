@@ -10,7 +10,7 @@ sqlite3 *db = NULL;
 pthread_mutex_t db_lock;
 
 // Cacheing.. Contains many struct blockchain*
-struct vector* blockchains;
+struct vector *blockchains;
 
 const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
@@ -19,8 +19,9 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"blockchain_id\" INTEGER \
                                                 );",
 
-                "CREATE TABLE \"blockchains\" ( \
+                               "CREATE TABLE \"blockchains\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
+                                                \"type\" INTEGER , \
                                                 \"begin_hash\"	TEXT,\
                                                 \"proven_verified_blocks\"  INTEGER);",
                                "CREATE TABLE \"transactions\" ( \
@@ -65,7 +66,7 @@ int magicnet_database_create()
         index++;
     }
 
-    blockchains = vector_create(sizeof(struct blockchain*));
+    blockchains = vector_create(sizeof(struct blockchain *));
 
     return res;
 }
@@ -140,6 +141,37 @@ int magicnet_database_load_last_block_no_locks(char *hash_out, char *prev_hash_o
         strncpy(prev_hash_out, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
     }
 out:
+    return res;
+}
+
+/**
+ * Creates a new blockchain due to the block provided.
+ * No checks are preformed you must ensure this is what you want to do before you call this function
+ */
+int magicnet_database_blockchain_create(struct block *block)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    const char *create_blockchain_sql = "INSERT INTO blockchains (begin_hash) VALUES (?);";
+    res = sqlite3_prepare_v2(db, create_blockchain_sql, strlen(create_blockchain_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
     return res;
 }
 int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)

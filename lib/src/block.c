@@ -171,6 +171,7 @@ bool blockchain_should_create_new(struct block* block)
 int blockchain_create_new(struct block* block)
 {
     int res = 0;
+    res = magicnet_database_blockchain_create(block);
     return res;
 }
 
@@ -193,7 +194,13 @@ int block_save(struct block* block)
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
         goto out;
     }
-    
+
+    res = blockchain_create_new_if_required(block);
+    if (res < 0)
+    {
+        goto out;
+
+    }    
     res = magicnet_database_save_block(block);
 
 out:
