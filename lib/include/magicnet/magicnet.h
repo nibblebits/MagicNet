@@ -395,10 +395,12 @@ struct magicnet_program *magicnet_program(const char *name);
  */
 
 struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data);
-struct block *block_create(struct block_data* data);
+struct block *block_create(struct block_data *data, const char* prev_hash);
 int block_save(struct block* block);
 void block_free(struct block *block);
 int blockchain_init();
+struct blockchain* blockchain_new();
+void blockchain_free(struct blockchain* blockchain);
 
 struct block *block_clone(struct block *block);
 struct block_data *block_data_new();

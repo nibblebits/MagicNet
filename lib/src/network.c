@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include "magicnet/database.h"
 #include "magicnet/config.h"
 #include "magicnet/magicnet.h"
 #include "magicnet/log.h"
@@ -2729,19 +2730,15 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
     server->next_block.step = BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS;
 }
 
-void magicnet_server_create_and_send_block(struct magicnet_server *server)
+void magicnet_server_create_and_send_block_single(struct magicnet_server* server, const char* prev_hash)
 {
-    magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
-    char block_data_hash[SHA256_STRING_LENGTH];
-    bzero(block_data_hash, sizeof(block_data_hash));
-
     struct block_data *block_data = block_data_new();
-    struct block *block = block_create(block_data);
+    struct block *block = block_create(block_data, prev_hash);
 
     // Let's loop through all of the block transactions that we are aware of and add them to the block
     vector_set_peek_pointer(server->next_block.block_transactions, 0);
-    struct block_transaction* transaction = vector_peek_ptr(server->next_block.block_transactions);
-    while(transaction)
+    struct block_transaction *transaction = vector_peek_ptr(server->next_block.block_transactions);
+    while (transaction)
     {
         block_transaction_add(block, transaction);
         transaction = vector_peek_ptr(server->next_block.block_transactions);
@@ -2766,6 +2763,41 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_signed_data(packet)->payload.block_send.block = block;
     magicnet_server_add_packet_to_relay(server, packet);
     magicnet_free_packet(packet);
+}
+
+void magicnet_server_create_and_send_block(struct magicnet_server *server)
+{
+    magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
+    char block_data_hash[SHA256_STRING_LENGTH];
+    bzero(block_data_hash, sizeof(block_data_hash));
+
+    struct vector* blockchains = vector_create(sizeof(struct blockchain*));
+    int res = magicnet_database_blockchain_all(blockchains);
+    if (res < 0)
+    {
+        magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
+        return;
+    }
+
+    if (vector_empty(blockchains))
+    {
+        // We don't have a blockchain yet, this must be the first block
+        magicnet_server_create_and_send_block_single(server, NULL);
+        return;
+    }
+
+    // We have blockchains, loop through and create a block for each one
+    // this can be optimized in the future to not duplicate the transactions.
+    vector_set_peek_pointer(blockchains, 0);
+    struct blockchain* blockchain = vector_peek_ptr(blockchains);
+    while(blockchain)
+    {
+        magicnet_server_create_and_send_block_single(server, blockchain->last_hash);
+        blockchain_free(blockchain);
+        blockchain = vector_peek_ptr(blockchains);
+    }
+    vector_free(blockchains);
+   
 }
 
 /**

@@ -171,6 +171,37 @@ out:
     return res;
 }
 
+int magicnet_database_blockchain_all(struct vector *blockchain_vector_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+    const char *blockchain_load_sql = "SELECT id, type, begin_hash, proven_verified_blocks, last_hash from blockchains";
+    res = sqlite3_prepare_v2(db, blockchain_load_sql, strlen(blockchain_load_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    while (step == SQLITE_ROW)
+    {
+        struct blockchain *blockchain = blockchain_new();
+        blockchain->id = sqlite3_column_int(stmt, 0);
+        blockchain->type = sqlite3_column_int(stmt, 1);
+        strncpy(blockchain->begin_hash, sqlite3_column_text(stmt, 2), SHA256_STRING_LENGTH);
+        blockchain->proved_verified_blocks = sqlite3_column_int(stmt, 3);
+        strncpy(blockchain->last_hash, sqlite3_column_text(stmt, 4), SHA256_STRING_LENGTH);
+        vector_push(blockchain_vector_out, &blockchain);
+        step = sqlite3_step(stmt);
+    }
+
+out:
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
 int magicnet_database_blockchain_update_last_hash(int blockchain_id, const char *new_last_hash)
 {
     int res = 0;

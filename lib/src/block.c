@@ -23,6 +23,16 @@ int blockchain_init()
     return 0;
 }
 
+struct blockchain* blockchain_new()
+{
+    return calloc(1, sizeof(struct blockchain));
+}
+
+void blockchain_free(struct blockchain* blockchain)
+{
+    free(blockchain);
+}
+
 struct block_data *block_data_new()
 {
     struct block_data *block_data = calloc(1, sizeof(struct block_data));
@@ -378,16 +388,22 @@ struct block *block_create_with_data(const char *hash, const char *prev_hash, st
     return block;
 }
 
-struct block *block_create(struct block_data *data)
+struct block *block_create(struct block_data *data, const char* prev_hash)
 {
     char last_hash[SHA256_STRING_LENGTH] = {0};
     struct block *block = calloc(1, sizeof(struct block));
     block->data = data;
-    // Consider instead cacheing it..
-    if (magicnet_database_load_last_block(last_hash, NULL) >= 0)
+
+    if (!prev_hash)
     {
-        memcpy(block->prev_hash, last_hash, sizeof(block->prev_hash));
+        if(magicnet_database_load_last_block(last_hash, NULL) >= 0)
+        {
+            memcpy(block->prev_hash, last_hash, sizeof(block->prev_hash));
+            prev_hash = last_hash;
+        }
     }
+
+    memcpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
 
     return block;
 }
