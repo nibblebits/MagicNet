@@ -8,6 +8,21 @@
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
+#include <pthread.h>
+
+pthread_mutex_t blockchain_lock;
+
+int blockchain_init()
+{
+    if (pthread_mutex_init(&blockchain_lock, NULL) != 0)
+    {
+        magicnet_log("Failed to initialize the blockchain lock\n");
+        return -1;
+    }
+
+    return 0;
+}
+
 struct block_data *block_data_new()
 {
     struct block_data *block_data = calloc(1, sizeof(struct block_data));
@@ -34,18 +49,18 @@ void block_data_free(struct block_data *block_data)
 
 struct block_transaction *block_transaction_new()
 {
-    struct block_transaction* transaction = calloc(1, sizeof(struct block_transaction));
+    struct block_transaction *transaction = calloc(1, sizeof(struct block_transaction));
     return transaction;
 }
 
-void block_transaction_free(struct block_transaction* transaction)
+void block_transaction_free(struct block_transaction *transaction)
 {
     free(transaction);
 }
 
-struct block_transaction* block_transaction_build(const char* program_name, char* data, size_t data_len)
+struct block_transaction *block_transaction_build(const char *program_name, char *data, size_t data_len)
 {
-    struct block_transaction* transaction = block_transaction_new();
+    struct block_transaction *transaction = block_transaction_new();
     strncpy(transaction->data.program_name, program_name, sizeof(transaction->data.program_name));
     transaction->data.size = data_len;
     transaction->data.ptr = calloc(1, data_len);
@@ -54,15 +69,15 @@ struct block_transaction* block_transaction_build(const char* program_name, char
     return transaction;
 }
 
-void block_buffer_write_transaction_data(struct block_transaction_data* data, struct buffer* buffer)
+void block_buffer_write_transaction_data(struct block_transaction_data *data, struct buffer *buffer)
 {
-  buffer_write_bytes(buffer, data->program_name, sizeof(data->program_name));
+    buffer_write_bytes(buffer, data->program_name, sizeof(data->program_name));
     buffer_write_long(buffer, data->size);
     buffer_write_long(buffer, data->time);
 
     if (data->ptr)
     {
-        buffer_write_bytes(buffer,data->ptr, data->size);
+        buffer_write_bytes(buffer, data->ptr, data->size);
     }
 }
 
@@ -74,8 +89,6 @@ void block_buffer_write_transaction(struct block_transaction *block_transaction,
     block_buffer_write_transaction_data(&block_transaction->data, buffer);
 }
 
-
-
 int block_transaction_hash_and_sign(struct block_transaction *transaction)
 {
     if (transaction->data.size > MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA)
@@ -84,13 +97,13 @@ int block_transaction_hash_and_sign(struct block_transaction *transaction)
     }
 
     char transaction_hash[SHA256_STRING_LENGTH];
-    struct buffer* buffer = buffer_create();
+    struct buffer *buffer = buffer_create();
     block_buffer_write_transaction_data(&transaction->data, buffer);
     sha256_data(buffer_ptr(buffer), transaction_hash, buffer_len(buffer));
     buffer_free(buffer);
 
     int res = 0;
-    res = private_sign(transaction_hash, sizeof(transaction_hash),&transaction->signature);
+    res = private_sign(transaction_hash, sizeof(transaction_hash), &transaction->signature);
     if (res < 0)
     {
         return res;
@@ -125,7 +138,7 @@ int block_transaction_valid(struct block_transaction *transaction)
     }
 
     char transaction_hash[SHA256_STRING_LENGTH];
-    struct buffer* buffer = buffer_create();
+    struct buffer *buffer = buffer_create();
     block_buffer_write_transaction_data(&transaction->data, buffer);
     sha256_data(buffer_ptr(buffer), transaction_hash, buffer_len(buffer));
     buffer_free(buffer);
@@ -156,54 +169,129 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
     return cloned_transaction;
 }
 
-bool blockchain_should_create_new(struct block* block)
+BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block)
 {
-   char empty_hash[SHA256_STRING_LENGTH] = {0};
-    if (memcmp(block->prev_hash, empty_hash, sizeof(empty_hash)) == 0)
+    char empty_hash[SHA256_STRING_LENGTH] = {0};
+    if (memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
     {
-    	// Previous hash is NULL, then this means a new blockchain has been created. We should ensure that we create this chain
-    	return true;
+        // Previous hash is NULL, then this means a new blockchain has been created. We should ensure that we create this chain
+        return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
+    }
+
+    struct blockchain blockchain = {0};
+    int res = magicnet_database_blockchain_load_from_last_hash(block->prev_hash, &blockchain);
+    if (res < 0)
+    {
+        // We don't actually have a blockchain that links to our blocks previous hash
+        // This essentially means that we dont have this full block chain .
+        // We should create a new chain that is incomplete. When the chain is completed we will resolve the conflict.
+        return MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE;
+    }
+
+    char hash[SHA256_STRING_LENGTH] = {0};
+    res = magicnet_database_load_block_with_previous_hash(block->prev_hash, hash);
+    if (res >= 0 && strncmp(block->hash, hash, sizeof(block->hash) != 0))
+    {
+        // We already have a block in one of our blockchains that has the previous hash equal to ours
+        // this means this is a chain split. With two different histories.
+        return MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN;
+    }
+
+    return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
+}
+
+int blockchain_create_new(struct block *block, BLOCKCHAIN_TYPE type)
+{
+    int res = 0;
+    struct blockchain blockchain = {0};
+    res = magicnet_database_blockchain_create(type, block->hash, &blockchain);
+    if (res < 0)
+    {
+        res = -1;
+        goto out;
+    }
+
+    res = blockchain.id;
+out:
+    return res;
+}
+
+int blockchain_create_new_if_required(struct block *block)
+{
+    int res = -1;
+    BLOCKCHAIN_TYPE blockchain_type = blockchain_should_create_new(block);
+    if (blockchain_type != MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN)
+    {
+        res = blockchain_create_new(block, blockchain_type);
+    }
+    return res;
+}
+
+int blockchain_block_prepare(struct block *block)
+{
+    int res = 0;
+    res = blockchain_create_new_if_required(block);
+    if (res > 0)
+    {
+        block->blockchain_id = res;
+        return res;
+    }
+
+    // We did not have to create a blockchain? Then we need to get the last chain and set that to our ID
+    struct blockchain blockchain = {0};
+    res = magicnet_database_blockchain_load_from_last_hash(block->prev_hash, &blockchain);
+    if (res < 0)
+    {
+        return res;
+    }
+
+    block->blockchain_id = blockchain.id;
+    return res;
+}
+
+int block_save(struct block *block)
+{
+    int res = 0;
+    pthread_mutex_lock(&blockchain_lock);
+    res = block_verify(block);
+    if (res < 0)
+    {
+        magicnet_log("%s block verification failed\n", __FUNCTION__);
+        goto out;
     }
     
-    return false;
-}
-
-int blockchain_create_new(struct block* block)
-{
-    int res = 0;
-    res = magicnet_database_blockchain_create(block);
-    return res;
-}
-
-int blockchain_create_new_if_required(struct block* block)
-{
-    int res = 0;
-    if (blockchain_should_create_new(block))
-    {
-        res = blockchain_create_new(block);
-    }
-    return res;
-}
-
-int block_save(struct block* block)
-{
-    int res = 0;
- 	res = magicnet_database_load_block(block->hash, NULL);
+    res = magicnet_database_load_block(block->hash, NULL);
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
         goto out;
     }
 
-    res = blockchain_create_new_if_required(block);
+    res = blockchain_block_prepare(block);
     if (res < 0)
     {
         goto out;
-
-    }    
+    }
     res = magicnet_database_save_block(block);
+    if (res < 0)
+    {
+        goto out;
+    }
 
+    res = magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
 out:
+    pthread_mutex_unlock(&blockchain_lock);
     return res;
 }
 
@@ -242,7 +330,7 @@ bool block_prev_hash_exists(struct block *block)
     return memcmp(block->prev_hash, empty_hash, sizeof(empty_hash)) != 0;
 }
 
-int block_hash_sign_verify(struct block* block)
+int block_hash_sign_verify(struct block *block)
 {
     int res = 0;
     block_hash_create(block->data, block->prev_hash, block->hash);
@@ -290,13 +378,13 @@ struct block *block_create_with_data(const char *hash, const char *prev_hash, st
     return block;
 }
 
-struct block *block_create(struct block_data* data)
+struct block *block_create(struct block_data *data)
 {
     char last_hash[SHA256_STRING_LENGTH] = {0};
-    struct block* block = calloc(1, sizeof(struct block));
+    struct block *block = calloc(1, sizeof(struct block));
     block->data = data;
     // Consider instead cacheing it..
-    if(magicnet_database_load_last_block(last_hash, NULL) >= 0)
+    if (magicnet_database_load_last_block(last_hash, NULL) >= 0)
     {
         memcpy(block->prev_hash, last_hash, sizeof(block->prev_hash));
     }
@@ -313,7 +401,7 @@ void block_free(struct block *block)
 
     if (block->data)
     {
-       // block_data_free(block->data);
+        // block_data_free(block->data);
     }
     free(block);
 }
@@ -331,7 +419,7 @@ void magicnet_get_block_path_for_hash(const char *hash, char *block_path_out)
 struct block *block_load(const char *hash)
 {
     int res = 0;
-    struct block* block = NULL;
+    struct block *block = NULL;
     FILE *block_fp = NULL;
     char block_path[PATH_MAX];
     char prev_hash[SHA256_STRING_LENGTH];
@@ -343,7 +431,7 @@ struct block *block_load(const char *hash)
 
 out:
     if (res < 0)
-    {   
+    {
         if (block)
         {
             block_free(block);
@@ -352,4 +440,4 @@ out:
     }
 
     return block;
-}   
+}

@@ -46,6 +46,12 @@ int magicnet_server_init()
         goto out;
     }
 
+    res = blockchain_init();
+    if (res < 0)
+    {
+        goto out;
+    }
+
 out:
     return res;
 }

@@ -313,6 +313,9 @@ enum
     MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN,
     // MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE - specifies an incomplete blockchain that should not be taken serioiusly until the chain is completed. Once that happens its type will change to the appropaite new type for the completed blockchain.
     MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE,
+
+    // Returned when we should not create a new blockchain.
+    MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN,
 };
 typedef int BLOCKCHAIN_TYPE;
 struct blockchain
@@ -320,6 +323,7 @@ struct blockchain
     int id;
     BLOCKCHAIN_TYPE type;
     char begin_hash[SHA256_STRING_LENGTH];
+    char last_hash[SHA256_STRING_LENGTH];
 
     // The blockchain with the highest count is the active chain.
     size_t proved_verified_blocks;
@@ -337,7 +341,7 @@ struct block
 
 
     // LOCAL DATA ONLY The below data is not sent across the network
-    const struct blockchain* blockchain;
+    int blockchain_id;
 };
 
 enum
@@ -359,12 +363,6 @@ int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
-/**
- * Creates a new blockchain due to the block provided.
- * No checks are preformed you must ensure this is what you want to do before you call this function
- */
-int magicnet_database_blockchain_create(struct block *block);
-
 
 /**
  * @brief Makes a transaction on the network which will eventually be put into a block.
@@ -384,8 +382,7 @@ int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
-int magicnet_database_save_block(struct block *block);
-int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out);
+
 
 /**
  * @brief Creates a new block in memory, no block is added to the chain.
@@ -401,10 +398,12 @@ struct block *block_create_with_data(const char *hash, const char *prev_hash, st
 struct block *block_create(struct block_data* data);
 int block_save(struct block* block);
 void block_free(struct block *block);
+int blockchain_init();
 
 struct block *block_clone(struct block *block);
 struct block_data *block_data_new();
 void block_data_free(struct block_data* block_data);
+
 
 struct block_transaction* block_transaction_new();
 struct block_transaction* block_transaction_clone(struct block_transaction* transaction);
