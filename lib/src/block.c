@@ -334,10 +334,18 @@ const char *block_transaction_group_hash_create(struct block_transaction_group *
     {
         block_buffer_write_transaction(group->transactions[i], tmp_buf);
     }
-    buffer_write_long(tmp_buf, group->total_transactions);
+
+    if (buffer_len(tmp_buf) == 0)
+    {
+        // No hash today....
+        memset(hash_out, 0, SHA256_STRING_LENGTH);
+        hash_out =NULL;
+        goto out;
+    }
     sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
     buffer_free(tmp_buf);
-    return group->hash;
+out:
+    return hash_out;
 }
 
 const char *block_hash_create(struct block *block, const char* prev_hash, char* hash_out)

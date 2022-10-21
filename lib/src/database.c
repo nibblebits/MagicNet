@@ -419,6 +419,12 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
+    if (transaction_group->total_transactions == 0)
+    {
+        // What transaction group... Just accept it as if we did something.
+        return 0;
+    }
+
     pthread_mutex_lock(&db_lock);
     const char *insert_transaction_groups_sql = "INSERT INTO  transaction_groups (hash, total_transactions) VALUES (?,?);";
     res = sqlite3_prepare_v2(db, insert_transaction_groups_sql, strlen(insert_transaction_groups_sql), &stmt, 0);
