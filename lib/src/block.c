@@ -439,8 +439,10 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
         }
     }
 
-    memcpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
-
+    if (prev_hash)
+    {
+        memcpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
+    }
     return block;
 }
 
