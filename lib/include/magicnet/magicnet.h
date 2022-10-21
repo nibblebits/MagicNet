@@ -286,9 +286,23 @@ struct block_transaction_data
     size_t size;
 };
 
+struct block_transaction_group
+{
+    // The hash of all combined transactions in this block transaction group.
+    char hash[SHA256_STRING_LENGTH];
+    size_t total_transactions;
+
+      // Pointer arrayto the loaded transactions data in memory
+    struct block_transaction* transactions[MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK];
+};
+
 struct block_transaction
 {
     char hash[SHA256_STRING_LENGTH];
+    
+    // The hash of the transaction group  that this transaction belongs to
+    char transaction_group_hash[SHA256_STRING_LENGTH];
+
     // Signed signature of the creator of the transaction.
     struct signature signature;
     // The public key of the creator of the transaction
@@ -297,13 +311,6 @@ struct block_transaction
     struct block_transaction_data data;
 };
 
-struct block_data
-{
-    // Pointer arrayto the loaded transactions data in memory
-    struct block_transaction* transactions[MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK];
-    // The total transactions in this block
-    size_t total_transactions;
-};
 
 enum
 {
@@ -337,7 +344,7 @@ struct block
     // Hash of the previous block
     char prev_hash[SHA256_STRING_LENGTH];
 
-    struct block_data *data;
+    struct block_transaction_group *transaction_group;
 
 
     // LOCAL DATA ONLY The below data is not sent across the network
@@ -394,8 +401,8 @@ struct magicnet_program *magicnet_program(const char *name);
  * @return struct block*
  */
 
-struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data);
-struct block *block_create(struct block_data *data, const char* prev_hash);
+struct block *block_create_with_group(const char *hash, const char *prev_hash, struct block_transaction_group *group);
+struct block *block_create(struct block_transaction_group *transaction_group, const char* prev_hash);
 int block_save(struct block* block);
 void block_free(struct block *block);
 int blockchain_init();
@@ -403,21 +410,23 @@ struct blockchain* blockchain_new();
 void blockchain_free(struct blockchain* blockchain);
 
 struct block *block_clone(struct block *block);
-struct block_data *block_data_new();
-void block_data_free(struct block_data* block_data);
+struct block_transaction *block_transaction_new();
+
+struct block_transaction_group* block_transaction_group_new();
+void block_transaction_group_free(struct block_transaction_group *transaction_group);
 
 
 struct block_transaction* block_transaction_new();
 struct block_transaction* block_transaction_clone(struct block_transaction* transaction);
 void block_transaction_free(struct block_transaction* transaction);
 struct block_transaction* block_transaction_build(const char* program_name, char* data, size_t data_len);
-int block_transaction_add(struct block *block, struct block_transaction *transaction);
+int block_transaction_add(struct block_transaction_group *transaction_group, struct block_transaction *transaction);
 int block_transaction_valid(struct block_transaction* transaction);
 int block_transaction_hash_and_sign(struct block_transaction *transaction);
 int block_verify(struct block* block);
 int block_hash_sign_verify(struct block* block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
-const char *block_hash_create(struct block_data *data, const char *prev_hash, char *hash_out);
+const char *block_hash_create(struct block *block, const char* prev_hash, char* hash_out);
 struct block *magicnet_block_load(const char *hash);
 
 #endif

@@ -33,28 +33,28 @@ void blockchain_free(struct blockchain* blockchain)
     free(blockchain);
 }
 
-struct block_data *block_data_new()
+
+struct block_transaction_group* block_transaction_group_new()
 {
-    struct block_data *block_data = calloc(1, sizeof(struct block_data));
-    return block_data;
+    return calloc(1, sizeof(struct block_transaction_group));
 }
 
-void block_data_free(struct block_data *block_data)
+void block_transaction_group_free(struct block_transaction_group *transaction_group)
 {
-    for (int i = 0; i < block_data->total_transactions; i++)
+    for (int i = 0; i < transaction_group->total_transactions; i++)
     {
-        if (!block_data->transactions[i])
+        if (!transaction_group->transactions[i])
         {
             continue;
         }
 
-        if (block_data->transactions[i]->data.ptr)
+        if (transaction_group->transactions[i]->data.ptr)
         {
-            free(block_data->transactions[i]->data.ptr);
+            free(transaction_group->transactions[i]->data.ptr);
         }
-        free(block_data->transactions[i]);
+        free(transaction_group->transactions[i]);
     }
-    free(block_data);
+    free(transaction_group);
 }
 
 struct block_transaction *block_transaction_new()
@@ -125,17 +125,19 @@ int block_transaction_hash_and_sign(struct block_transaction *transaction)
     return 0;
 }
 
-int block_transaction_add(struct block *block, struct block_transaction *transaction)
+
+
+int block_transaction_add(struct block_transaction_group *transaction_group, struct block_transaction *transaction)
 {
     int res = 0;
-    if (block->data->total_transactions >= MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK)
+    if (transaction_group->total_transactions >= MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK)
     {
         res = -1;
         goto out;
     }
-    int index = block->data->total_transactions;
-    block->data->transactions[index] = transaction;
-    block->data->total_transactions++;
+    int index = transaction_group->total_transactions;
+    transaction_group->transactions[index] = transaction;
+    transaction_group->total_transactions++;
 out:
     return res;
 }
@@ -288,6 +290,12 @@ int block_save(struct block *block)
         goto out;
     }
 
+    res = magincet_database_save_transaction_group(block->transaction_group);
+    if (res < 0)
+    {
+        goto out;
+    }
+
     res = magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
     if (res < 0)
     {
@@ -307,31 +315,47 @@ out:
 
 struct block *block_clone(struct block *block)
 {
-    struct block_data *block_data = block_data_new();
-    for (int i = 0; i < block->data->total_transactions; i++)
+    struct block_transaction_group *transaction_group = block_transaction_group_new();
+    for (int i = 0; i < block->transaction_group->total_transactions; i++)
     {
-        block_data->transactions[i] = block_transaction_clone(block->data->transactions[i]);
+        transaction_group->transactions[i] = block_transaction_clone(block->transaction_group->transactions[i]);
     }
-    block_data->total_transactions = block->data->total_transactions;
-    return block_create_with_data(block->hash, block->prev_hash, block_data);
+    transaction_group->total_transactions = block->transaction_group->total_transactions;
+    memcpy(transaction_group->hash, block->transaction_group->hash, sizeof(transaction_group->hash));
+    return block_create_with_group(block->hash, block->prev_hash, transaction_group);
 }
 
-const char *block_hash_create(struct block_data *data, const char *prev_hash, char *hash_out)
+
+const char *block_transaction_group_hash_create(struct block_transaction_group *group, char* hash_out)
 {
     struct buffer *tmp_buf = buffer_create();
-    if (prev_hash)
+    buffer_write_long(tmp_buf, group->total_transactions);
+    for (int i = 0; i < group->total_transactions; i++)
+    {
+        block_buffer_write_transaction(group->transactions[i], tmp_buf);
+    }
+    buffer_write_long(tmp_buf, group->total_transactions);
+    sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
+    buffer_free(tmp_buf);
+    return group->hash;
+}
+
+const char *block_hash_create(struct block *block, const char* prev_hash, char* hash_out)
+{
+    struct buffer *tmp_buf = buffer_create();
+    if (block->prev_hash)
     {
         buffer_write_bytes(tmp_buf, (void *)prev_hash, SHA256_STRING_LENGTH);
     }
-    buffer_write_long(tmp_buf, data->total_transactions);
-    for (int i = 0; i < data->total_transactions; i++)
-    {
-        block_buffer_write_transaction(data->transactions[i], tmp_buf);
-    }
+
+    char transaction_group_hash[SHA256_STRING_LENGTH];
+    block_transaction_group_hash_create(block->transaction_group, transaction_group_hash);
+    buffer_write_bytes(tmp_buf, transaction_group_hash, sizeof(block->transaction_group->hash));
     sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
     buffer_free(tmp_buf);
-    return hash_out;
+    return block->hash;
 }
+
 
 bool block_prev_hash_exists(struct block *block)
 {
@@ -343,15 +367,17 @@ bool block_prev_hash_exists(struct block *block)
 int block_hash_sign_verify(struct block *block)
 {
     int res = 0;
-    block_hash_create(block->data, block->prev_hash, block->hash);
+    block_hash_create(block, block->prev_hash, block->hash);
+    block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
     res = block_verify(block);
     return res;
 }
+
 int block_verify(struct block *block)
 {
     int res = 0;
     char block_hash[SHA256_STRING_LENGTH];
-    block_hash_create(block->data, block->prev_hash, block_hash);
+    block_hash_create(block, block->prev_hash, block_hash);
     if (memcmp(block->hash, block_hash, sizeof(block_hash)) != 0)
     {
         magicnet_log("%s the hash in the block does not match the hash it should be\n", __FUNCTION__);
@@ -359,9 +385,19 @@ int block_verify(struct block *block)
         goto out;
     }
 
-    for (int i = 0; i < block->data->total_transactions; i++)
+    char transaction_group_hash[SHA256_STRING_LENGTH];
+    block_transaction_group_hash_create(block->transaction_group, transaction_group_hash);
+    if (memcmp(transaction_group_hash, block->transaction_group->hash, sizeof(transaction_group_hash)) != 0)
     {
-        struct block_transaction *transaction = block->data->transactions[i];
+        magicnet_log("%s the transaction group hash is not what it should be\n",__FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Validate every transaction to ensure they are correct.
+    for (int i = 0; i < block->transaction_group->total_transactions; i++)
+    {
+        struct block_transaction *transaction = block->transaction_group->transactions[i];
         res = block_transaction_valid(transaction);
         if (res < 0)
         {
@@ -376,7 +412,7 @@ out:
     }
     return res;
 }
-struct block *block_create_with_data(const char *hash, const char *prev_hash, struct block_data *data)
+struct block *block_create_with_group(const char *hash, const char *prev_hash, struct block_transaction_group *group)
 {
     struct block *block = calloc(1, sizeof(struct block));
     memcpy(block->hash, hash, sizeof(block->hash));
@@ -384,15 +420,15 @@ struct block *block_create_with_data(const char *hash, const char *prev_hash, st
     {
         memcpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
     }
-    block->data = data;
+    block->transaction_group = group;
     return block;
 }
 
-struct block *block_create(struct block_data *data, const char* prev_hash)
+struct block *block_create(struct block_transaction_group *transaction_group, const char* prev_hash)
 {
     char last_hash[SHA256_STRING_LENGTH] = {0};
     struct block *block = calloc(1, sizeof(struct block));
-    block->data = data;
+    block->transaction_group = transaction_group;
 
     if (!prev_hash)
     {
@@ -415,9 +451,9 @@ void block_free(struct block *block)
         return;
     }
 
-    if (block->data)
+    if (block->transaction_group)
     {
-        // block_data_free(block->data);
+        
     }
     free(block);
 }

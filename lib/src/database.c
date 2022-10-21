@@ -13,7 +13,8 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
                                                 \"hash\"	TEXT,\
                                                 \"prev_hash\"	TEXT,\
-                                                \"blockchain_id\" INTEGER \
+                                                \"blockchain_id\" INTEGER, \
+                                                \"transaction_group_hash\" TEXT \
                                                 );",
 
                                "CREATE TABLE \"blockchains\" ( \
@@ -22,9 +23,16 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"begin_hash\"	TEXT,\
                                                 \"last_hash\"	TEXT,\
                                                 \"proven_verified_blocks\"  INTEGER);",
+
+                               "CREATE TABLE \"transaction_groups\" ( \
+                                \"hash\"  PRIMARY KEY	TEXT,  \
+                                \"total_transactions\" INTEGER \
+                                );",
+
                                "CREATE TABLE \"transactions\" ( \
                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
                                 \"hash\"	TEXT,  \
+                                \"transaction_group_hash\" TEXT, \
                                 \"signature\"	BLOB,  \
                                 \"key\"	BLOB,  \
                                 \"program_name\"	TEXT,  \
@@ -407,6 +415,64 @@ int magicnet_database_load_block(const char *hash, char *prev_hash_out)
     return res;
 }
 
+int magincet_database_save_transaction_group(struct block_transaction_group *transaction_group)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+    const char *insert_transaction_groups_sql = "INSERT INTO  transaction_groups (hash, total_transactions) VALUES (?,?);";
+    res = sqlite3_prepare_v2(db, insert_transaction_groups_sql, strlen(insert_transaction_groups_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, transaction_group->hash, strlen(transaction_group->hash), NULL);
+    sqlite3_bind_int(stmt, 2, transaction_group->total_transactions);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_finalize(stmt);
+
+    for (int i = 0; i < transaction_group->total_transactions; i++)
+    {
+        const char *insert_transaction_groups_sql = "INSERT INTO  transactions (hash, signature, key, program_name, time, data, data_size, transaction_group_hash) VALUES (?,?,?,?,?,?,?, ?);";
+        res = sqlite3_prepare_v2(db, insert_transaction_groups_sql, strlen(insert_transaction_groups_sql), &stmt, 0);
+        if (res != SQLITE_OK)
+        {
+            res = -1;
+            goto out;
+        }
+
+        struct block_transaction *transaction = transaction_group->transactions[i];
+        sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
+        sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
+        sqlite3_bind_blob(stmt, 3, &transaction->key, sizeof(transaction->key), NULL);
+        sqlite3_bind_text(stmt, 4, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
+        sqlite3_bind_int64(stmt, 5, transaction->data.time);
+        sqlite3_bind_blob(stmt, 6, transaction->data.ptr, transaction->data.size, NULL);
+        sqlite3_bind_int(stmt, 7, transaction->data.size);
+        sqlite3_bind_text(stmt, 8, transaction_group->hash, strlen(transaction_group->hash), NULL);
+        int step = sqlite3_step(stmt);
+        if (step != SQLITE_DONE)
+        {
+            res = -1;
+            goto out;
+        }
+
+        sqlite3_finalize(stmt);
+        stmt = NULL;
+    }
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
 int magicnet_database_save_block(struct block *block)
 {
     int res = 0;
@@ -423,7 +489,7 @@ int magicnet_database_save_block(struct block *block)
         goto out;
     }
 
-    const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash, blockchain_id) VALUES(?, ?, ?)";
+    const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash, blockchain_id, transaction_group_hash) VALUES(?, ?, ?, ?)";
     res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -433,6 +499,7 @@ int magicnet_database_save_block(struct block *block)
     sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
     sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->prev_hash), NULL);
     sqlite3_bind_int(stmt, 3, block->blockchain_id);
+    sqlite3_bind_text(stmt, 4, block->transaction_group->hash, strlen(block->transaction_group->hash), NULL);
 
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
@@ -441,35 +508,6 @@ int magicnet_database_save_block(struct block *block)
     }
 
     sqlite3_finalize(stmt);
-
-    const char *insert_transaction_sql = "INSERT INTO  transactions (hash, signature, key, program_name, time, data, data_size) VALUES (?,?,?,?,?,?,?);";
-    res = sqlite3_prepare_v2(db, insert_transaction_sql, strlen(insert_transaction_sql), &stmt, 0);
-    if (res != SQLITE_OK)
-    {
-        goto out;
-    }
-
-    for (int i = 0; i < block->data->total_transactions; i++)
-    {
-        struct block_transaction *transaction = block->data->transactions[i];
-        sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
-        sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
-        sqlite3_bind_blob(stmt, 3, &transaction->key, sizeof(transaction->key), NULL);
-        sqlite3_bind_text(stmt, 4, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
-        sqlite3_bind_int64(stmt, 5, transaction->data.time);
-        sqlite3_bind_blob(stmt, 6, transaction->data.ptr, transaction->data.size, NULL);
-        sqlite3_bind_int(stmt, 7, transaction->data.size);
-
-        int step = sqlite3_step(stmt);
-        if (step != SQLITE_DONE)
-        {
-            res = -1;
-            goto out;
-        }
-
-        sqlite3_finalize(stmt);
-        stmt = NULL;
-    }
 
 out:
     pthread_mutex_unlock(&db_lock);
