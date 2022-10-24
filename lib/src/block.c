@@ -261,6 +261,12 @@ int blockchain_block_prepare(struct block *block)
 int block_save(struct block *block)
 {
     int res = 0;
+    if (!block)
+    {
+        // Null block? Could this be someone trying to exploit or a mistake of some kind..
+        return MAGICNET_ERROR_SECURITY_RISK;
+    }
+
     pthread_mutex_lock(&blockchain_lock);
     res = block_verify(block);
     if (res < 0)
