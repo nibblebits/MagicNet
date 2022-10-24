@@ -23,18 +23,17 @@ int blockchain_init()
     return 0;
 }
 
-struct blockchain* blockchain_new()
+struct blockchain *blockchain_new()
 {
     return calloc(1, sizeof(struct blockchain));
 }
 
-void blockchain_free(struct blockchain* blockchain)
+void blockchain_free(struct blockchain *blockchain)
 {
     free(blockchain);
 }
 
-
-struct block_transaction_group* block_transaction_group_new()
+struct block_transaction_group *block_transaction_group_new()
 {
     return calloc(1, sizeof(struct block_transaction_group));
 }
@@ -124,8 +123,6 @@ int block_transaction_hash_and_sign(struct block_transaction *transaction)
 
     return 0;
 }
-
-
 
 int block_transaction_add(struct block_transaction_group *transaction_group, struct block_transaction *transaction)
 {
@@ -271,7 +268,7 @@ int block_save(struct block *block)
         magicnet_log("%s block verification failed\n", __FUNCTION__);
         goto out;
     }
-    
+
     res = magicnet_database_load_block(block->hash, NULL);
     if (res >= 0)
     {
@@ -307,7 +304,7 @@ int block_save(struct block *block)
     {
         goto out;
     }
-    
+
 out:
     pthread_mutex_unlock(&blockchain_lock);
     return res;
@@ -325,9 +322,15 @@ struct block *block_clone(struct block *block)
     return block_create_with_group(block->hash, block->prev_hash, transaction_group);
 }
 
-
-const char *block_transaction_group_hash_create(struct block_transaction_group *group, char* hash_out)
+const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out)
 {
+    if (group->total_transactions == 0)
+    {
+        // No hash today....
+        memset(hash_out, 0, SHA256_STRING_LENGTH);
+        return NULL;
+    }
+
     struct buffer *tmp_buf = buffer_create();
     buffer_write_long(tmp_buf, group->total_transactions);
     for (int i = 0; i < group->total_transactions; i++)
@@ -335,20 +338,12 @@ const char *block_transaction_group_hash_create(struct block_transaction_group *
         block_buffer_write_transaction(group->transactions[i], tmp_buf);
     }
 
-    if (buffer_len(tmp_buf) == 0)
-    {
-        // No hash today....
-        memset(hash_out, 0, SHA256_STRING_LENGTH);
-        hash_out =NULL;
-        goto out;
-    }
     sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
     buffer_free(tmp_buf);
-out:
     return hash_out;
 }
 
-const char *block_hash_create(struct block *block, const char* prev_hash, char* hash_out)
+const char *block_hash_create(struct block *block, const char *prev_hash, char *hash_out)
 {
     struct buffer *tmp_buf = buffer_create();
     if (block->prev_hash)
@@ -357,13 +352,14 @@ const char *block_hash_create(struct block *block, const char* prev_hash, char* 
     }
 
     char transaction_group_hash[SHA256_STRING_LENGTH];
-    block_transaction_group_hash_create(block->transaction_group, transaction_group_hash);
-    buffer_write_bytes(tmp_buf, transaction_group_hash, sizeof(block->transaction_group->hash));
+    if (block_transaction_group_hash_create(block->transaction_group, transaction_group_hash))
+    {
+        buffer_write_bytes(tmp_buf, transaction_group_hash, sizeof(block->transaction_group->hash));
+    }
     sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
     buffer_free(tmp_buf);
     return block->hash;
 }
-
 
 bool block_prev_hash_exists(struct block *block)
 {
@@ -393,26 +389,30 @@ int block_verify(struct block *block)
         goto out;
     }
 
-    char transaction_group_hash[SHA256_STRING_LENGTH];
-    block_transaction_group_hash_create(block->transaction_group, transaction_group_hash);
-    if (memcmp(transaction_group_hash, block->transaction_group->hash, sizeof(transaction_group_hash)) != 0)
+    // We only deal deal with transaction groups when transactions exist.
+    if (block->transaction_group->total_transactions > 0)
     {
-        magicnet_log("%s the transaction group hash is not what it should be\n",__FUNCTION__);
-        res = -1;
-        goto out;
-    }
+        char transaction_group_hash[SHA256_STRING_LENGTH];
+        block_transaction_group_hash_create(block->transaction_group, transaction_group_hash);
 
-    // Validate every transaction to ensure they are correct.
-    for (int i = 0; i < block->transaction_group->total_transactions; i++)
-    {
-        struct block_transaction *transaction = block->transaction_group->transactions[i];
-        res = block_transaction_valid(transaction);
-        if (res < 0)
+        if (memcmp(transaction_group_hash, block->transaction_group->hash, sizeof(transaction_group_hash)) != 0)
         {
+            magicnet_log("%s the transaction group hash is not what it should be\n", __FUNCTION__);
+            res = -1;
             goto out;
         }
-    }
 
+        // Validate every transaction to ensure they are correct.
+        for (int i = 0; i < block->transaction_group->total_transactions; i++)
+        {
+            struct block_transaction *transaction = block->transaction_group->transactions[i];
+            res = block_transaction_valid(transaction);
+            if (res < 0)
+            {
+                goto out;
+            }
+        }
+    }
 out:
     if (res < 0)
     {
@@ -432,7 +432,7 @@ struct block *block_create_with_group(const char *hash, const char *prev_hash, s
     return block;
 }
 
-struct block *block_create(struct block_transaction_group *transaction_group, const char* prev_hash)
+struct block *block_create(struct block_transaction_group *transaction_group, const char *prev_hash)
 {
     char last_hash[SHA256_STRING_LENGTH] = {0};
     struct block *block = calloc(1, sizeof(struct block));
@@ -440,7 +440,7 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
 
     if (!prev_hash)
     {
-        if(magicnet_database_load_last_block(last_hash, NULL) >= 0)
+        if (magicnet_database_load_last_block(last_hash, NULL) >= 0)
         {
             memcpy(block->prev_hash, last_hash, sizeof(block->prev_hash));
             prev_hash = last_hash;
@@ -463,7 +463,6 @@ void block_free(struct block *block)
 
     if (block->transaction_group)
     {
-        
     }
     free(block);
 }

@@ -505,8 +505,16 @@ int magicnet_database_save_block(struct block *block)
     sqlite3_bind_text(stmt, 1, block->hash, strlen(block->hash), NULL);
     sqlite3_bind_text(stmt, 2, block->prev_hash, strlen(block->prev_hash), NULL);
     sqlite3_bind_int(stmt, 3, block->blockchain_id);
-    sqlite3_bind_text(stmt, 4, block->transaction_group->hash, strlen(block->transaction_group->hash), NULL);
 
+    // transaction group hash is NULL in the case of zero transactions in a group
+    if (block->transaction_group->total_transactions != 0)
+    {
+        sqlite3_bind_text(stmt, 4, block->transaction_group->hash, strlen(block->transaction_group->hash), NULL);
+    }
+    else
+    {
+        sqlite3_bind_null(stmt, 4);
+    }
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
     {
