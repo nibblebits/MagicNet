@@ -346,7 +346,7 @@ const char *block_transaction_group_hash_create(struct block_transaction_group *
 const char *block_hash_create(struct block *block, const char *prev_hash, char *hash_out)
 {
     struct buffer *tmp_buf = buffer_create();
-    if (block->prev_hash)
+    if (prev_hash)
     {
         buffer_write_bytes(tmp_buf, (void *)prev_hash, SHA256_STRING_LENGTH);
     }
