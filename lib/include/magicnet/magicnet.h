@@ -72,6 +72,9 @@ enum
 
 struct block;
 
+struct blockchain;
+
+
 struct magicnet_packet
 {
 
@@ -163,9 +166,15 @@ struct magicnet_packet
                 {
                     struct block_transaction* transaction;
                 } transaction_send;
+
                 struct magicnet_block_send
                 {
-                    struct block *block;
+                    // a vector of struct block* that holds the blocks we are sending.
+                    // A copy of the exact same block is expected for each blockchain known by the peer
+                    struct vector* blocks;
+                    // The group of transactions associated with all blocks in the vector above.
+                    struct block_transaction_group *transaction_group;
+
                 } block_send;
             };
         } payload;
@@ -403,6 +412,7 @@ struct magicnet_program *magicnet_program(const char *name);
 
 struct block *block_create_with_group(const char *hash, const char *prev_hash, struct block_transaction_group *group);
 struct block *block_create(struct block_transaction_group *transaction_group, const char* prev_hash);
+const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out);
 int block_save(struct block* block);
 void block_free(struct block *block);
 int blockchain_init();

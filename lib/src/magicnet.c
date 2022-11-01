@@ -68,7 +68,22 @@ int magicnet_register_structure(long type, size_t size)
     return 0;
 }
 
+void magicnet_block_send_packet_free(struct magicnet_packet* packet)
+{
+    struct magicnet_block_send* block_send_packet = &magicnet_signed_data(packet)->payload.block_send;
+    vector_set_peek_pointer(block_send_packet->blocks, 0);
+    struct block* block = vector_peek_ptr(block_send_packet->blocks);
+    while(block)
+    {
+        // To be dealth with later.
+        block->transaction_group = NULL;
+        block_free(block);
+        block = vector_peek_ptr(block_send_packet->blocks);
+    }
 
+    // Here we go we free transaction group here.
+    block_transaction_group_free(block_send_packet->transaction_group);
+}
 void magicnet_free_packet_pointers(struct magicnet_packet* packet)
 {   
     if (!packet)
@@ -106,7 +121,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet* packet)
             break;
 
         case MAGICNET_PACKET_TYPE_BLOCK_SEND:
-            block_free(magicnet_signed_data(packet)->payload.block_send.block);
+            magicnet_block_send_packet_free(packet);
             break;
 
 

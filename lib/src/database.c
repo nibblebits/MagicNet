@@ -25,9 +25,10 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"proven_verified_blocks\"  INTEGER);",
 
                                "CREATE TABLE \"transaction_groups\" ( \
-                                \"hash\"  PRIMARY KEY	TEXT,  \
-                                \"total_transactions\" INTEGER \
-                                );",
+                                \"hash\"	TEXT, \
+                                \"total_transactions\"	INTEGER DEFAULT 0, \
+                                PRIMARY KEY(\"hash\") \
+                            );",
 
                                "CREATE TABLE \"transactions\" ( \
                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \

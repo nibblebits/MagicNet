@@ -987,97 +987,87 @@ out:
     return res;
 }
 
+
 int magicnet_client_read_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
-//     int res = 0;
-//     char block_hash[SHA256_STRING_LENGTH];
-//     char block_prev_hash[SHA256_STRING_LENGTH];
-//     bzero(block_hash, sizeof(block_hash));
-//     bzero(block_prev_hash, sizeof(block_prev_hash));
-//     struct block_data *block_data = block_data_new();
-//     struct block *block = NULL;
-//     bool has_prev_hash = false;
-//     int total_transactions = 0;
-//     res = magicnet_read_bytes(client, block_hash, sizeof(block_hash), packet_out->not_sent.tmp_buf);
-//     if (res < 0)
-//     {
-//         goto out;
-//     }
+    int res = 0;
+    int total_transactions = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_transactions < 0)
+    {
+        res = total_transactions;
+        goto out;
+    }
 
-//     has_prev_hash = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
-//     if (has_prev_hash < 0)
-//     {
-//         res = has_prev_hash;
-//         goto out;
-//     }
+    struct block_transaction_group* transaction_group = block_transaction_group_new();
+    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = transaction_group;
+    for (int i  = 0; i < total_transactions; i++)
+    {
+        struct block_transaction* transaction = block_transaction_new();
+        res = magicnet_read_transaction(client, transaction, packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            block_transaction_free(transaction);
+            goto out;
+        }
 
-//     if (has_prev_hash)
-//     {
-//         res = magicnet_read_bytes(client, block_prev_hash, sizeof(block_prev_hash), packet_out->not_sent.tmp_buf);
-//         if (res < 0)
-//         {
-//             goto out;
-//         }
-//     }
-//     total_transactions = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
-//     if (total_transactions < 0)
-//     {
-//         res = total_transactions;
-//         goto out;
-//     }
+        block_transaction_add(transaction_group, transaction);
+    }
+    block_transaction_group_hash_create(transaction_group, transaction_group->hash);
+    magicnet_signed_data(packet_out)->payload.block_send.blocks = vector_create(sizeof(struct block*));
 
-//     if (total_transactions > MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK)
-//     {
-//         res = -1;
-//         magicnet_log("%s peer tried to send us too many transactions. This is either a poorly wrote client or a hack attmept.\n", __FUNCTION__);
-//         goto out;
-//     }
+    int total_blocks = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_blocks < 0)
+    {
+        res = total_blocks;
+        goto out;
+    }
 
-//     block = block_create_with_group(block_hash, block_prev_hash, block_data);
-//     for (int i = 0; i < total_transactions; i++)
-//     {
-//         struct block_transaction *transaction = block_transaction_new();
-//         res = magicnet_read_transaction(client, transaction, packet_out->not_sent.tmp_buf);
-//         if (res < 0)
-//         {
-//             goto out;
-//         }
+    for (int i = 0; i < total_blocks; i++)
+    {
+        char hash[SHA256_STRING_LENGTH];
+        char prev_hash[SHA256_STRING_LENGTH];
+        char transaction_group_hash[SHA256_STRING_LENGTH];
+        res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+        res = magicnet_read_bytes(client, prev_hash, sizeof(prev_hash), packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+        res = magicnet_read_bytes(client, transaction_group_hash, sizeof(transaction_group_hash), packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
 
-//         res = block_transaction_add(block, transaction);
-//         if (res < 0)
-//         {
-//             goto out;
-//         }
-//     }
-
-//     // Lets verify the whole block to make sure its right.
-//     // If its local host we can assume its not been signed yet since local host clients
-//     // have no access to our keypair.
-//     // Therefore theirs no need to verify for incoming local host clients.
-//     if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
-//     {
-//         res = block_verify(block);
-//         if (res < 0)
-//         {
-//             goto out;
-//         }
-//     }
-
-//     // Final thing to do is to attach the block to the packet
-//     magicnet_signed_data(packet_out)->payload.block_send.block = block;
-
-// out:
-//     if (res < 0)
-//     {
-//         block_data_free(block_data);
-//         if (block)
-//         {
-//             block->transaction_group = NULL;
-//             block_free(block);
-//         }
-//     }
-//     return res;
-return 0;
+        if (memcmp(transaction_group_hash, transaction_group->hash, sizeof(transaction_group_hash)) != 0)
+        {
+            magicnet_log("%s the transaction group hash does not match the one in the block sent to us\n", __FUNCTION__);
+            res = MAGICNET_ERROR_SECURITY_RISK;
+            break;
+        }
+        struct block* block = block_create_with_group(hash, prev_hash, transaction_group);
+        if (!block)
+        {
+            res = MAGICNET_ERROR_UNKNOWN;
+            block_free(block);
+            break;
+        }
+        res = block_verify(block);
+        if (res < 0)
+        {
+            magicnet_log("%s issue verifying the received block\n", __FUNCTION__);
+            block_free(block);
+            break;
+        }
+        // Add the block 
+        vector_push(magicnet_signed_data(packet_out)->payload.block_send.blocks, &block);
+    }
+out:
+    return res;
 }
 
 int magicnet_client_read_tansaction_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
@@ -1443,63 +1433,53 @@ out:
 int magicnet_client_write_packet_block_send(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    char blank_hash[SHA256_STRING_LENGTH];
-    bzero(blank_hash, sizeof(blank_hash));
+    struct vector* blocks_to_send = magicnet_signed_data(packet)->payload.block_send.blocks;
+    struct block_transaction_group* transaction_group = magicnet_signed_data(packet)->payload.block_send.transaction_group;
+    res = magicnet_write_int(client, transaction_group->total_transactions, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
 
-//     struct block *block_to_send = magicnet_signed_data(packet)->payload.block_send.block;
-//     // Check for possible corrupted data or an attempt to cause a buffer overflow.
-//     if (block_to_send->data->total_transactions >= MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK)
-//     {
-//         res = -1;
-//         goto out;
-//     }
+    for (int i = 0; i < transaction_group->total_transactions; i++)
+    {
+        res = magicnet_write_transaction(client, transaction_group->transactions[i], packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+    }
 
-//     bool has_prev_hash = memcmp(block_to_send->prev_hash, blank_hash, sizeof(blank_hash)) != 0;
-//     res = magicnet_write_bytes(client, block_to_send->hash, sizeof(block_to_send->hash), packet->not_sent.tmp_buf);
-//     if (res < 0)
-//     {
-//         goto out;
-//     }
+    res = magicnet_write_int(client, vector_count(blocks_to_send), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
 
-//     res = magicnet_write_int(client, has_prev_hash, packet->not_sent.tmp_buf);
-//     if (res < 0)
-//     {
-//         goto out;
-//     }
+    vector_set_peek_pointer(blocks_to_send, 0);
+    struct block* block = vector_peek_ptr(blocks_to_send);
+    while(block)
+    {
+        res = magicnet_write_bytes(client, block->hash, sizeof(block->hash), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+        res = magicnet_write_bytes(client, block->prev_hash, sizeof(block->prev_hash), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
 
-//     if (has_prev_hash)
-//     {
-//         res = magicnet_write_bytes(client, block_to_send->prev_hash, sizeof(block_to_send->prev_hash), packet->not_sent.tmp_buf);
-//         if (res < 0)
-//         {
-//             goto out;
-//         }
-//     }
-
-//     res = magicnet_write_int(client, block_to_send->data->total_transactions, packet->not_sent.tmp_buf);
-//     if (res < 0)
-//     {
-//         goto out;
-//     }
-
-//     for (int i = 0; i < block_to_send->data->total_transactions; i++)
-//     {
-//         struct block_transaction *transaction = block_to_send->data->transactions[i];
-//         if (!transaction)
-//         {
-//             // We aren't allowed NULL transactions inbetween valid ones.
-//             res = -1;
-//             goto out;
-//         }
-
-//         res = magicnet_write_transaction(client, transaction, packet->not_sent.tmp_buf);
-//         if (res < 0)
-//         {
-//             goto out;
-//         }
-//     }
-// out:
-//     return res;
+        res = magicnet_write_bytes(client, block->transaction_group->hash, sizeof(block->transaction_group->hash), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+        block = vector_peek_ptr(blocks_to_send);
+    }
+out:
+    return res;
 }
 
 int magicnet_client_write_packet_transaction_send(struct magicnet_client *client, struct magicnet_packet *packet)
@@ -1770,6 +1750,23 @@ struct magicnet_packet *magicnet_client_get_next_packet_to_process(struct magicn
     return packet;
 }
 
+void magicnet_copy_packet_block_send(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+{
+    struct magicnet_block_send* block_send_packet_in = &magicnet_signed_data(packet_in)->payload.block_send;
+    struct magicnet_block_send* block_send_packet_out = &magicnet_signed_data(packet_out)->payload.block_send;
+    struct vector* block_vector_out = vector_create(sizeof(struct block));
+
+    vector_set_peek_pointer(block_send_packet_in->blocks, 0);
+    struct block* block = vector_peek_ptr(block_send_packet_in->blocks);
+    while(block)
+    {
+        vector_push(block_vector_out, block_clone(block));
+        block = vector_peek_ptr(block_send_packet_in->blocks);
+    }
+    block_send_packet_out->transaction_group = block_send_packet_in->transaction_group;
+    block_send_packet_out->blocks = block_vector_out;
+}
+
 /**
  * @brief Copies the packet including copying all internal pointers and creating new memory
  * for the destination packet
@@ -1791,8 +1788,7 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         magicnet_signed_data(packet_out)->payload.transaction_send.transaction = block_transaction_clone(magicnet_signed_data(packet_in)->payload.transaction_send.transaction);
         break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
-        magicnet_signed_data(packet_out)->payload.block_send.block = block_clone(magicnet_signed_data(packet_in)->payload.block_send.block);
-
+        magicnet_copy_packet_block_send(packet_out, packet_in);
         break;
     }
 }
@@ -2352,7 +2348,7 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
-    block_save(magicnet_signed_data(packet)->payload.block_send.block);
+   // block_save(magicnet_signed_data(packet)->payload.block_send.block);
     magicnet_server_add_packet_to_relay(client->server, packet);
     return 0;
 }
@@ -2731,11 +2727,46 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
     server->next_block.step = BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS;
 }
 
-void magicnet_server_create_and_send_block_single(struct magicnet_server* server, const char* prev_hash)
+int magicnet_server_create_block(struct magicnet_server* server, const char* prev_hash, struct block_transaction_group* transaction_group, struct block** block_out)
 {
-    struct block_transaction_group *transaction_group = block_transaction_group_new();
+   
     struct block *block = block_create(transaction_group, prev_hash);
+    block->transaction_group = transaction_group;
+    if (block_hash_sign_verify(block) < 0)
+    {
+        magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
+        // This transaction group is still depended on so we wont delete it. Therefore NULL it
+        // so its not deleted by block_free
+        block->transaction_group = NULL;
+        block_free(block);
+        return -1;
+    }
 
+    // Save the block
+    block_save(block);
+    *block_out = block;
+    return 0;
+}
+
+void magicnet_server_create_and_send_block(struct magicnet_server *server)
+{
+    magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
+
+    struct vector* blockchains = vector_create(sizeof(struct blockchain*));
+    struct vector* block_vector = vector_create(sizeof(struct block));
+    struct block_transaction_group *transaction_group = block_transaction_group_new();
+    struct magicnet_packet *packet = magicnet_packet_new();
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(packet)->payload.block_send.blocks = block_vector;
+    magicnet_signed_data(packet)->payload.block_send.transaction_group = transaction_group;
+
+    int res = magicnet_database_blockchain_all(blockchains);
+    if (res < 0)
+    {
+        magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
+        goto out;
+    }
     // Let's loop through all of the block transactions that we are aware of and add them to the block
     vector_set_peek_pointer(server->next_block.block_transactions, 0);
     struct block_transaction *transaction = vector_peek_ptr(server->next_block.block_transactions);
@@ -2745,47 +2776,7 @@ void magicnet_server_create_and_send_block_single(struct magicnet_server* server
         transaction = vector_peek_ptr(server->next_block.block_transactions);
     }
 
-    if (block_hash_sign_verify(block) < 0)
-    {
-        magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
-        block_transaction_group_free(transaction_group);
-        block->transaction_group = NULL;
-        block_free(block);
-        return;
-    }
 
-    // Save the block
-    block_save(block);
-
-    // Send the block to the rest of the network through relay system.
-    struct magicnet_packet *packet = magicnet_packet_new();
-    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
-    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    magicnet_signed_data(packet)->payload.block_send.block = block;
-    magicnet_server_add_packet_to_relay(server, packet);
-    magicnet_free_packet(packet);
-}
-
-void magicnet_server_create_and_send_block(struct magicnet_server *server)
-{
-    magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
-    char block_data_hash[SHA256_STRING_LENGTH];
-    bzero(block_data_hash, sizeof(block_data_hash));
-
-    struct vector* blockchains = vector_create(sizeof(struct blockchain*));
-    int res = magicnet_database_blockchain_all(blockchains);
-    if (res < 0)
-    {
-        magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
-        return;
-    }
-
-    if (vector_empty(blockchains))
-    {
-        // We don't have a blockchain yet, this must be the first block
-        magicnet_server_create_and_send_block_single(server, NULL);
-        return;
-    }
 
     // We have blockchains, loop through and create a block for each one
     // this can be optimized in the future to not duplicate the transactions.
@@ -2793,10 +2784,20 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     struct blockchain* blockchain = vector_peek_ptr(blockchains);
     while(blockchain)
     {
-        magicnet_server_create_and_send_block_single(server, blockchain->last_hash);
+        struct block* block = NULL;
+        int res = magicnet_server_create_block(server, blockchain->last_hash, transaction_group, &block);
+        if (res >= 0)
+        {
+            vector_push(block_vector, &block);
+        }
         blockchain_free(blockchain);
         blockchain = vector_peek_ptr(blockchains);
     }
+       
+    magicnet_server_add_packet_to_relay(server, packet);
+
+out:
+    magicnet_free_packet(packet);
     vector_free(blockchains);
    
 }
