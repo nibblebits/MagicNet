@@ -1758,7 +1758,8 @@ void magicnet_copy_packet_block_send(struct magicnet_packet *packet_out, struct 
     struct block *block = vector_peek_ptr(block_send_packet_in->blocks);
     while (block)
     {
-        vector_push(block_vector_out, block_clone(block));
+        struct block* cloned_block = block_clone(block);
+        vector_push(block_vector_out, &cloned_block);
         block = vector_peek_ptr(block_send_packet_in->blocks);
     }
     block_send_packet_out->transaction_group = block_transaction_group_clone(block_send_packet_in->transaction_group);
