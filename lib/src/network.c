@@ -1763,7 +1763,7 @@ void magicnet_copy_packet_block_send(struct magicnet_packet* packet_out, struct 
         vector_push(block_vector_out, block_clone(block));
         block = vector_peek_ptr(block_send_packet_in->blocks);
     }
-    block_send_packet_out->transaction_group = block_send_packet_in->transaction_group;
+    block_send_packet_out->transaction_group = block_transaction_group_clone(block_send_packet_in->transaction_group);
     block_send_packet_out->blocks = block_vector_out;
 }
 

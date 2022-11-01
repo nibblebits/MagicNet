@@ -55,6 +55,18 @@ void block_transaction_group_free(struct block_transaction_group *transaction_gr
     }
     free(transaction_group);
 }
+struct block_transaction_group* block_transaction_group_clone(struct block_transaction_group* transaction_group_in)
+{
+    struct block_transaction_group* cloned_transaction_group = block_transaction_group_new();
+    for (int i = 0; i < transaction_group_in->total_transactions; i++)
+    {
+        cloned_transaction_group->transactions[i] = block_transaction_clone(transaction_group_in->transactions[i]);
+    }
+    cloned_transaction_group->total_transactions = transaction_group_in->total_transactions;
+    memcpy(cloned_transaction_group->hash, transaction_group_in->hash, sizeof(cloned_transaction_group->hash));
+    return cloned_transaction_group;
+}
+
 
 struct block_transaction *block_transaction_new()
 {
