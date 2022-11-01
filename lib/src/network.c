@@ -2753,7 +2753,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
 
     struct vector* blockchains = vector_create(sizeof(struct blockchain*));
-    struct vector* block_vector = vector_create(sizeof(struct block));
+    struct vector* block_vector = vector_create(sizeof(struct block*));
     struct block_transaction_group *transaction_group = block_transaction_group_new();
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
