@@ -1871,7 +1871,7 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
     return 0;
 }
 
-struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_client *client)
+struct magicnet_packet const *magicnet_client_next_packet_to_relay(struct magicnet_client *client)
 {
     if (!client->server)
     {
@@ -1988,7 +1988,7 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     bool has_packet_to_relay = false;
     // We got to lock this server
     magicnet_server_lock(client->server);
-    struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+    struct magicnet_packet const *tmp_packet = magicnet_client_next_packet_to_relay(client);
     if (tmp_packet)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
@@ -2429,7 +2429,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     magicnet_signed_data(packet_to_relay)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     struct magicnet_packet *packet = NULL;
     magicnet_server_lock(client->server);
-    struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+    struct magicnet_packet const *tmp_packet = magicnet_client_next_packet_to_relay(client);
     if (tmp_packet)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
@@ -2797,7 +2797,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_server_add_packet_to_relay(server, packet);
 
 out:
-    magicnet_free_packet(packet);
+   // magicnet_free_packet(packet);
     vector_free(blockchains);
    
 }
