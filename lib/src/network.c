@@ -2793,7 +2793,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_server_add_packet_to_relay(server, packet);
 
 out:
-    // magicnet_free_packet(packet);
+     magicnet_free_packet(packet);
     vector_free(blockchains);
 }
 
