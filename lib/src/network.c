@@ -1754,7 +1754,7 @@ void magicnet_copy_packet_block_send(struct magicnet_packet* packet_out, struct 
 {
     struct magicnet_block_send* block_send_packet_in = &magicnet_signed_data(packet_in)->payload.block_send;
     struct magicnet_block_send* block_send_packet_out = &magicnet_signed_data(packet_out)->payload.block_send;
-    struct vector* block_vector_out = vector_create(sizeof(struct block));
+    struct vector* block_vector_out = vector_create(sizeof(struct block*));
 
     vector_set_peek_pointer(block_send_packet_in->blocks, 0);
     struct block* block = vector_peek_ptr(block_send_packet_in->blocks);
