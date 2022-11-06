@@ -15,7 +15,11 @@ int main(int argc, char** argv)
         printf("could not initialize the magicnet server\n");
         return res;
     }
+    magicnet_log("test");
 
+    struct magicnet_chain_downloader* downloader = magincnet_chain_downloader_download("hello");
+    magicnet_chain_downloader_finish(downloader);
+    magicnet_log("done");
     struct magicnet_server* server = magicnet_server_start();
     if (!server)
     {

@@ -360,6 +360,23 @@ struct block
     int blockchain_id;
 };
 
+
+struct magicnet_chain_downloader
+{
+    // The download lock. Should be used when dealing with this downloader
+    pthread_mutex_t lock;
+
+    // The block hash we should start with. We will download until a NULL previous hash is found.
+    char starting_hash[SHA256_STRING_LENGTH];
+
+    // The current total blocks downloaded
+    size_t total_blocks_downloaded;
+
+    pthread_t downloader_thread_id;
+
+    bool finished;
+};
+
 enum
 {
     MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,
@@ -439,5 +456,11 @@ int block_hash_sign_verify(struct block* block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
 const char *block_hash_create(struct block *block, const char* prev_hash, char* hash_out);
 struct block *magicnet_block_load(const char *hash);
+
+
+// Blockchain downloader (used for desyncs..)
+
+struct magicnet_chain_downloader* magincnet_chain_downloader_download(const char* prev_hash);
+void magicnet_chain_downloader_finish(struct magicnet_chain_downloader* downloader);
 
 #endif

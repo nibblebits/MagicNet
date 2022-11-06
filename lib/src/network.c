@@ -2410,7 +2410,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_server_process_block_send_packet(client, packet);
         break;
-
+    
     case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
         res = magicnet_server_process_transaction_send_packet(client, packet);
         break;

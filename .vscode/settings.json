@@ -9,6 +9,7 @@
         "fcntl.h": "c",
         "stdbool.h": "c",
         "type_traits": "c",
-        "dirent.h": "c"
+        "dirent.h": "c",
+        "unistd.h": "c"
     }
 }

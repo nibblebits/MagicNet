@@ -1,4 +1,4 @@
-OBJECTS= ./build/vector.o ./build/magicnet.o ./build/init.o ./build/block.o ./build/log.o ./build/network.o ./build/database.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
+OBJECTS= ./build/vector.o ./build/magicnet.o ./build/init.o ./build/block.o ./build/log.o ./build/network.o ./build/cdownloader.o ./build/database.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
 INCLUDES= -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector
 ADDITIONAL_FLAGS= -g -fPIC
 all: ${OBJECTS}
@@ -17,6 +17,9 @@ all: ${OBJECTS}
 
 ./build/network.o:./src/network.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./src/network.c -c -o ./build/network.o 
+
+./build/cdownloader.o:./src/cdownloader.c
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./src/cdownloader.c -c -o ./build/cdownloader.o 
 
 ./build/database.o:./src/database.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./src/database.c -c -o ./build/database.o 

@@ -332,7 +332,8 @@ out:
  * Creates a new blockchain due to the block provided.
  * No checks are preformed you must ensure this is what you want to do before you call this function
  */
-int magicnet_database_blockchain_create(BLOCKCHAIN_TYPE type, const char *begin_hash, struct blockchain *blockchain_out)
+int magicnet_database_blockchain_create
+(BLOCKCHAIN_TYPE type, const char *begin_hash, struct blockchain *blockchain_out)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
