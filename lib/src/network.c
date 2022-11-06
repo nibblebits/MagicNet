@@ -2747,6 +2747,12 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
         return -1;
     }
 
+    if(block_verify(block) < 0)
+    {
+        magicnet_log("%s failed to verify the block we created. We did something wrong\n");
+        return -1;
+    }
+    
     // Save the block
     block_save(block);
     *block_out = block;
@@ -2773,7 +2779,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     struct block_transaction *transaction = vector_peek_ptr(server->next_block.block_transactions);
     while (transaction)
     {
-        block_transaction_add(transaction_group, transaction);
+        block_transaction_add(transaction_group, block_transaction_clone(transaction));
         transaction = vector_peek_ptr(server->next_block.block_transactions);
     }
 
