@@ -2347,7 +2347,13 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
-    // block_save(magicnet_signed_data(packet)->payload.block_send.block);
+    vector_set_peek_pointer(magicnet_signed_data(packet)->payload.block_send.blocks, 0);
+    struct block* block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
+    while(block)
+    {
+        block_save(block);
+        block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
+    }
     magicnet_server_add_packet_to_relay(client->server, packet);
     return 0;
 }
@@ -2749,6 +2755,7 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 
 void magicnet_server_create_and_send_block(struct magicnet_server *server)
 {
+    int res = 0;
     magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
 
     struct vector *blockchains = vector_create(sizeof(struct blockchain *));
@@ -2760,12 +2767,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_signed_data(packet)->payload.block_send.blocks = block_vector;
     magicnet_signed_data(packet)->payload.block_send.transaction_group = transaction_group;
 
-    int res = magicnet_database_blockchain_all(blockchains);
-    if (res < 0)
-    {
-        magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
-        goto out;
-    }
+ 
     // Let's loop through all of the block transactions that we are aware of and add them to the block
     vector_set_peek_pointer(server->next_block.block_transactions, 0);
     struct block_transaction *transaction = vector_peek_ptr(server->next_block.block_transactions);
@@ -2775,26 +2777,44 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
         transaction = vector_peek_ptr(server->next_block.block_transactions);
     }
 
-    // We have blockchains, loop through and create a block for each one
-    // this can be optimized in the future to not duplicate the transactions.
-    vector_set_peek_pointer(blockchains, 0);
-    struct blockchain *blockchain = vector_peek_ptr(blockchains);
-    while (blockchain)
+    if (vector_empty(blockchains))
     {
         struct block *block = NULL;
-        int res = magicnet_server_create_block(server, blockchain->last_hash, transaction_group, &block);
+        res = magicnet_server_create_block(server, NULL, transaction_group, &block);
         if (res >= 0)
         {
             vector_push(block_vector, &block);
         }
-        blockchain_free(blockchain);
-        blockchain = vector_peek_ptr(blockchains);
     }
+    else
+    {
+        res = magicnet_database_blockchain_all(blockchains);
+        if (res < 0)
+        {
+            magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
+            goto out;
+        }
 
+        // We have blockchains, loop through and create a block for each one
+        // this can be optimized in the future to not duplicate the transactions.
+        vector_set_peek_pointer(blockchains, 0);
+        struct blockchain *blockchain = vector_peek_ptr(blockchains);
+        while (blockchain)
+        {
+            struct block *block = NULL;
+            res = magicnet_server_create_block(server, blockchain->last_hash, transaction_group, &block);
+            if (res >= 0)
+            {
+                vector_push(block_vector, &block);
+            }
+            blockchain_free(blockchain);
+            blockchain = vector_peek_ptr(blockchains);
+        }
+    }
     magicnet_server_add_packet_to_relay(server, packet);
 
 out:
-     magicnet_free_packet(packet);
+    magicnet_free_packet(packet);
     vector_free(blockchains);
 }
 
