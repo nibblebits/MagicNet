@@ -34,6 +34,7 @@ int magicnet_chain_downloader_client_add(struct magicnet_chain_downloader* downl
 
             downloader->clients[i] = client;
             res = 0;
+            break;
         }
     }   
     return res;
