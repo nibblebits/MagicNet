@@ -55,17 +55,21 @@ void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_cha
     }
 
    
-    while(magicnet_chain_downloader_connected_clients_count(downloader) <= MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS)
+    while(magicnet_chain_downloader_connected_clients_count(downloader) < MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS)
     {
          int random_index = rand() % vector_count(ip_vec);
         struct sockaddr_in* addr = vector_peek_at(ip_vec, random_index);
         struct magicnet_client* client = magicnet_tcp_network_connect(*addr, 0, "chain-downloader");
         if (client)
         {
-            if(magicnet_chain_downloader_client_add(downloader, client) == 0)
+            if(magicnet_chain_downloader_client_add(downloader, client) < 0)
             {
-                magicnet_log("%s added a new client to the chain downloader\n", __FUNCTION__);
+                magicnet_log("%s failed to add client", __FUNCTION__);
+                magicnet_client_free(client);
+                continue;
             }
+
+            magicnet_log("%s added a new client to the chain downloader\n", __FUNCTION__);
         }
     }
 
