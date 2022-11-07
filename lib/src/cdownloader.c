@@ -64,7 +64,7 @@ void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_cha
         {
             if(magicnet_chain_downloader_client_add(downloader, client) < 0)
             {
-                magicnet_log("%s failed to add client", __FUNCTION__);
+                magicnet_log("%s failed to add client\n", __FUNCTION__);
                 magicnet_client_free(client);
                 continue;
             }
