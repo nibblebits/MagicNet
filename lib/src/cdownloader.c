@@ -54,11 +54,11 @@ void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_cha
         return;
     }
 
-    int random_index = rand() % vector_count(ip_vec);
-    struct sockaddr_in* addr = vector_peek_at(ip_vec, random_index);
-    size_t count = 0;
-    while(count <= magicnet_chain_downloader_connected_clients_count(downloader))
+   
+    while(magicnet_chain_downloader_connected_clients_count(downloader) <= MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS)
     {
+         int random_index = rand() % vector_count(ip_vec);
+        struct sockaddr_in* addr = vector_peek_at(ip_vec, random_index);
         struct magicnet_client* client = magicnet_tcp_network_connect(*addr, 0, "chain-downloader");
         if (client)
         {
@@ -67,7 +67,6 @@ void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_cha
                 magicnet_log("%s added a new client to the chain downloader\n", __FUNCTION__);
             }
         }
-        count++;
     }
 
     vector_free(ip_vec);
