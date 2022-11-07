@@ -128,7 +128,16 @@ int magicnet_ip_file_add_ip(struct magicnet_server *server, const char *ip_addre
     return fwrite(ip_address, strlen(ip_address), 1, server->ip_file) > 0 ? 0 : -1;
 }
 
-struct magicnet_server *magicnet_server_start()
+struct magicnet_client *magicnet_client_new()
+{
+    return calloc(1, sizeof(struct magicnet_client));
+}
+void magicnet_client_free(struct magicnet_client *client)
+{
+    free(client);
+}
+
+struct magicnet_server *magicnet_server_start(int port)
 {
     int sockfd, len;
     struct sockaddr_in servaddr, cli;
@@ -149,7 +158,7 @@ struct magicnet_server *magicnet_server_start()
     // assign IP, PORT
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    servaddr.sin_port = htons(MAGICNET_SERVER_PORT);
+    servaddr.sin_port = htons(port);
 
     int _true = 1;
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &_true, sizeof(int)) < 0)
@@ -525,7 +534,23 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     }
 }
 
-struct magicnet_client *magicnet_tcp_network_connect_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name)
+/**
+ * Pushes all connected ip addresses to the output vector.
+ *
+ * Output vector should be sizeof(struct sockaddr_in)
+ */
+void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server, struct vector *vector_out)
+{
+    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    {
+        if (magicnet_connected(&server->outgoing_clients[i]))
+        {
+            vector_push(vector_out, &server->outgoing_clients[i].client_info);
+        }
+    }
+}
+
+struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name)
 {
     int sockfd;
     struct sockaddr_in servaddr, cli;
@@ -1631,10 +1656,66 @@ out:
 
 bool magicnet_connected(struct magicnet_client *client)
 {
-    return client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
+    return client && client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
 }
 
-struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int port, int flags, const char *program_name)
+struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, const char *program_name)
+{
+    int sockfd;
+    // socket create and varification
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == -1)
+    {
+        return NULL;
+    }
+
+    struct timeval timeout;
+    timeout.tv_sec = MAGICNET_CLIENT_TIMEOUT_SECONDS;
+    timeout.tv_usec = 0;
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
+                   sizeof timeout) < 0)
+    {
+        // magicnet_log("Failed to set socket timeout\n");
+        return NULL;
+    }
+
+    // connect the client socket to server socket
+    if (connect(sockfd, (const struct sockaddr *)&addr, sizeof(addr)) != 0)
+    {
+        return NULL;
+    }
+
+    struct magicnet_client *mclient = magicnet_client_new();
+    mclient->sock = sockfd;
+    mclient->server = NULL;
+    mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+
+    // Bit crappy, convert to integer then test...
+    // CHECK FOR INTEGER HERE
+    // if (strcmp(ip_address, "127.0.0.1") == 0)
+    // {
+    //     mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
+    // }
+
+    if (program_name)
+    {
+        memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
+    }
+
+    if (flags & MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE)
+    {
+        mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
+    }
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name);
+    if (res < 0)
+    {
+        magicnet_close(mclient);
+        mclient = NULL;
+    }
+    return mclient;
+}
+struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name)
 {
     int sockfd;
     struct sockaddr_in servaddr, cli;
@@ -1676,7 +1757,7 @@ struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int
         return NULL;
     }
 
-    struct magicnet_client *mclient = calloc(1, sizeof(struct magicnet_client));
+    struct magicnet_client *mclient = magicnet_client_new();
     mclient->sock = sockfd;
     mclient->server = NULL;
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
@@ -1758,7 +1839,7 @@ void magicnet_copy_packet_block_send(struct magicnet_packet *packet_out, struct 
     struct block *block = vector_peek_ptr(block_send_packet_in->blocks);
     while (block)
     {
-        struct block* cloned_block = block_clone(block);
+        struct block *cloned_block = block_clone(block);
         vector_push(block_vector_out, &cloned_block);
         block = vector_peek_ptr(block_send_packet_in->blocks);
     }
@@ -2348,8 +2429,8 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
 {
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
     vector_set_peek_pointer(magicnet_signed_data(packet)->payload.block_send.blocks, 0);
-    struct block* block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
-    while(block)
+    struct block *block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
+    while (block)
     {
         block_save(block);
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
@@ -2410,7 +2491,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_server_process_block_send_packet(client, packet);
         break;
-    
+
     case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
         res = magicnet_server_process_transaction_send_packet(client, packet);
         break;
@@ -2607,7 +2688,7 @@ void magicnet_server_attempt_new_connections(struct magicnet_server *server)
         return;
     }
 
-    struct magicnet_client *client = magicnet_tcp_network_connect_for_server(server, ip, MAGICNET_SERVER_PORT, MAGICNET_LISTEN_ALL_PROGRAM);
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip_for_server(server, ip, MAGICNET_SERVER_PORT, MAGICNET_LISTEN_ALL_PROGRAM);
     if (client)
     {
         pthread_t threadId;
@@ -2747,12 +2828,12 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
         return -1;
     }
 
-    if(block_verify(block) < 0)
+    if (block_verify(block) < 0)
     {
         magicnet_log("%s failed to verify the block we created. We did something wrong\n");
         return -1;
     }
-    
+
     // Save the block
     block_save(block);
     *block_out = block;
@@ -2773,7 +2854,6 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_signed_data(packet)->payload.block_send.blocks = block_vector;
     magicnet_signed_data(packet)->payload.block_send.transaction_group = transaction_group;
 
- 
     // Let's loop through all of the block transactions that we are aware of and add them to the block
     vector_set_peek_pointer(server->next_block.block_transactions, 0);
     struct block_transaction *transaction = vector_peek_ptr(server->next_block.block_transactions);

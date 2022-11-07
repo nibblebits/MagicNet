@@ -374,6 +374,12 @@ struct magicnet_chain_downloader
 
     pthread_t downloader_thread_id;
 
+    // The server 
+    struct magicnet_server* server;
+
+    // The clients we are using to download the chain from.
+    struct magicnet_client* clients[MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS];
+
     bool finished;
 };
 
@@ -385,17 +391,32 @@ enum
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
 
 };
+
+void magicnet_server_lock(struct magicnet_server *server);
+void magicnet_server_unlock(struct magicnet_server *server);
+struct magicnet_client* magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, const char *program_name);
+struct magicnet_client* magicnet_client_new();
+void magicnet_client_free(struct magicnet_client* client);
+bool magicnet_connected(struct magicnet_client *client);
+
 struct signed_data *magicnet_signed_data(struct magicnet_packet *packet);
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
 int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name);
-struct magicnet_client *magicnet_tcp_network_connect(const char *ip_address, int port, int flags, const char *program_name);
+struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
+
+/**
+ * Pushes all connected ip addresses to the output vector.
+ * 
+ * Output vector should be sizeof(struct sockaddr_in)
+*/
+void magicnet_server_push_outgoing_connected_ips(struct magicnet_server* server, struct vector* vector_out);
 
 /**
  * @brief Makes a transaction on the network which will eventually be put into a block.
@@ -415,6 +436,11 @@ int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
+
+
+// Shared network functions
+const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server);
+struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name);
 
 
 /**
@@ -460,7 +486,7 @@ struct block *magicnet_block_load(const char *hash);
 
 // Blockchain downloader (used for desyncs..)
 
-struct magicnet_chain_downloader* magincnet_chain_downloader_download(const char* prev_hash);
+struct magicnet_chain_downloader* magincnet_chain_downloader_download(struct magicnet_server* server, const char* prev_hash);
 void magicnet_chain_downloader_finish(struct magicnet_chain_downloader* downloader);
 
 #endif

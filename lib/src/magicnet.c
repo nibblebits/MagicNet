@@ -157,7 +157,7 @@ struct magicnet_program *magicnet_get_program(const char *name)
 
 void magicnet_reconnect(struct magicnet_program* program)
 {
-    struct magicnet_client *client = magicnet_tcp_network_connect(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, program->name);
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, program->name);
     if (!client)
     {
         return;
@@ -325,7 +325,7 @@ struct magicnet_program *magicnet_program(const char *name)
     strncpy(program->name, name, sizeof(program->name));
     vector_push(program_vec, program);
 
-    struct magicnet_client *client = magicnet_tcp_network_connect(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, name);
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, name);
     if (!client)
     {
         res = -1;

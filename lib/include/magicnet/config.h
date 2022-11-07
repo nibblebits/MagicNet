@@ -49,4 +49,8 @@
 #define MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK 1024
 #define MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA 65535
 
+
+// We will download a chain from a maximum of 4 peers.
+#define MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS 4
+
 #endif

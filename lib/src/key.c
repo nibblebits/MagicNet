@@ -419,6 +419,12 @@ out:
 
 void MAGICNET_load_keypair()
 {
+    // Have we already loaded the keypair?
+    if (key_loaded(&public_key))
+    {
+        return;
+    }
+    
     MAGICNET_keys_init();
     
     if (!file_exists(MAGICNET_private_key_filepath()))
