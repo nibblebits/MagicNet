@@ -676,6 +676,12 @@ void magicnet_close(struct magicnet_client *client)
     }
 }
 
+void magicnet_close_and_free(struct magicnet_client* client)
+{
+    close(client->sock);
+    free(client);
+}
+
 int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;

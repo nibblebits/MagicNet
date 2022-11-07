@@ -360,6 +360,19 @@ struct block
     int blockchain_id;
 };
 
+struct magicnet_chain_downloader;
+struct magicnet_chain_downloader_peer_thread
+{
+    struct magicnet_client* client;
+    size_t blocks_downloaded;
+    time_t last_block_received;
+    thread_t thread_id;
+
+    struct magicnet_chain_downloader* downloader;
+
+    // When true this thread should terminate its self at the next possible moment;
+    bool finished;
+}
 
 struct magicnet_chain_downloader
 {
@@ -379,7 +392,9 @@ struct magicnet_chain_downloader
 
     // The clients we are using to download the chain from.
     struct magicnet_client* clients[MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS];
+    struct magicnet_chain_downloader_peer_thread* peer_threads[MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS];
 
+    // When true this thread should terminate its self at the next possible moment
     bool finished;
 };
 
@@ -398,6 +413,8 @@ struct magicnet_client* magicnet_tcp_network_connect(struct sockaddr_in addr, in
 struct magicnet_client* magicnet_client_new();
 void magicnet_client_free(struct magicnet_client* client);
 bool magicnet_connected(struct magicnet_client *client);
+void magicnet_close(struct magicnet_client *client);
+void magicnet_close_and_free(struct magicnet_client* client);
 
 struct signed_data *magicnet_signed_data(struct magicnet_packet *packet);
 int magicnet_network_thread_start(struct magicnet_server *server);

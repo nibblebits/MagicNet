@@ -6,6 +6,31 @@
 #include <unistd.h>
 #include <time.h>
 
+struct magicnet_chain_downloader_peer_thread* magicnet_chain_downloader_peer_thread_for_client(struct magicnet_chain_downloader* downloader, struct magicnet_client* client)
+{
+    for (int i = 0; i < MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS; i++)
+    {
+        if (downloader->peer_threads[i] && downloader->peer_threads[i]->client == client)
+        {
+            return downloader->peer_threads[i];
+        }
+    }
+    return NULL;
+}
+
+void magicnet_chain_downloader_client_free(struct magicnet_chain_downloader* downloader, struct magicnet_client* client)
+{
+    struct magicnet_chain_downloader_peer_thread* thread = magicnet_chain_downloader_peer_thread_for_client(downloader, client);
+    // If we have a running thread it is responsible for cleaning up the client memory not us.
+    if (thread)
+    {
+        thread->finished = true;
+        return;
+    }
+
+    magicnet_close_and_free(client);
+}
+
 size_t magicnet_chain_downloader_connected_clients_count(struct magicnet_chain_downloader* downloader)
 {
     size_t count = 0;
@@ -29,7 +54,7 @@ int magicnet_chain_downloader_client_add(struct magicnet_chain_downloader* downl
         {
             if (downloader->clients[i] != NULL)
             {
-                magicnet_client_free(downloader->clients[i]);
+                magicnet_chain_downloader_client_free(downloader->clients[i]);
             }
 
             downloader->clients[i] = client;
@@ -38,6 +63,52 @@ int magicnet_chain_downloader_client_add(struct magicnet_chain_downloader* downl
         }
     }   
     return res;
+}
+
+int magicnet_chain_downloader_peer_thread_add(struct magicnet_chain_downloader* downloader, struct magicnet_chain_downloader_peer_thread* peer_thread)
+{
+    int res = -1;
+    for (int i = 0; i < MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS; i++)
+    {
+        if(downloader->peer_threads[i] == NULL)
+        {
+            downloader->peer_threads[i] = peer_thread;
+            res = 0;
+            break;
+        }
+    }   
+    return res;
+}
+
+
+
+void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
+{
+    struct magicnet_chain_downloader_peer_thread* peer_thread = _peer_thread;
+    bool running = true;
+    while(running)
+    {
+        magicnet_log("%s peer thread loop test\n", __FUNCTION__);
+        sleep(1);
+    }
+}
+
+int magicnet_chain_downloader_peer_create_thread(struct magicnet_chain_downloader* downloader, struct magicnet_client* client)
+{
+    int res = 0;
+    struct magicnet_chain_downloader_peer_thread* peer_thread = calloc(1, sizeof(struct magicnet_chain_downloader_peer_thread));
+    peer_thread->client = client;
+    peer_thread->downloader = downloader;
+    
+    if (pthread_create(&peer_thread->thread_id, NULL, &magicnet_chain_downloader_peer_thread_loop, peer_thread))
+    {
+        magicnet_log("%s failed to start the peer download thread\n", __FUNCTION__);
+        goto out;
+    }
+
+    res = magicnet_chain_downloader_peer_thread_add(downloader, peer_thread);
+    return res;
+    
 }
 void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_chain_downloader* downloader)
 {
@@ -67,7 +138,14 @@ void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_cha
             if(magicnet_chain_downloader_client_add(downloader, client) < 0)
             {
                 magicnet_log("%s failed to add client\n", __FUNCTION__);
-                magicnet_client_free(client);
+                magicnet_close_and_free(client);
+                continue;
+            }
+
+            if(magicnet_chain_downloader_peer_create_thread(client) < 0)
+            {
+                magicnet_log("%s failed to start peer thread\n", __FUNCTION__);
+                magicnet_close_and_free(client);
                 continue;
             }
 
@@ -77,6 +155,10 @@ void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_cha
 
     vector_free(ip_vec);
 }
+
+
+
+
 /**
  * This file is responsible for downloading blockchains when people lag behind.
 */
@@ -94,7 +176,7 @@ void *magicnet_chain_downloader_thread(void *_downloader)
         }
         magicnet_chain_downloader_thread_connect_to_next_client(downloader);
         pthread_mutex_unlock(&downloader->lock);
-        sleep(5);
+        sleep(1);
 
     }
 }
