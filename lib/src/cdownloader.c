@@ -172,8 +172,17 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
     {
         struct magicnet_packet *send_packet = magicnet_packet_new();
         struct magicnet_packet *recv_packet = magicnet_packet_new();
+        int res = magicnet_chain_downloader_peer_thread_loop_packet_exchange(peer_thread, send_packet, recv_packet);
+        if (res < 0)
+        {
+            magicnet_log("%s failed packet exchange we will terminate the client\n", __FUNCTION__);
+            pthread_mutex_lock(&peer_thread->downloader->lock);
+            peer_thread->finished = true;
+            pthread_mutex_unlock(&peer_thread->downloader->lock);
+            running = false;
+        }
+
         pthread_mutex_lock(&peer_thread->downloader->lock);
-        magicnet_chain_downloader_peer_thread_loop_packet_exchange(peer_thread, send_packet, recv_packet);
         // Check the thread has not been terminated.
         // We should have a seperate lock for the peer.. Hesitant as i dont want to make a deadlock but neccessary.
         running = !peer_thread->finished;
