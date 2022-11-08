@@ -35,14 +35,6 @@ void magicnet_chain_downloader_peer_thread_remove(struct magicnet_chain_download
 
 void magicnet_chain_downloader_client_free(struct magicnet_chain_downloader *downloader, struct magicnet_client *client)
 {
-    struct magicnet_chain_downloader_peer_thread *thread = magicnet_chain_downloader_peer_thread_for_client(downloader, client);
-    // If we have a running thread it is responsible for cleaning up the client memory not us.
-    if (thread)
-    {
-        thread->finished = true;
-        return;
-    }
-
     magicnet_close_and_free(client);
 }
 
@@ -60,18 +52,33 @@ size_t magicnet_chain_downloader_connected_clients_count(struct magicnet_chain_d
     return count;
 }
 
+/**
+ * Removes a client from the downloader. Does not close or free the client.. Just removes its association with the downloader.
+*/
+int magicnet_chain_downloader_client_remove(struct magicnet_chain_downloader* downloader, struct magicnet_client* client)
+{
+    if (!client)
+    {
+        return -1;
+    }
+
+    for (int i = 0; i < MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS; i++)
+    {
+        if (downloader->clients[i] == client)
+        {
+            downloader->clients[i] = NULL;
+        }
+    }
+
+    return 0;
+}
 int magicnet_chain_downloader_client_add(struct magicnet_chain_downloader *downloader, struct magicnet_client *client)
 {
     int res = -1;
     for (int i = 0; i < MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS; i++)
     {
-        if (!magicnet_connected(downloader->clients[i]))
+        if (!downloader->clients[i])
         {
-            if (downloader->clients[i] != NULL)
-            {
-                magicnet_chain_downloader_client_free(downloader, downloader->clients[i]);
-            }
-
             downloader->clients[i] = client;
             res = 0;
             break;
@@ -193,6 +200,7 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
     }
 
     pthread_mutex_lock(&peer_thread->downloader->lock);
+    magicnet_chain_downloader_client_remove(peer_thread->downloader, peer_thread->client);
     magicnet_close_and_free(peer_thread->client);
     magicnet_chain_downloader_peer_thread_remove(peer_thread->downloader, peer_thread);
     free(peer_thread);
