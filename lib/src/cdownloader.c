@@ -214,6 +214,8 @@ int magicnet_chain_downloader_peer_create_thread(struct magicnet_chain_downloade
     }
 
     res = magicnet_chain_downloader_peer_thread_add(downloader, peer_thread);
+        pthread_mutex_unlock(&peer_thread->downloader->lock);
+
     while(1)
     {
         sleep(1);
