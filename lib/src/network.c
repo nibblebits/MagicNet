@@ -2197,6 +2197,21 @@ out:
     return res;
 }
 
+int magicnet_client_process_request_block_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+
+    magicnet_log("%s request block packet initiated\n");
+
+    // Send a dummy not found for now..
+    struct magicnet_packet* packet_out = magicnet_packet_new();
+    magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
+    res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+
+    magicnet_free_packet(packet_out);
+    return res;
+}
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
@@ -2211,6 +2226,9 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
             res = magicnet_client_process_server_sync_packet(client, packet);
             break;
 
+        case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
+            res = magicnet_client_process_request_block_packet(client, packet);
+            break;
         case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
             // empty..
             res = 0;
