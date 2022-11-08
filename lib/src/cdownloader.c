@@ -246,11 +246,14 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
             peer_thread->downloader->finished = true;
             pthread_mutex_unlock(&peer_thread->downloader->lock);
         }
-        pthread_mutex_lock(&peer_thread->downloader->lock);
-        // Check the thread has not been terminated.
-        // We should have a seperate lock for the peer.. Hesitant as i dont want to make a deadlock but neccessary.
-        running = !peer_thread->finished;
-        pthread_mutex_unlock(&peer_thread->downloader->lock);
+        else
+        {
+            pthread_mutex_lock(&peer_thread->downloader->lock);
+            // Check the thread has not been terminated.
+            // We should have a seperate lock for the peer.. Hesitant as i dont want to make a deadlock but neccessary.
+            running = !peer_thread->finished;
+            pthread_mutex_unlock(&peer_thread->downloader->lock);
+        }
 
         magicnet_free_packet(send_packet);
         magicnet_free_packet(recv_packet);
