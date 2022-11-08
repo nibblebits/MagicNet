@@ -42,7 +42,7 @@ bool block_hash_empty(const char* hash)
 {
     char blank_hash[SHA256_STRING_LENGTH];
     bzero(&blank_hash, sizeof(blank_hash));
-    return memcmp(blank_hash, hash, sizeof(blank_hash));
+    return memcmp(blank_hash, hash, sizeof(blank_hash)) == 0;
 }
 
 void block_transaction_group_free(struct block_transaction_group *transaction_group)
