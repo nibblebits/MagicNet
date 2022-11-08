@@ -192,9 +192,12 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
         magicnet_free_packet(recv_packet);
     }
 
+    pthread_mutex_lock(&peer_thread->downloader->lock);
     magicnet_close_and_free(peer_thread->client);
     magicnet_chain_downloader_peer_thread_remove(peer_thread->downloader, peer_thread);
     free(peer_thread);
+    pthread_mutex_unlock(&peer_thread->downloader->lock);
+
 }
 
 void magicnet_chain_downloader_peer_thread_stop(struct magicnet_chain_downloader_peer_thread *peer_thread)
