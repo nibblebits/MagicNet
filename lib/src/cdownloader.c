@@ -105,6 +105,7 @@ int magicnet_chain_downloader_peer_thread_loop_packet_exchange_protocol(struct m
 {
     int res = 0;
     magicnet_signed_data(send_packet)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(send_packet)->type = MAGICNET_PACKET_TYPE_REQUEST_BLOCK;
     strncpy(magicnet_signed_data(send_packet)->payload.request_block.prev_hash, peer_thread->downloader->request_hash, sizeof(magicnet_signed_data(send_packet)->payload.request_block.prev_hash));
     res = magicnet_client_write_packet(peer_thread->client, send_packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     if (res < 0)

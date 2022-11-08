@@ -2201,7 +2201,7 @@ int magicnet_client_process_request_block_packet(struct magicnet_client* client,
 {
     int res = 0;
 
-    magicnet_log("%s request block packet initiated\n");
+    magicnet_log("%s request block packet initiated\n", __FUNCTION__);
 
     // Send a dummy not found for now..
     struct magicnet_packet* packet_out = magicnet_packet_new();
