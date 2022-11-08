@@ -245,7 +245,7 @@ void magicnet_chain_downloader_thread_connect_to_next_client(struct magicnet_cha
         int random_index = rand() % vector_count(ip_vec);
         struct sockaddr_in *addr = vector_peek_at(ip_vec, random_index);
         // Our new client will not accept relayed packets as we just want to ask and then get. No relayed stuff..
-        struct magicnet_client *client = magicnet_tcp_network_connect(*addr, 0, "chain-downloader", MAGICNET_COMMUNICATION_FLAG_NO_RELAYED_PACKETS);
+        struct magicnet_client *client = magicnet_tcp_network_connect(*addr, 0, MAGICNET_COMMUNICATION_FLAG_NO_RELAYED_PACKETS, "chain-downloader");
         if (client)
         {
             if (magicnet_chain_downloader_client_add(downloader, client) < 0)
