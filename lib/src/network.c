@@ -608,7 +608,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
     }
 
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name);
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0);
     if (res < 0)
     {
         magicnet_close(mclient);
@@ -1108,6 +1108,19 @@ int magicnet_client_read_tansaction_send_packet(struct magicnet_client *client, 
     return res;
 }
 
+int magicnet_client_read_request_block_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{
+    int res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.request_block.prev_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block.prev_hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read previous hash for request block packet\n", __FUNCTION__);
+        goto out;
+    }
+
+out:
+    return res;
+}
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1183,6 +1196,14 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         if (res < 0)
         {
             magicnet_log("%s read transaction send packet failed\n", __FUNCTION__);
+        }
+        break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
+        res = magicnet_client_read_request_block_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s failed to read block request packet\n", __FUNCTION__);
         }
         break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
@@ -1524,6 +1545,13 @@ out:
     return res;
 }
 
+int magicnet_client_write_packet_request_block(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.request_block.prev_hash, sizeof(magicnet_signed_data(packet)->payload.request_block.prev_hash), packet->not_sent.tmp_buf);
+
+    return res;
+}
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -1574,6 +1602,9 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_client_write_packet_transaction_send(client, packet);
         break;
 
+    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
+        res = magicnet_client_write_packet_request_block(client, packet);
+        break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_client_write_packet_block_send(client, packet);
         break;
@@ -1665,7 +1696,7 @@ bool magicnet_connected(struct magicnet_client *client)
     return client && client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
 }
 
-struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, const char *program_name)
+struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name)
 {
     int sockfd;
     // socket create and varification
@@ -1696,6 +1727,7 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     mclient->sock = sockfd;
     mclient->server = NULL;
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+    mclient->communication_flags = communication_flags;
 
     // Bit crappy, convert to integer then test...
     // CHECK FOR INTEGER HERE
@@ -1713,7 +1745,7 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     {
         mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
     }
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name);
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, communication_flags);
     if (res < 0)
     {
         magicnet_close(mclient);
@@ -1783,7 +1815,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     {
         mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
     }
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name);
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0);
     if (res < 0)
     {
         magicnet_close(mclient);
@@ -2261,6 +2293,14 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         magicnet_log("%s somebody connected to us but doesnt understand our protocol.. Probably some accidental connection.. Dropping\n", __FUNCTION__);
         return -1;
     }
+
+    int communication_flags = magicnet_read_int(client, NULL);
+    if (communication_flags < 0)
+    {
+        magicnet_log("%s failed to read  valid comminciation flags\n", __FUNCTION__);
+        return -1;
+    }
+
     // We need to find out what they are listening too before we can accept them.
     // What is the program they are subscribing too, lets read it.
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
@@ -2272,10 +2312,12 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
 
     memcpy(client->program_name, program_name, sizeof(client->program_name));
     res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE, NULL);
+
+    client->communication_flags = communication_flags;
     return res;
 }
 
-int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name)
+int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags)
 {
     int res = 0;
     res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE, NULL);
@@ -2289,6 +2331,13 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         goto out;
     }
+
+    res = magicnet_write_int(client, communication_flags, NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
 
     // Now lets see if we got the signature back
     int sig = 0;

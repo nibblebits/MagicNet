@@ -37,6 +37,7 @@ enum
     MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP,
     MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER,
     MAGICNET_PACKET_TYPE_TRANSACTION_SEND,
+    MAGICNET_PACKET_TYPE_REQUEST_BLOCK,
     MAGICNET_PACKET_TYPE_BLOCK_SEND,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
@@ -174,17 +175,31 @@ struct magicnet_packet
                     struct vector* blocks;
                     // The group of transactions associated with all blocks in the vector above.
                     struct block_transaction_group *transaction_group;
-
                 } block_send;
+
+                struct magicnet_request_block
+                {
+                    char prev_hash[SHA256_STRING_LENGTH];
+                } request_block;
             };
         } payload;
     } signed_data;
 };
 
+enum
+{
+    // When set the server will not send relayed packets to this client.
+    MAGICNET_COMMUNICATION_FLAG_NO_RELAYED_PACKETS = 0b00000001
+};
 struct magicnet_client
 {
     int sock;
+    // The flags must not be instructed by any remote party. These flags are for this server instance only
+    // not to be set or updated by command of a remote host.
     int flags;
+
+    // Communication flags are set in the entry protocol they determine the type of packets this peer is willing to accept.
+    int communication_flags;
     time_t last_contact;
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
     struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
@@ -365,14 +380,15 @@ struct magicnet_chain_downloader_peer_thread
 {
     struct magicnet_client* client;
     size_t blocks_downloaded;
-    time_t last_block_received;
-    thread_t thread_id;
+    time_t last_block_received_time;
+    
+    pthread_t thread_id;
 
     struct magicnet_chain_downloader* downloader;
 
     // When true this thread should terminate its self at the next possible moment;
     bool finished;
-}
+};
 
 struct magicnet_chain_downloader
 {
@@ -381,6 +397,9 @@ struct magicnet_chain_downloader
 
     // The block hash we should start with. We will download until a NULL previous hash is found.
     char starting_hash[SHA256_STRING_LENGTH];
+
+    // The request hash. This is the hash of the next block the downloader should request.
+    char request_hash[SHA256_STRING_LENGTH];
 
     // The current total blocks downloaded
     size_t total_blocks_downloaded;
@@ -409,7 +428,7 @@ enum
 
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
-struct magicnet_client* magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, const char *program_name);
+struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
 struct magicnet_client* magicnet_client_new();
 void magicnet_client_free(struct magicnet_client* client);
 bool magicnet_connected(struct magicnet_client *client);
@@ -421,7 +440,7 @@ int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
 int magicnet_client_thread_start(struct magicnet_client *client);
-int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name);
+int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
