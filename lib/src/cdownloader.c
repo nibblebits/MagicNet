@@ -135,8 +135,7 @@ out:
 int magicnet_chain_downloader_peer_thread_loop_packet_exchange(struct magicnet_chain_downloader_peer_thread *thread, struct magicnet_packet *send_packet, struct magicnet_packet *recv_packet)
 {
     int res = 0;
-    thread->thread_id = 57;
-    res = magicnet_chain_downloader_peer_thread_loop_packet_exchange(thread, send_packet, recv_packet);
+    res = magicnet_chain_downloader_peer_thread_loop_packet_exchange_protocol(thread, send_packet, recv_packet);
     if (res < 0)
     {
         magicnet_log("%s issue exchanging the packet\n", __FUNCTION__);
