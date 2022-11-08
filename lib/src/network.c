@@ -1110,7 +1110,7 @@ int magicnet_client_read_tansaction_send_packet(struct magicnet_client *client, 
 
 int magicnet_client_read_request_block_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
 {
-    int res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.request_block.prev_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block.prev_hash), packet_out->not_sent.tmp_buf);
+    int res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.request_block.request_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block.request_hash), packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         magicnet_log("%s failed to read previous hash for request block packet\n", __FUNCTION__);
@@ -1548,7 +1548,7 @@ out:
 int magicnet_client_write_packet_request_block(struct magicnet_client* client, struct magicnet_packet* packet)
 {
     int res = 0;
-    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.request_block.prev_hash, sizeof(magicnet_signed_data(packet)->payload.request_block.prev_hash), packet->not_sent.tmp_buf);
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.request_block.request_hash, sizeof(magicnet_signed_data(packet)->payload.request_block.request_hash), packet->not_sent.tmp_buf);
 
     return res;
 }
@@ -2200,15 +2200,27 @@ out:
 int magicnet_client_process_request_block_packet(struct magicnet_client* client, struct magicnet_packet* packet)
 {
     int res = 0;
-
     magicnet_log("%s request block packet initiated\n", __FUNCTION__);
-
-    // Send a dummy not found for now..
     struct magicnet_packet* packet_out = magicnet_packet_new();
+    
     magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
-    res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
 
+    struct block* block = block_load(magicnet_signed_data(packet)->payload.request_block.request_hash);
+    if (!block)
+    {
+        magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
+        res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+        goto out;
+    }
+    struct vector* block_vec = vector_create(sizeof(struct block*));
+    struct block* cloned_block = block_clone(block);
+    vector_push(block_vec, &cloned_block);
+    magicnet_signed_data(packet_out)->payload.block_send.blocks = block_vec;
+    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = cloned_block->transaction_group;
+    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
+    res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    block_free(block);
+out:
     magicnet_free_packet(packet_out);
     return res;
 }

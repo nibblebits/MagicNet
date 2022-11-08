@@ -287,7 +287,7 @@ int block_save(struct block *block)
         goto out;
     }
 
-    res = magicnet_database_load_block(block->hash, NULL);
+    res = magicnet_database_load_block(block->hash, NULL, NULL, NULL);
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
@@ -500,13 +500,18 @@ struct block *block_load(const char *hash)
     int res = 0;
     struct block *block = NULL;
     FILE *block_fp = NULL;
-    char block_path[PATH_MAX];
     char prev_hash[SHA256_STRING_LENGTH];
-    res = magicnet_database_load_block(hash, prev_hash);
+    int* blockchain_id = NULL;
+    char transaction_group_hash[SHA256_STRING_LENGTH];
+    res = magicnet_database_load_block(hash, prev_hash, blockchain_id, transaction_group_hash);
     if (res < 0)
     {
         goto out;
     }
+
+    struct block_transaction_group* group = block_transaction_group_new();
+    block = block_create_with_group(hash, prev_hash, group);
+    block->blockchain_id = blockchain_id;
 
 out:
     if (res < 0)

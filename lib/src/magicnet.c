@@ -83,6 +83,7 @@ void magicnet_block_send_packet_free(struct magicnet_packet* packet)
 
     // Here we go we free transaction group here.
     block_transaction_group_free(block_send_packet->transaction_group);
+    vector_free(block_send_packet->blocks);
 }
 void magicnet_free_packet_pointers(struct magicnet_packet* packet)
 {   

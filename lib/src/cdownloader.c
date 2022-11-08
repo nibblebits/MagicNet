@@ -6,6 +6,11 @@
 #include <unistd.h>
 #include <time.h>
 
+void magicnet_chain_downloader_peer_thread_free(struct magicnet_chain_downloader_peer_thread* thread)
+{
+    free(thread);
+}
+
 struct magicnet_chain_downloader_peer_thread *magicnet_chain_downloader_peer_thread_for_client(struct magicnet_chain_downloader *downloader, struct magicnet_client *client)
 {
     for (int i = 0; i < MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS; i++)
@@ -113,7 +118,7 @@ int magicnet_chain_downloader_peer_thread_loop_packet_exchange_protocol(struct m
     int res = 0;
     magicnet_signed_data(send_packet)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(send_packet)->type = MAGICNET_PACKET_TYPE_REQUEST_BLOCK;
-    strncpy(magicnet_signed_data(send_packet)->payload.request_block.prev_hash, peer_thread->downloader->request_hash, sizeof(magicnet_signed_data(send_packet)->payload.request_block.prev_hash));
+    strncpy(magicnet_signed_data(send_packet)->payload.request_block.request_hash, peer_thread->downloader->request_hash, sizeof(magicnet_signed_data(send_packet)->payload.request_block.request_hash));
     res = magicnet_client_write_packet(peer_thread->client, send_packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     if (res < 0)
     {
@@ -203,7 +208,7 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
     magicnet_chain_downloader_client_remove(peer_thread->downloader, peer_thread->client);
     magicnet_close_and_free(peer_thread->client);
     magicnet_chain_downloader_peer_thread_remove(peer_thread->downloader, peer_thread);
-    free(peer_thread);
+    magicnet_chain_downloader_peer_thread_free(peer_thread);
     pthread_mutex_unlock(&peer_thread->downloader->lock);
 
 }
@@ -239,7 +244,7 @@ out:
     if (res < 0)
     {
         magicnet_log("%s problem adding thread freeing\n", __FUNCTION__);
-        free(peer_thread);
+        magicnet_chain_downloader_peer_thread_free(peer_thread);
     }
     return res;
 }

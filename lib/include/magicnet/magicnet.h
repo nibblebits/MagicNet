@@ -179,7 +179,7 @@ struct magicnet_packet
 
                 struct magicnet_request_block
                 {
-                    char prev_hash[SHA256_STRING_LENGTH];
+                    char request_hash[SHA256_STRING_LENGTH];
                 } request_block;
             };
         } payload;
@@ -493,6 +493,8 @@ struct block *block_create_with_group(const char *hash, const char *prev_hash, s
 struct block *block_create(struct block_transaction_group *transaction_group, const char* prev_hash);
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out);
 struct block_transaction_group* block_transaction_group_clone(struct block_transaction_group* transaction_group_in);
+struct block *block_load(const char *hash);
+
 int block_save(struct block* block);
 void block_free(struct block *block);
 int blockchain_init();
