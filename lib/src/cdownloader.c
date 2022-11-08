@@ -177,6 +177,7 @@ out:
 int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct magicnet_chain_downloader_peer_thread* peer_thread, struct magicnet_packet *recv_packet)
 {
     int res = 0;
+    pthread_mutex_lock(&peer_thread->downloader->lock);
     // We have a packet
     if (vector_count(magicnet_signed_data(recv_packet)->payload.block_send.blocks) != 1)
     {
@@ -201,7 +202,19 @@ int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct mag
     }
 
     magicnet_log("%s saved block %s\n", __FUNCTION__, block->hash);
+
+    // Now the request hash must change
+    strncpy(peer_thread->downloader->request_hash, block->prev_hash, sizeof(peer_thread->downloader->request_hash));
+    peer_thread->downloader->total_blocks_downloaded++;
+
+    if (block_hash_empty(block->prev_hash))
+    {
+        // Empty hash? Then we are done downloading the chain at this point.
+        res = MAGICNET_TASK_COMPLETE;
+        peer_thread->downloader->download_completed = true;
+    }
 out:
+    pthread_mutex_unlock(&peer_thread->downloader->lock);
     return res;
 }
 void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
@@ -220,9 +233,13 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
         }
         
         res = magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(peer_thread, recv_packet);
-
+        if (res == MAGICNET_TASK_COMPLETE)
+        {
+            // We are done downloading the chain.
+            running = false;
+        }
     loop_end:
-        if (res < 0)
+        if (res < 0 || !running)
         {
             pthread_mutex_lock(&peer_thread->downloader->lock);
             running = false;
@@ -340,11 +357,15 @@ void *magicnet_chain_downloader_thread(void *_downloader)
     {
         pthread_mutex_lock(&downloader->lock);
 
-        if (downloader->finished)
+        if (downloader->finished || downloader->download_completed)
         {
+            downloader->finished = true;
             running = false;
+            goto out;
         }
         magicnet_chain_downloader_thread_connect_to_next_client(downloader);
+
+out:
         pthread_mutex_unlock(&downloader->lock);
         sleep(1);
     }

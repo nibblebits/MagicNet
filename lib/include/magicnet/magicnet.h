@@ -68,7 +68,9 @@ enum
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
     MAGICNET_ERROR_CRITICAL_ERROR = -1,
-    MAGICNET_ACKNOWLEGED_ALL_OKAY = 0
+    MAGICNET_ACKNOWLEGED_ALL_OKAY = 0,
+    // Sometimes returned for certain operations when something is completed.
+    MAGICNET_TASK_COMPLETE = 200,
 };
 
 struct block;
@@ -415,6 +417,9 @@ struct magicnet_chain_downloader
 
     // When true this thread should terminate its self at the next possible moment
     bool finished;
+
+    // When a peer thread recognizes the whole chain has been downloaded it will set this to true.
+    bool download_completed;
 };
 
 enum
@@ -497,6 +502,8 @@ struct block *block_load(const char *hash);
 
 int block_save(struct block* block);
 void block_free(struct block *block);
+bool block_hash_empty(const char* hash);
+
 int blockchain_init();
 struct blockchain* blockchain_new();
 void blockchain_free(struct blockchain* blockchain);

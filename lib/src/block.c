@@ -38,6 +38,13 @@ struct block_transaction_group *block_transaction_group_new()
     return calloc(1, sizeof(struct block_transaction_group));
 }
 
+bool block_hash_empty(const char* hash)
+{
+    char blank_hash[SHA256_STRING_LENGTH];
+    bzero(&blank_hash, sizeof(blank_hash));
+    return memcmp(blank_hash, hash, sizeof(blank_hash));
+}
+
 void block_transaction_group_free(struct block_transaction_group *transaction_group)
 {
     for (int i = 0; i < transaction_group->total_transactions; i++)
