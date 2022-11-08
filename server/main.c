@@ -32,7 +32,7 @@ int main(int argc, char** argv)
         return -1;
     }
     
-    struct magicnet_chain_downloader* downloader = magincnet_chain_downloader_download(server, "17f3830135685dacf2c9589331bfa905618c89ac13764a2638028c1bd3bf990c");
+    struct magicnet_chain_downloader* downloader = magincnet_chain_downloader_download(server, "17f38301354354438c89ac13764a2638028c1bd3bf990c");
 
 
     // Accept the clients
