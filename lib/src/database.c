@@ -411,7 +411,10 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
     if (transaction_group_hash)
     {
         bzero(transaction_group_hash, SHA256_STRING_LENGTH);
-        strncpy(transaction_group_hash, sqlite3_column_text(stmt, 2), SHA256_STRING_LENGTH);
+        if (sqlite3_column_text(stmt, 2))
+        {
+            strncpy(transaction_group_hash, sqlite3_column_text(stmt, 2), SHA256_STRING_LENGTH);
+        }
     }
 
 
