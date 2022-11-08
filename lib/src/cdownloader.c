@@ -218,6 +218,7 @@ int magicnet_chain_downloader_peer_create_thread(struct magicnet_chain_downloade
 out:
     if (res < 0)
     {
+        magicnet_log("%s problem adding thread freeing\n", __FUNCTION__);
         free(peer_thread);
     }
     return res;
