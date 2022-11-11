@@ -2,6 +2,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
+#include "config.h"
+#include "magicnet.h"
+bool sha256_empty(const char* hash)
+{
+    char blank_hash[SHA256_STRING_LENGTH];
+    bzero(&blank_hash, sizeof(blank_hash));
+    return memcmp(blank_hash, hash, sizeof(blank_hash)) == 0;
+}
 
 void sha256_hash_string (unsigned char hash[SHA256_DIGEST_LENGTH], char *outputBuffer)
 {

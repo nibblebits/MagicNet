@@ -10,6 +10,7 @@
         "stdbool.h": "c",
         "type_traits": "c",
         "dirent.h": "c",
-        "unistd.h": "c"
+        "unistd.h": "c",
+        "magicnet.h": "c"
     }
 }

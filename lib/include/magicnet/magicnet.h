@@ -515,7 +515,7 @@ struct block *block_load(const char *hash);
 
 int block_save(struct block* block);
 void block_free(struct block *block);
-bool block_hash_empty(const char* hash);
+bool sha256_empty(const char* hash);
 
 int blockchain_init();
 struct blockchain* blockchain_new();

@@ -5,6 +5,9 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include "database.h"
+
+void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader);
 
 static struct magicnet_active_chain_downloads downloads;
 int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
@@ -250,18 +253,18 @@ int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct mag
         goto out;
     }
 
-    if (res == MAGICNET_BLOCK_SENT_BEFORE)
-    {
-        magicnet_log("%s we actually finished downloading the chain as we have a block that we already own\n", __FUNCTION__);
-        download_completed = true;
-    }
+    // if (res == MAGICNET_BLOCK_SENT_BEFORE)
+    // {
+    //     magicnet_log("%s we actually finished downloading the chain as we have a block that we already own\n", __FUNCTION__);
+    //     download_completed = true;
+    // }
     magicnet_log("%s saved block %s\n", __FUNCTION__, block->hash);
 
     // Now the request hash must change
     strncpy(peer_thread->downloader->request_hash, block->prev_hash, sizeof(peer_thread->downloader->request_hash));
     peer_thread->downloader->total_blocks_downloaded++;
 
-    if (block_hash_empty(block->prev_hash))
+    if (sha256_empty(block->prev_hash))
     {
        download_completed = true;
     }

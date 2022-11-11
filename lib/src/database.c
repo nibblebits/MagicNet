@@ -1,4 +1,5 @@
 #include "magicnet.h"
+#include "database.h"
 #include "log.h"
 #include "misc.h"
 #include <sqlite3.h>
@@ -211,6 +212,67 @@ out:
     pthread_mutex_unlock(&db_lock);
     return res;
 }
+
+
+int magicnet_database_blockchain_delete(int blockchain_id)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    const char *create_blockchain_sql = "DELETE FROM blockchains where id=?";
+    res = sqlite3_prepare_v2(db, create_blockchain_sql, strlen(create_blockchain_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_bind_int(stmt, 1, blockchain_id);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_blocks_swap_chain(int blockchain_id_to_swap, int blockchain_id_to_swap_to)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    const char *create_blockchain_sql = "UPDATE blocks SET blockchain_id=?  WHERE blockchain_id=?;";
+    res = sqlite3_prepare_v2(db, create_blockchain_sql, strlen(create_blockchain_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_bind_int(stmt, 1, blockchain_id_to_swap_to);
+    sqlite3_bind_int(stmt, 2, blockchain_id_to_swap);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magicnet_database_blockchain_update_last_hash(int blockchain_id, const char *new_last_hash)
 {
     int res = 0;
@@ -255,6 +317,38 @@ int magicnet_database_blockchain_increment_proven_verified_blocks(int blockchain
     }
 
     sqlite3_bind_int(stmt, 1, blockchain_id);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_blockchain_save(struct blockchain *blockchain)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    const char *update_blockchain_sql = "UPDATE blockchains SET type=?, begin_hash=?, last_hash=?, proven_verified_blocks=?  WHERE id=?;";
+    res = sqlite3_prepare_v2(db, update_blockchain_sql, strlen(update_blockchain_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_bind_int(stmt, 1, blockchain->type);
+    sqlite3_bind_text(stmt, 2, blockchain->begin_hash, strlen(blockchain->begin_hash), NULL);
+    sqlite3_bind_text(stmt, 3, blockchain->last_hash, strlen(blockchain->last_hash), NULL);
+    sqlite3_bind_int(stmt, 4, blockchain->proved_verified_blocks);
+    sqlite3_bind_int(stmt, 5, blockchain->id);
+
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
     {
@@ -332,8 +426,7 @@ out:
  * Creates a new blockchain due to the block provided.
  * No checks are preformed you must ensure this is what you want to do before you call this function
  */
-int magicnet_database_blockchain_create
-(BLOCKCHAIN_TYPE type, const char *begin_hash, struct blockchain *blockchain_out)
+int magicnet_database_blockchain_create(BLOCKCHAIN_TYPE type, const char *begin_hash, struct blockchain *blockchain_out)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -377,7 +470,62 @@ int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
     return res;
 }
 
-int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int* blockchain_id, char* transaction_group_hash)
+int magicnet_database_load_block_from_previous_hash(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_block_from_previous_hash_no_locks(prev_hash, hash_out, blockchain_id, transaction_group_hash);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_load_block_from_previous_hash_no_locks(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *load_block_sql = "SELECT hash, blockchain_id, transaction_group_hash FROM blocks WHERE prev_hash = ?";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, prev_hash, strlen(prev_hash), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        goto out;
+    }
+
+    if (hash_out)
+    {
+        bzero(hash_out, SHA256_STRING_LENGTH);
+        strncpy(hash_out, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
+    }
+
+    if (blockchain_id)
+    {
+        *blockchain_id = sqlite3_column_int(stmt, 1);
+    }
+
+    if (transaction_group_hash)
+    {
+        bzero(transaction_group_hash, SHA256_STRING_LENGTH);
+        if (sqlite3_column_text(stmt, 2))
+        {
+            strncpy(transaction_group_hash, sqlite3_column_text(stmt, 2), SHA256_STRING_LENGTH);
+        }
+    }
+
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -407,7 +555,6 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
         *blockchain_id = sqlite3_column_int(stmt, 1);
     }
 
-
     if (transaction_group_hash)
     {
         bzero(transaction_group_hash, SHA256_STRING_LENGTH);
@@ -417,7 +564,6 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
         }
     }
 
-
 out:
     if (stmt)
     {
@@ -425,7 +571,7 @@ out:
     }
     return res;
 }
-int magicnet_database_load_block(const char *hash, char *prev_hash_out, int* blockchain_id, char* transaction_group_hash)
+int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);

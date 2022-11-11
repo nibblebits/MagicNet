@@ -38,13 +38,6 @@ struct block_transaction_group *block_transaction_group_new()
     return calloc(1, sizeof(struct block_transaction_group));
 }
 
-bool block_hash_empty(const char* hash)
-{
-    char blank_hash[SHA256_STRING_LENGTH];
-    bzero(&blank_hash, sizeof(blank_hash));
-    return memcmp(blank_hash, hash, sizeof(blank_hash)) == 0;
-}
-
 void block_transaction_group_free(struct block_transaction_group *transaction_group)
 {
     for (int i = 0; i < transaction_group->total_transactions; i++)
@@ -62,9 +55,9 @@ void block_transaction_group_free(struct block_transaction_group *transaction_gr
     }
     free(transaction_group);
 }
-struct block_transaction_group* block_transaction_group_clone(struct block_transaction_group* transaction_group_in)
+struct block_transaction_group *block_transaction_group_clone(struct block_transaction_group *transaction_group_in)
 {
-    struct block_transaction_group* cloned_transaction_group = block_transaction_group_new();
+    struct block_transaction_group *cloned_transaction_group = block_transaction_group_new();
     for (int i = 0; i < transaction_group_in->total_transactions; i++)
     {
         cloned_transaction_group->transactions[i] = block_transaction_clone(transaction_group_in->transactions[i]);
@@ -73,7 +66,6 @@ struct block_transaction_group* block_transaction_group_clone(struct block_trans
     memcpy(cloned_transaction_group->hash, transaction_group_in->hash, sizeof(cloned_transaction_group->hash));
     return cloned_transaction_group;
 }
-
 
 struct block_transaction *block_transaction_new()
 {
@@ -197,7 +189,10 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
     return cloned_transaction;
 }
 
-BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block)
+/**
+ * Probably should rewrite this its very messy...
+ */
+BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchain_id_out)
 {
     char empty_hash[SHA256_STRING_LENGTH] = {0};
     if (memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
@@ -207,9 +202,23 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block)
     }
 
     struct blockchain blockchain = {0};
+    int blockchain_id = -1;
     int res = magicnet_database_blockchain_load_from_last_hash(block->prev_hash, &blockchain);
     if (res < 0)
     {
+
+        // Theirs still a chance that its possible to have a blockchain with this thing..
+        // Thier may already be a block who knows us as its previous hash. If this is the case then we can use their chain
+        // such case is possible when we are downloading a chain from top to bottom in the chain downloader
+
+        res = magicnet_database_load_block_from_previous_hash(block->hash, NULL, &blockchain_id, NULL);
+        if (res >= 0)
+        {
+            // Alright this is the case
+            *blockchain_id_out = blockchain_id;
+            return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
+        }
+
         // We don't actually have a blockchain that links to our blocks previous hash
         // This essentially means that we dont have this full block chain .
         // We should create a new chain that is incomplete. When the chain is completed we will resolve the conflict.
@@ -217,14 +226,16 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block)
     }
 
     char hash[SHA256_STRING_LENGTH] = {0};
-    res = magicnet_database_load_block_with_previous_hash(block->prev_hash, hash);
+    res = magicnet_database_load_block_from_previous_hash(block->prev_hash, hash, &blockchain_id, NULL);
     if (res >= 0 && strncmp(block->hash, hash, sizeof(block->hash) != 0))
     {
         // We already have a block in one of our blockchains that has the previous hash equal to ours
         // this means this is a chain split. With two different histories.
+        *blockchain_id_out = blockchain_id;
         return MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN;
     }
 
+    *blockchain_id_out = blockchain_id;
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
 
@@ -247,7 +258,7 @@ out:
 int blockchain_create_new_if_required(struct block *block)
 {
     int res = -1;
-    BLOCKCHAIN_TYPE blockchain_type = blockchain_should_create_new(block);
+    BLOCKCHAIN_TYPE blockchain_type = blockchain_should_create_new(block, &res);
     if (blockchain_type != MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN)
     {
         res = blockchain_create_new(block, blockchain_type);
@@ -255,6 +266,47 @@ int blockchain_create_new_if_required(struct block *block)
     return res;
 }
 
+/**
+ * Reformats the blockchain based on the given block. This function is responsible for moving blocks into new blockchains
+ * if it is clear that a blockchain is obsolete.
+ *
+ * A blockchain becomes obsolete when it becomes fully resolved. For example this can happen if we have a block sent to us but we dont know
+ * the block before it. This results in a blockchain of type INCOMPLETE. If we then resolve this chain then all the blocks are moved
+ * to the correct blockchain and the old chain is deleted. In some cases the chain state is changed deletion is not always the case.
+ */
+int blockchain_reformat(struct block *block)
+{
+    int res = 0;
+    int blockchain_id = -1;
+    
+    // If we already received a block with our previous hash we may need to merge a chain.
+    res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL);
+    if (res >= 0)
+    {   
+        if (block->blockchain_id != blockchain_id)
+        {
+            // Alright they ended up on seperate chains so we need to merge them.
+            // Since our previous block has a different blockchain we will choose them as the dominant chain
+            res = magicnet_database_blocks_swap_chain(block->blockchain_id, blockchain_id);
+            if (res < 0)
+            {
+                magicnet_log("%s failed to swap chains\n", __FUNCTION__);
+                goto out;
+            }
+            // Now we have swaped the entire chain to this one lets delete the old chain.
+            res = magicnet_database_blockchain_delete(block->blockchain_id);
+            if (res < 0)
+            {
+                magicnet_log("%s failed to delete blockchain\n", __FUNCTION__);
+            }
+            block->blockchain_id = blockchain_id;
+
+        }
+    }
+
+out:
+    return res;
+}
 int blockchain_block_prepare(struct block *block)
 {
     int res = 0;
@@ -294,19 +346,22 @@ int block_save(struct block *block)
         goto out;
     }
 
-    res = magicnet_database_load_block(block->hash, NULL, NULL, NULL);
-    if (res >= 0)
-    {
-        magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
-        res = MAGICNET_BLOCK_SENT_BEFORE;
-        goto out;
-    }
-
     res = blockchain_block_prepare(block);
     if (res < 0)
     {
         goto out;
     }
+
+    res = magicnet_database_load_block(block->hash, NULL, NULL, NULL);
+    if (res >= 0)
+    {
+        blockchain_reformat(block);
+        magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
+        res = MAGICNET_BLOCK_SENT_BEFORE;
+        goto out;
+    }
+
+
     res = magicnet_database_save_block(block);
     if (res < 0)
     {
@@ -331,6 +386,11 @@ int block_save(struct block *block)
         goto out;
     }
 
+    res = blockchain_reformat(block);
+    if (res < 0)
+    {
+        goto out;
+    }
 out:
     pthread_mutex_unlock(&blockchain_lock);
     return res;
@@ -509,15 +569,15 @@ struct block *block_load(const char *hash)
     struct block *block = NULL;
     FILE *block_fp = NULL;
     char prev_hash[SHA256_STRING_LENGTH];
-    int* blockchain_id = NULL;
+    int blockchain_id = -1;
     char transaction_group_hash[SHA256_STRING_LENGTH];
-    res = magicnet_database_load_block(hash, prev_hash, blockchain_id, transaction_group_hash);
+    res = magicnet_database_load_block(hash, prev_hash, &blockchain_id, transaction_group_hash);
     if (res < 0)
     {
         goto out;
     }
 
-    struct block_transaction_group* group = block_transaction_group_new();
+    struct block_transaction_group *group = block_transaction_group_new();
     block = block_create_with_group(hash, prev_hash, group);
     block->blockchain_id = blockchain_id;
 
