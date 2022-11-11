@@ -71,6 +71,7 @@ enum
     MAGICNET_ACKNOWLEGED_ALL_OKAY = 0,
     // Sometimes returned for certain operations when something is completed.
     MAGICNET_TASK_COMPLETE = 200,
+    MAGICNET_BLOCK_SENT_BEFORE = 201,
 };
 
 struct block;
@@ -415,11 +416,22 @@ struct magicnet_chain_downloader
     struct magicnet_client* clients[MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS];
     struct magicnet_chain_downloader_peer_thread* peer_threads[MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS];
 
+
     // When true this thread should terminate its self at the next possible moment
     bool finished;
 
     // When a peer thread recognizes the whole chain has been downloaded it will set this to true.
     bool download_completed;
+};
+
+/**
+ * Represents the active chain downloads.
+*/
+struct magicnet_active_chain_downloads
+{
+    // Vector of struct magicnet_chain_downloader*
+    struct vector* chain_downloads;
+    pthread_mutex_t lock;
 };
 
 enum
@@ -431,6 +443,7 @@ enum
 
 };
 
+int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server* server);
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
 struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
@@ -530,8 +543,8 @@ struct block *magicnet_block_load(const char *hash);
 
 
 // Blockchain downloader (used for desyncs..)
-
-struct magicnet_chain_downloader* magincnet_chain_downloader_download(struct magicnet_server* server, const char* prev_hash);
+int magicnet_chain_downloader_download_and_wait(struct magicnet_server *server, const char *request_hash);
+struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t* thread_id_out);
 void magicnet_chain_downloader_finish(struct magicnet_chain_downloader* downloader);
 
 #endif

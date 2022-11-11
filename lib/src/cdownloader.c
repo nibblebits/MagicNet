@@ -6,6 +6,45 @@
 #include <unistd.h>
 #include <time.h>
 
+static struct magicnet_active_chain_downloads downloads;
+int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
+{
+    int res = 0;
+    bzero(&downloads, sizeof(downloads));
+    if (pthread_mutex_init(&downloads.lock, NULL) != 0)
+    {
+        magicnet_log("%s Failed to initialize the downloder lock\n", __FUNCTION__);
+        goto out;
+    }
+
+    downloads.chain_downloads = vector_create(sizeof(struct magicnet_chain_downloader *));
+
+    // Lets go through all the blockchains that need downloading
+    struct vector *blockchains = vector_create(sizeof(struct blockchain *));
+    res = magicnet_database_blockchain_all(blockchains);
+    if (res < 0)
+    {
+        magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
+        goto out;
+    }
+
+    vector_set_peek_pointer(blockchains, 0);
+    struct blockchain *chain = vector_peek_ptr(blockchains);
+    while (chain)
+    {
+        if (chain->type == MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE)
+        {
+            // Incomplete chains must be downloaded.
+            magincnet_chain_downloader_download(server, chain->last_hash, NULL);
+        }
+        blockchain_free(chain);
+        chain = vector_peek_ptr(blockchains);
+    }
+    vector_free(blockchains);
+out:
+    return res;
+}
+
 void magicnet_chain_downloader_peer_thread_free(struct magicnet_chain_downloader_peer_thread *thread)
 {
     free(thread);
@@ -40,6 +79,15 @@ void magicnet_chain_downloader_peer_thread_remove(struct magicnet_chain_download
 void magicnet_chain_downloader_client_free(struct magicnet_chain_downloader *downloader, struct magicnet_client *client)
 {
     magicnet_close_and_free(client);
+}
+
+void magicnet_chain_downloader_peer_thread_finish(struct magicnet_chain_downloader_peer_thread *thread)
+{
+    thread->finished = true;
+}
+void magicnet_chain_downloader_free(struct magicnet_chain_downloader *downloader)
+{
+    free(downloader);
 }
 
 size_t magicnet_chain_downloader_connected_clients_count(struct magicnet_chain_downloader *downloader)
@@ -174,9 +222,10 @@ out:
     return res;
 }
 
-int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct magicnet_chain_downloader_peer_thread* peer_thread, struct magicnet_packet *recv_packet)
+int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct magicnet_chain_downloader_peer_thread *peer_thread, struct magicnet_packet *recv_packet)
 {
     int res = 0;
+    bool download_completed = false;
     pthread_mutex_lock(&peer_thread->downloader->lock);
     // We have a packet
     if (vector_count(magicnet_signed_data(recv_packet)->payload.block_send.blocks) != 1)
@@ -201,6 +250,11 @@ int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct mag
         goto out;
     }
 
+    if (res == MAGICNET_BLOCK_SENT_BEFORE)
+    {
+        magicnet_log("%s we actually finished downloading the chain as we have a block that we already own\n", __FUNCTION__);
+        download_completed = true;
+    }
     magicnet_log("%s saved block %s\n", __FUNCTION__, block->hash);
 
     // Now the request hash must change
@@ -209,7 +263,12 @@ int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct mag
 
     if (block_hash_empty(block->prev_hash))
     {
-        // Empty hash? Then we are done downloading the chain at this point.
+       download_completed = true;
+    }
+
+    if (download_completed)
+    {
+         //Finished downloading?
         res = MAGICNET_TASK_COMPLETE;
         peer_thread->downloader->download_completed = true;
     }
@@ -220,6 +279,7 @@ out:
 void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
 {
     struct magicnet_chain_downloader_peer_thread *peer_thread = _peer_thread;
+    struct magicnet_chain_downloader *downloader = peer_thread->downloader;
     bool running = true;
     while (running)
     {
@@ -231,7 +291,7 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
             magicnet_log("%s failed packet exchange we will terminate the client\n", __FUNCTION__);
             goto loop_end;
         }
-        
+
         res = magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(peer_thread, recv_packet);
         if (res == MAGICNET_TASK_COMPLETE)
         {
@@ -241,30 +301,41 @@ void *magicnet_chain_downloader_peer_thread_loop(void *_peer_thread)
     loop_end:
         if (res < 0 || !running)
         {
-            pthread_mutex_lock(&peer_thread->downloader->lock);
+            pthread_mutex_lock(&downloader->lock);
             running = false;
-            peer_thread->downloader->finished = true;
-            pthread_mutex_unlock(&peer_thread->downloader->lock);
+            peer_thread->finished = true;
+            pthread_mutex_unlock(&downloader->lock);
         }
         else
         {
-            pthread_mutex_lock(&peer_thread->downloader->lock);
+            pthread_mutex_lock(&downloader->lock);
             // Check the thread has not been terminated.
             // We should have a seperate lock for the peer.. Hesitant as i dont want to make a deadlock but neccessary.
             running = !peer_thread->finished;
-            pthread_mutex_unlock(&peer_thread->downloader->lock);
+            if (downloader->finished)
+            {
+                // Downloader finished? Then we are also done
+                peer_thread->finished = true;
+                running = false;
+            }
+            pthread_mutex_unlock(&downloader->lock);
         }
 
         magicnet_free_packet(send_packet);
         magicnet_free_packet(recv_packet);
     }
 
-    pthread_mutex_lock(&peer_thread->downloader->lock);
-    magicnet_chain_downloader_client_remove(peer_thread->downloader, peer_thread->client);
+    pthread_mutex_lock(&downloads.lock);
+    magicnet_downloads_remove(downloader);
+    pthread_mutex_unlock(&downloads.lock);
+
+    pthread_mutex_lock(&downloader->lock);
+    magicnet_chain_downloader_client_remove(downloader, peer_thread->client);
     magicnet_close_and_free(peer_thread->client);
-    magicnet_chain_downloader_peer_thread_remove(peer_thread->downloader, peer_thread);
+    magicnet_chain_downloader_peer_thread_remove(downloader, peer_thread);
     magicnet_chain_downloader_peer_thread_free(peer_thread);
-    pthread_mutex_unlock(&peer_thread->downloader->lock);
+    pthread_mutex_unlock(&downloader->lock);
+    return NULL;
 }
 
 void magicnet_chain_downloader_peer_thread_stop(struct magicnet_chain_downloader_peer_thread *peer_thread)
@@ -364,24 +435,45 @@ void *magicnet_chain_downloader_thread(void *_downloader)
         {
             downloader->finished = true;
             running = false;
-            goto out;
+            goto loop_out;
         }
         magicnet_chain_downloader_thread_connect_to_next_client(downloader);
 
-out:
+    loop_out:
         pthread_mutex_unlock(&downloader->lock);
         sleep(1);
     }
+
+    magicnet_log("%s ended downloader thread\n", __FUNCTION__);
 }
 
+void magicnet_downloads_add(struct magicnet_chain_downloader *downloader)
+{
+    vector_push(downloads.chain_downloads, &downloader);
+}
+
+void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader)
+{
+    vector_set_peek_pointer(downloads.chain_downloads, 0);
+    struct magicnet_chain_downloader *current_downloader = vector_peek_ptr(downloads.chain_downloads);
+    while (current_downloader)
+    {
+        if (current_downloader == downloader)
+        {
+            vector_pop_last_peek(downloads.chain_downloads);
+            break;
+        }
+        current_downloader = vector_peek_ptr(downloads.chain_downloads);
+    }
+}
 /**
  * Queues a download for the block with the given previous hash. Downloads the entire chain until NULL is found.
  */
-struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct magicnet_server *server, const char *prev_hash)
+struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
 {
     struct magicnet_chain_downloader *downloader = calloc(1, sizeof(struct magicnet_chain_downloader));
-    strncpy(downloader->starting_hash, prev_hash, sizeof(downloader->starting_hash));
-    strncpy(downloader->request_hash, prev_hash, sizeof(downloader->request_hash));
+    strncpy(downloader->starting_hash, request_hash, sizeof(downloader->starting_hash));
+    strncpy(downloader->request_hash, request_hash, sizeof(downloader->request_hash));
 
     downloader->total_blocks_downloaded = 0;
     downloader->finished = false;
@@ -391,17 +483,24 @@ struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct mag
         magicnet_log("%s Failed to initialize the downloder lock\n", __FUNCTION__);
         return NULL;
     }
+    pthread_mutex_lock(&downloads.lock);
+    magicnet_downloads_add(downloader);
+    pthread_mutex_unlock(&downloads.lock);
 
     // Let's start the thread
-    pthread_t thread_id;
+    pthread_t thread_id = 0;
     pthread_mutex_lock(&downloader->lock);
     if (pthread_create(&thread_id, NULL, &magicnet_chain_downloader_thread, downloader))
     {
         magicnet_log("%s failed to start the downloader thread\n", __FUNCTION__);
         goto out;
     }
-    downloader->downloader_thread_id = thread_id;
 
+    downloader->downloader_thread_id = thread_id;
+    if (thread_id_out)
+    {
+        *thread_id_out = thread_id;
+    }
 out:
     pthread_mutex_unlock(&downloader->lock);
     return downloader;
@@ -413,6 +512,45 @@ void magicnet_chain_downloader_finish(struct magicnet_chain_downloader *download
     downloader->finished = true;
     pthread_mutex_unlock(&downloader->lock);
 
+    // Wait for all the peers to end..
+    for (int i = 0; i < MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS; i++)
+    {
+        pthread_t peer_thread_id = -1;
+        pthread_mutex_lock(&downloader->lock);
+        if (downloader->peer_threads[i])
+        {
+            peer_thread_id = downloader->peer_threads[i]->thread_id;
+        }
+        pthread_mutex_unlock(&downloader->lock);
+
+        if (peer_thread_id == -1)
+        {
+            continue;
+        }
+
+        pthread_join(peer_thread_id, NULL);
+    }
+
+    // Wait for the downloader thread to end.
     pthread_join(downloader->downloader_thread_id, NULL);
+    pthread_mutex_destroy(&downloader->lock);
     free(downloader);
+    magicnet_log("%s downloaded freed\n", __FUNCTION__);
+}
+
+int magicnet_chain_downloader_download_and_wait(struct magicnet_server *server, const char *request_hash)
+{
+    int res = 0;
+    pthread_t thread_id = -1;
+    struct magicnet_chain_downloader *downloader = magincnet_chain_downloader_download(server, request_hash, &thread_id);
+    if (!downloader)
+    {
+        return -1;
+    }
+
+    // Let's wait until the thread is done.
+    pthread_join(thread_id, NULL);
+    magicnet_chain_downloader_finish(downloader);
+
+    return res;
 }

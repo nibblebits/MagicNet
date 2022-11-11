@@ -127,6 +127,16 @@ out:
         BN_CTX_free(ctx);
     }
 
+    if (eckey)
+    {
+        EC_KEY_free(eckey);
+    }
+
+    if (ecgroup)
+    {
+        EC_GROUP_free(ecgroup);
+    }
+
     if (point)
     {
         EC_POINT_free(point);
@@ -243,9 +253,24 @@ out:
         BN_CTX_free(ctx);
     }
 
+    if (eckey)
+    {
+        EC_KEY_free(eckey);
+    }
+
+    if (ecgroup)
+    {
+        EC_GROUP_free(ecgroup);
+    }
+
     if (point)
     {
         EC_POINT_free(point);
+    }
+
+    if (pnum)
+    {
+        BN_free(pnum);
     }
 
     pthread_mutex_unlock(&key_lock);

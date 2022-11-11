@@ -15,13 +15,17 @@ int main(int argc, char** argv)
         printf("could not initialize the magicnet server\n");
         return res;
     }
-    magicnet_log("test");
-
 
     struct magicnet_server* server = magicnet_server_start(MAGICNET_SERVER_PORT);
     if (!server)
     {
         printf("The  magic net server could not be started\n");
+        return -1;
+    }
+    res = magicnet_chain_downloaders_setup_and_poll(server);
+    if (res < 0)
+    {
+        printf("There was a problem setting up the chain downloaders\n");
         return -1;
     }
 
@@ -32,8 +36,6 @@ int main(int argc, char** argv)
         return -1;
     }
     
-    struct magicnet_chain_downloader* downloader = magincnet_chain_downloader_download(server, "17f3830135685dacf2c9589331bfa905618c89ac13764a2638028c1bd3bf990c");
-
 
     // Accept the clients
     while(1)

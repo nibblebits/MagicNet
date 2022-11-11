@@ -298,6 +298,7 @@ int block_save(struct block *block)
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
+        res = MAGICNET_BLOCK_SENT_BEFORE;
         goto out;
     }
 
