@@ -278,11 +278,11 @@ int blockchain_reformat(struct block *block)
 {
     int res = 0;
     int blockchain_id = -1;
-    
+
     // If we already received a block with our previous hash we may need to merge a chain.
     res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL);
     if (res >= 0)
-    {   
+    {
         if (block->blockchain_id != blockchain_id)
         {
             // Alright they ended up on seperate chains so we need to merge them.
@@ -300,10 +300,28 @@ int blockchain_reformat(struct block *block)
                 magicnet_log("%s failed to delete blockchain\n", __FUNCTION__);
             }
             block->blockchain_id = blockchain_id;
-
         }
     }
 
+    struct vector *blockchains = vector_create(sizeof(struct blockchain *));
+    res = magicnet_database_blockchain_all(blockchains);
+    struct blockchain *chain = vector_peek_ptr(blockchains);
+    while (chain)
+    {
+        int total_blocks = magicnet_database_blockchain_blocks_count(chain->id);
+        if (total_blocks == 0)
+        {
+            res = magicnet_database_blockchain_delete(chain->id);
+            if (res < 0)
+            {
+                magicnet_log("%s failed to delete blockchain\n", __FUNCTION__);
+            }
+        }
+        blockchain_free(chain);
+        chain = vector_peek_ptr(blockchains);
+    }
+
+    vector_free(blockchains);
 out:
     return res;
 }
@@ -360,7 +378,6 @@ int block_save(struct block *block)
         res = MAGICNET_BLOCK_SENT_BEFORE;
         goto out;
     }
-
 
     res = magicnet_database_save_block(block);
     if (res < 0)
