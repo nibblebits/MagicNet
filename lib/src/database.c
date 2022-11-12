@@ -721,3 +721,45 @@ out:
     pthread_mutex_unlock(&db_lock);
     return res;
 }
+
+int magicnet_database_update_block(struct block *block)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+
+    sqlite3_stmt *stmt = NULL;
+
+    const char *insert_block_sql = "UPDATE blocks SET prev_hash=?, blockchain_id=?, transaction_group_hash=?) WHERE hash=?";
+    res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, block->prev_hash, strlen(block->prev_hash), NULL);
+    sqlite3_bind_int(stmt, 2, block->blockchain_id);
+
+    // transaction group hash is NULL in the case of zero transactions in a group
+    if (block->transaction_group->total_transactions != 0)
+    {
+        sqlite3_bind_text(stmt, 3, block->transaction_group->hash, strlen(block->transaction_group->hash), NULL);
+    }
+    else
+    {
+        sqlite3_bind_null(stmt, 3);
+    }
+
+    sqlite3_bind_text(stmt, 4, block->prev_hash, strlen(block->prev_hash), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        goto out;
+    }
+
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+

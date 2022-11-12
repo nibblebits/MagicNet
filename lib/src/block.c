@@ -189,9 +189,6 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
     return cloned_transaction;
 }
 
-/**
- * Probably should rewrite this its very messy...
- */
 BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchain_id_out)
 {
     char empty_hash[SHA256_STRING_LENGTH] = {0};
@@ -199,44 +196,28 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     {
         // Previous hash is NULL, then this means a new blockchain has been created. We should ensure that we create this chain
         return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
-    }
+    }   
 
-    struct blockchain blockchain = {0};
-    int blockchain_id = -1;
-    int res = magicnet_database_blockchain_load_from_last_hash(block->prev_hash, &blockchain);
-    if (res < 0)
+    int blockchain_id= -1;
+    int res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL);
+    if (res >= 0)
     {
-
-        // Theirs still a chance that its possible to have a blockchain with this thing..
-        // Thier may already be a block who knows us as its previous hash. If this is the case then we can use their chain
-        // such case is possible when we are downloading a chain from top to bottom in the chain downloader
-
-        res = magicnet_database_load_block_from_previous_hash(block->hash, NULL, &blockchain_id, NULL);
-        if (res >= 0)
-        {
-            // Alright this is the case
-            *blockchain_id_out = blockchain_id;
-            return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
-        }
-
-        // We don't actually have a blockchain that links to our blocks previous hash
-        // This essentially means that we dont have this full block chain .
-        // We should create a new chain that is incomplete. When the chain is completed we will resolve the conflict.
-        return MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE;
-    }
-
-    char hash[SHA256_STRING_LENGTH] = {0};
-    res = magicnet_database_load_block_from_previous_hash(block->prev_hash, hash, &blockchain_id, NULL);
-    if (res >= 0 && strncmp(block->hash, hash, sizeof(block->hash) != 0))
-    {
-        // We already have a block in one of our blockchains that has the previous hash equal to ours
-        // this means this is a chain split. With two different histories.
+        // We should use the chain of the previous hash here..
         *blockchain_id_out = blockchain_id;
-        return MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN;
+        return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
-    *blockchain_id_out = blockchain_id;
-    return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
+    res = magicnet_database_load_block_from_previous_hash(block->hash, NULL, &blockchain_id, NULL);
+    if (res >= 0)
+    {
+        // We should use the chain of the previous hash here..
+        *blockchain_id_out = blockchain_id;
+        return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
+    }
+
+
+    return MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE;
+
 }
 
 int blockchain_create_new(struct block *block, BLOCKCHAIN_TYPE type)
@@ -273,9 +254,14 @@ int blockchain_create_new_if_required(struct block *block)
  * A blockchain becomes obsolete when it becomes fully resolved. For example this can happen if we have a block sent to us but we dont know
  * the block before it. This results in a blockchain of type INCOMPLETE. If we then resolve this chain then all the blocks are moved
  * to the correct blockchain and the old chain is deleted. In some cases the chain state is changed deletion is not always the case.
+ * [DEPRECATED] FOR NOW.
  */
 int blockchain_reformat(struct block *block)
 {
+
+    // DEPRECATED FOR NOW! ISSUES MANY ISSUES..
+    return 0;
+
     int res = 0;
     int blockchain_id = -1;
 
@@ -285,23 +271,23 @@ int blockchain_reformat(struct block *block)
     {
         if (block->blockchain_id != blockchain_id)
         {
-            // Alright they ended up on seperate chains so we need to merge them.
-            // Since our previous block has a different blockchain we will choose them as the dominant chain
-            res = magicnet_database_blocks_swap_chain(block->blockchain_id, blockchain_id);
-            if (res < 0)
-            {
-                magicnet_log("%s failed to swap chains\n", __FUNCTION__);
-                goto out;
-            }
-            // Now we have swaped the entire chain to this one lets delete the old chain.
-            res = magicnet_database_blockchain_delete(block->blockchain_id);
-            if (res < 0)
-            {
-                magicnet_log("%s failed to delete blockchain\n", __FUNCTION__);
-            }
             block->blockchain_id = blockchain_id;
+            magicnet_database_update_block(block);
         }
     }
+
+    // Theirs cases where we download the chain from top to bottom as well.. In these circumstances we must check
+    // to see if theirs a block with our previous hash already. If there is we may need to also swap the chain
+    res = magicnet_database_load_block_from_previous_hash(block->hash, NULL, &blockchain_id, NULL);
+    if (res >= 0)
+    {
+        if (block->blockchain_id != blockchain_id)
+        {
+            block->blockchain_id = blockchain_id;
+            magicnet_database_update_block(block);
+        }
+    }
+
 
     struct vector *blockchains = vector_create(sizeof(struct blockchain *));
     res = magicnet_database_blockchain_all(blockchains);

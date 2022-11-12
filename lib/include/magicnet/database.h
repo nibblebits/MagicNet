@@ -14,6 +14,7 @@ int magicnet_database_blockchain_save(struct blockchain* blockchain);
 int magicnet_database_blocks_swap_chain(int blockchain_id_to_swap, int blockchain_id_to_swap_to);
 int magicnet_database_blockchain_delete(int blockchain_id);
 int magicnet_database_blockchain_blocks_count(int blockchain_id);
+int magicnet_database_update_block(struct block *block);
 
 
 /**
