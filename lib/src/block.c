@@ -216,6 +216,15 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     }
 
 
+    res = magicnet_database_load_block_from_previous_hash(block->prev_hash, NULL, &blockchain_id, NULL);
+    if (res >= 0)
+    {
+        // We should use the chain of the previous hash here..
+        *blockchain_id_out = blockchain_id;
+        return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
+    }
+
+
     return MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE;
 
 }
