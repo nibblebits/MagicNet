@@ -413,7 +413,10 @@ struct block *block_clone(struct block *block)
     }
     transaction_group->total_transactions = block->transaction_group->total_transactions;
     memcpy(transaction_group->hash, block->transaction_group->hash, sizeof(transaction_group->hash));
-    return block_create_with_group(block->hash, block->prev_hash, transaction_group);
+    struct block* block_cloned = block_create_with_group(block->hash, block->prev_hash, transaction_group);
+    block_cloned->key = *block->key;
+    block_cloned->signature = *block->signature;
+    return block;
 }
 
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out)
