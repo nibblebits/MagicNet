@@ -15,8 +15,9 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"hash\"	TEXT,\
                                                 \"prev_hash\"	TEXT,\
                                                 \"blockchain_id\" INTEGER, \
-                                                \"transaction_group_hash\" TEXT \
-                                                );",
+                                                \"transaction_group_hash\" TEXT, \
+                                                \"key\"	BLOB, \
+                                                \"signature\");",
 
                                "CREATE TABLE \"blockchains\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
@@ -554,11 +555,11 @@ out:
     }
     return res;
 }
-int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash)
+int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key* key, struct signature* signature)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT prev_hash, blockchain_id, transaction_group_hash FROM blocks WHERE hash = ?";
+    const char *load_block_sql = "SELECT prev_hash, blockchain_id, transaction_group_hash, key, signature FROM blocks WHERE hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -593,6 +594,22 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
         }
     }
 
+    if (key)
+    {
+        if (sqlite3_column_blob(stmt, 3))
+        {
+            memcpy(key, sqlite3_column_blob(stmt, 3), sizeof(struct key));
+        }
+    }
+
+    if (signature)
+    {
+        if (sqlite3_column_blob(stmt, 4))
+        {
+            memcpy(key, sqlite3_column_blob(stmt, 4), sizeof(struct signature));
+        }
+    }
+
 out:
     if (stmt)
     {
@@ -600,11 +617,11 @@ out:
     }
     return res;
 }
-int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash)
+int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key* key, struct signature* signature)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);
-    res = magicnet_database_load_block_no_locks(hash, prev_hash_out, blockchain_id, transaction_group_hash);
+    res = magicnet_database_load_block_no_locks(hash, prev_hash_out, blockchain_id, transaction_group_hash, key, signature);
     pthread_mutex_unlock(&db_lock);
     return res;
 }
@@ -681,7 +698,7 @@ int magicnet_database_save_block(struct block *block)
     sqlite3_stmt *stmt = NULL;
 
     // Let's see if we already have the block saved
-    res = magicnet_database_load_block_no_locks(block->hash, NULL, NULL, NULL);
+    res = magicnet_database_load_block_no_locks(block->hash, NULL, NULL, NULL, NULL, NULL);
     if (res >= 0)
     {
         // The block was already saved before
@@ -689,7 +706,7 @@ int magicnet_database_save_block(struct block *block)
         goto out;
     }
 
-    const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash, blockchain_id, transaction_group_hash) VALUES(?, ?, ?, ?)";
+    const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash, blockchain_id, transaction_group_hash, key, signature) VALUES(?, ?, ?, ?, ?, ?)";
     res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -709,6 +726,10 @@ int magicnet_database_save_block(struct block *block)
     {
         sqlite3_bind_null(stmt, 4);
     }
+
+    sqlite3_bind_blob(stmt, 5, &block->key, sizeof(block->key), NULL);
+    sqlite3_bind_blob(stmt, 6, &block->signature, sizeof(block->signature), NULL);
+
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
     {
@@ -729,7 +750,7 @@ int magicnet_database_update_block(struct block *block)
 
     sqlite3_stmt *stmt = NULL;
 
-    const char *insert_block_sql = "UPDATE blocks SET prev_hash=?, blockchain_id=?, transaction_group_hash=?) WHERE hash=?";
+    const char *insert_block_sql = "UPDATE blocks SET prev_hash=?, blockchain_id=?, transaction_group_hash=?, key=?,signature=?) WHERE hash=?";
     res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -749,7 +770,10 @@ int magicnet_database_update_block(struct block *block)
         sqlite3_bind_null(stmt, 3);
     }
 
-    sqlite3_bind_text(stmt, 4, block->prev_hash, strlen(block->prev_hash), NULL);
+    sqlite3_bind_blob(stmt, 4, &block->key, sizeof(block->key), NULL);
+    sqlite3_bind_blob(stmt, 5, &block->signature, sizeof(block->signature), NULL);
+
+    sqlite3_bind_text(stmt, 6, block->prev_hash, strlen(block->prev_hash), NULL);
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
     {
@@ -762,4 +786,3 @@ out:
     pthread_mutex_unlock(&db_lock);
     return res;
 }
-

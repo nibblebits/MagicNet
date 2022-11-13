@@ -75,8 +75,6 @@ void magicnet_block_send_packet_free(struct magicnet_packet* packet)
     struct block* block = vector_peek_ptr(block_send_packet->blocks);
     while(block)
     {
-        // To be dealth with later.
-        block->transaction_group = NULL;
         block_free(block);
         block = vector_peek_ptr(block_send_packet->blocks);
     }

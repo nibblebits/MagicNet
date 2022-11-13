@@ -371,6 +371,11 @@ struct block
     // Hash of the previous block
     char prev_hash[SHA256_STRING_LENGTH];
 
+    // Signed signature of the creator of the block
+    struct signature signature;
+    // The public key of the creator of the block.
+    struct key key;
+
     struct block_transaction_group *transaction_group;
 
 
@@ -514,6 +519,7 @@ struct block_transaction_group* block_transaction_group_clone(struct block_trans
 struct block *block_load(const char *hash);
 
 int block_save(struct block* block);
+int block_sign(struct block *block);
 void block_free(struct block *block);
 bool sha256_empty(const char* hash);
 
@@ -538,7 +544,7 @@ int block_transaction_hash_and_sign(struct block_transaction *transaction);
 int block_verify(struct block* block);
 int block_hash_sign_verify(struct block* block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
-const char *block_hash_create(struct block *block, const char* prev_hash, char* hash_out);
+const char *block_hash_create(struct block *block, char* hash_out);
 struct block *magicnet_block_load(const char *hash);
 
 

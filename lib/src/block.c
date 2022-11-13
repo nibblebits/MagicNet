@@ -196,10 +196,10 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     {
         // Previous hash is NULL, then this means a new blockchain has been created. We should ensure that we create this chain
         return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
-    }   
+    }
 
-    int blockchain_id= -1;
-    int res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL);
+    int blockchain_id = -1;
+    int res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL, NULL, NULL);
     if (res >= 0)
     {
         // We should use the chain of the previous hash here..
@@ -215,7 +215,6 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
-
     res = magicnet_database_load_block_from_previous_hash(block->prev_hash, NULL, &blockchain_id, NULL);
     if (res >= 0)
     {
@@ -224,9 +223,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
-
     return MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE;
-
 }
 
 int blockchain_create_new(struct block *block, BLOCKCHAIN_TYPE type)
@@ -275,7 +272,7 @@ int blockchain_reformat(struct block *block)
     int blockchain_id = -1;
 
     // If we already received a block with our previous hash we may need to merge a chain.
-    res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL);
+    res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL, NULL, NULL);
     if (res >= 0)
     {
         if (block->blockchain_id != blockchain_id)
@@ -296,7 +293,6 @@ int blockchain_reformat(struct block *block)
             magicnet_database_update_block(block);
         }
     }
-
 
     struct vector *blockchains = vector_create(sizeof(struct blockchain *));
     res = magicnet_database_blockchain_all(blockchains);
@@ -365,7 +361,7 @@ int block_save(struct block *block)
         goto out;
     }
 
-    res = magicnet_database_load_block(block->hash, NULL, NULL, NULL);
+    res = magicnet_database_load_block(block->hash, NULL, NULL, NULL, NULL, NULL);
     if (res >= 0)
     {
         blockchain_reformat(block);
@@ -441,14 +437,12 @@ const char *block_transaction_group_hash_create(struct block_transaction_group *
     return hash_out;
 }
 
-const char *block_hash_create(struct block *block, const char *prev_hash, char *hash_out)
+const char *block_hash_create(struct block *block, char *hash_out)
 {
     struct buffer *tmp_buf = buffer_create();
-    if (prev_hash)
-    {
-        buffer_write_bytes(tmp_buf, (void *)prev_hash, strlen(prev_hash));
-    }
-
+ 
+    buffer_write_bytes(tmp_buf, &block->key, sizeof(block->key));
+    buffer_write_bytes(tmp_buf, block->prev_hash, strlen(block->prev_hash));
     char transaction_group_hash[SHA256_STRING_LENGTH];
     if (block_transaction_group_hash_create(block->transaction_group, transaction_group_hash))
     {
@@ -469,20 +463,49 @@ bool block_prev_hash_exists(struct block *block)
 int block_hash_sign_verify(struct block *block)
 {
     int res = 0;
-    block_hash_create(block, block->prev_hash, block->hash);
+    res = block_sign(block);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to sign block\n", __FUNCTION__);
+        return res;
+    }
+
+    block_hash_create(block, block->hash);
     block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
     res = block_verify(block);
     return res;
 }
 
+int block_sign(struct block *block)
+{
+    int res = 0;
+    block->key = *MAGICNET_public_key();
+    res = private_sign(block->hash, sizeof(block->hash), &block->signature);
+    if (res < 0)
+    {
+        magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
+        return -1;
+    }
+
+    return res;
+}
 int block_verify(struct block *block)
 {
     int res = 0;
     char block_hash[SHA256_STRING_LENGTH];
-    block_hash_create(block, block->prev_hash, block_hash);
+    block_hash_create(block, block_hash);
     if (memcmp(block->hash, block_hash, sizeof(block_hash)) != 0)
     {
         magicnet_log("%s the hash in the block does not match the hash it should be\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Okay the hashes are correct but was this block signed by the key in the block?
+    
+    if (public_verify(&block->key, block->hash, sizeof(block->hash), &block->signature) < 0)
+    {
+        magicnet_log("%s block is invalid, signature did not sign this data\n", __FUNCTION__);
         res = -1;
         goto out;
     }
@@ -511,6 +534,7 @@ int block_verify(struct block *block)
             }
         }
     }
+
 out:
     if (res < 0)
     {
@@ -526,7 +550,10 @@ struct block *block_create_with_group(const char *hash, const char *prev_hash, s
     {
         memcpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
     }
-    block->transaction_group = group;
+    if (group)
+    {
+        block->transaction_group = block_transaction_group_clone(group);
+    }
     return block;
 }
 
@@ -561,6 +588,7 @@ void block_free(struct block *block)
 
     if (block->transaction_group)
     {
+        block_transaction_group_free(block->transaction_group);
     }
     free(block);
 }
@@ -583,7 +611,9 @@ struct block *block_load(const char *hash)
     char prev_hash[SHA256_STRING_LENGTH];
     int blockchain_id = -1;
     char transaction_group_hash[SHA256_STRING_LENGTH];
-    res = magicnet_database_load_block(hash, prev_hash, &blockchain_id, transaction_group_hash);
+    struct key key;
+    struct signature signature;
+    res = magicnet_database_load_block(hash, prev_hash, &blockchain_id, transaction_group_hash, &key, &signature);
     if (res < 0)
     {
         goto out;
@@ -592,6 +622,8 @@ struct block *block_load(const char *hash)
     struct block_transaction_group *group = block_transaction_group_new();
     block = block_create_with_group(hash, prev_hash, group);
     block->blockchain_id = blockchain_id;
+    block->key = key;
+    block->signature = signature;
 
 out:
     if (res < 0)

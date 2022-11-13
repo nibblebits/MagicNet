@@ -1,8 +1,9 @@
 #ifndef MAGICNET_DATABASE
 #define MAGICNET_DATABASE
 #include "magicnet.h"
-int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int* blockchain_id, char* transaction_group_hash);
-int magicnet_database_load_block(const char *hash, char *prev_hash_out, int* blockchain_id, char* transaction_group_hash);
+#include "key.h"
+int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key* key, struct signature* signature);
+int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key* key, struct signature* signature);
 int magicnet_database_load_block_from_previous_hash(const char* prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash);
 int magicnet_database_load_block_from_previous_hash_no_locks(const char* prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash);
 int magicnet_database_load();

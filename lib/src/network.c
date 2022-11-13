@@ -676,7 +676,7 @@ void magicnet_close(struct magicnet_client *client)
     }
 }
 
-void magicnet_close_and_free(struct magicnet_client* client)
+void magicnet_close_and_free(struct magicnet_client *client)
 {
     close(client->sock);
     free(client);
@@ -1057,6 +1057,8 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         char hash[SHA256_STRING_LENGTH];
         char prev_hash[SHA256_STRING_LENGTH];
         char transaction_group_hash[SHA256_STRING_LENGTH];
+        struct key key;
+        struct signature signature;
         res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
         if (res < 0)
         {
@@ -1079,7 +1081,23 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
             res = MAGICNET_ERROR_SECURITY_RISK;
             break;
         }
+
+        res = magicnet_read_bytes(client, &key, sizeof(key), packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+
+        res = magicnet_read_bytes(client, &signature, sizeof(signature), packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+
         struct block *block = block_create_with_group(hash, prev_hash, transaction_group);
+        block->key = key;
+        block->signature = signature;
+
         if (!block)
         {
             res = MAGICNET_ERROR_UNKNOWN;
@@ -1108,7 +1126,7 @@ int magicnet_client_read_tansaction_send_packet(struct magicnet_client *client, 
     return res;
 }
 
-int magicnet_client_read_request_block_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+int magicnet_client_read_request_block_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.request_block.request_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block.request_hash), packet_out->not_sent.tmp_buf);
     if (res < 0)
@@ -1526,6 +1544,19 @@ int magicnet_client_write_packet_block_send(struct magicnet_client *client, stru
         {
             break;
         }
+
+        res = magicnet_write_bytes(client, &block->key, sizeof(block->key), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+
+        res = magicnet_write_bytes(client, &block->signature, sizeof(block->signature), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+
         block = vector_peek_ptr(blocks_to_send);
     }
 out:
@@ -1545,7 +1576,7 @@ out:
     return res;
 }
 
-int magicnet_client_write_packet_request_block(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_write_packet_request_block(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.request_block.request_hash, sizeof(magicnet_signed_data(packet)->payload.request_block.request_hash), packet->not_sent.tmp_buf);
@@ -2197,23 +2228,23 @@ out:
     return res;
 }
 
-int magicnet_client_process_request_block_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_process_request_block_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     magicnet_log("%s request block packet initiated\n", __FUNCTION__);
-    struct magicnet_packet* packet_out = magicnet_packet_new();
-    
+    struct magicnet_packet *packet_out = magicnet_packet_new();
+
     magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
 
-    struct block* block = block_load(magicnet_signed_data(packet)->payload.request_block.request_hash);
+    struct block *block = block_load(magicnet_signed_data(packet)->payload.request_block.request_hash);
     if (!block)
     {
         magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
         res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
         goto out;
     }
-    struct vector* block_vec = vector_create(sizeof(struct block*));
-    struct block* cloned_block = block_clone(block);
+    struct vector *block_vec = vector_create(sizeof(struct block *));
+    struct block *cloned_block = block_clone(block);
     vector_push(block_vec, &cloned_block);
     magicnet_signed_data(packet_out)->payload.block_send.blocks = block_vec;
     magicnet_signed_data(packet_out)->payload.block_send.transaction_group = cloned_block->transaction_group;
@@ -2367,7 +2398,6 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         goto out;
     }
-
 
     // Now lets see if we got the signature back
     int sig = 0;
