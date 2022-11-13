@@ -471,7 +471,6 @@ int block_hash_sign_verify(struct block *block)
     }
 
     block_hash_create(block, block->hash);
-    block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
     res = block_verify(block);
     return res;
 }

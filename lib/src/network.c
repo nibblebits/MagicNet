@@ -2933,6 +2933,8 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 
     struct block *block = block_create(transaction_group, prev_hash);
     block->transaction_group = transaction_group;
+    block->key = *MAGICNET_public_key();
+    
     if (block_hash_sign_verify(block) < 0)
     {
         magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
