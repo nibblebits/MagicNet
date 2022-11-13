@@ -463,6 +463,8 @@ bool block_prev_hash_exists(struct block *block)
 int block_hash_sign_verify(struct block *block)
 {
     int res = 0;
+    block->key = *MAGICNET_public_key();
+
     res = block_hash_create(block, block->hash);
     if (res < 0)
     {
@@ -483,7 +485,12 @@ int block_hash_sign_verify(struct block *block)
 int block_sign(struct block *block)
 {
     int res = 0;
-    block->key = *MAGICNET_public_key();
+    struct key blank_key = {0};
+    if (memcmp(&block->key, &blank_key, sizeof(block->key)) == 0)
+    {
+        magicnet_log("%s no key attached to the block to sign with\n", __FUNCTION__);
+        return -1;
+    }
     res = private_sign(block->hash, sizeof(block->hash), &block->signature);
     if (res < 0)
     {
