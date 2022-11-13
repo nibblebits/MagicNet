@@ -2933,7 +2933,7 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 
     struct block *block = block_create(transaction_group, prev_hash);
     block->key = *MAGICNET_public_key();
-    
+
     if (block_hash_sign_verify(block) < 0)
     {
         magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
@@ -2976,6 +2976,12 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
         transaction = vector_peek_ptr(server->next_block.block_transactions);
     }
 
+    res = magicnet_database_blockchain_all(blockchains);
+    if (res < 0)
+    {
+        magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
+        goto out;
+    }
     if (vector_empty(blockchains))
     {
         struct block *block = NULL;
@@ -2987,13 +2993,6 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     }
     else
     {
-        res = magicnet_database_blockchain_all(blockchains);
-        if (res < 0)
-        {
-            magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
-            goto out;
-        }
-
         // We have blockchains, loop through and create a block for each one
         // this can be optimized in the future to not duplicate the transactions.
         vector_set_peek_pointer(blockchains, 0);

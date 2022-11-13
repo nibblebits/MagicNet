@@ -406,14 +406,8 @@ out:
 
 struct block *block_clone(struct block *block)
 {
-    struct block_transaction_group *transaction_group = block_transaction_group_new();
-    for (int i = 0; i < block->transaction_group->total_transactions; i++)
-    {
-        transaction_group->transactions[i] = block_transaction_clone(block->transaction_group->transactions[i]);
-    }
-    transaction_group->total_transactions = block->transaction_group->total_transactions;
-    memcpy(transaction_group->hash, block->transaction_group->hash, sizeof(transaction_group->hash));
-    struct block* block_cloned = block_create_with_group(block->hash, block->prev_hash, transaction_group);
+
+    struct block* block_cloned = block_create_with_group(block->hash, block->prev_hash, block->transaction_group);
     block_cloned->key = block->key;
     block_cloned->signature = block->signature;
     return block;
@@ -563,6 +557,10 @@ struct block *block_create_with_group(const char *hash, const char *prev_hash, s
     {
         block->transaction_group = block_transaction_group_clone(group);
     }
+    else
+    {
+        block->transaction_group = block_transaction_group_new();
+    }
     return block;
 }
 
@@ -573,6 +571,10 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
     if (transaction_group)
     {
         block->transaction_group = block_transaction_group_clone(transaction_group);
+    }
+    else
+    {
+        block->transaction_group = block_transaction_group_new();
     }
     if (!prev_hash)
     {
