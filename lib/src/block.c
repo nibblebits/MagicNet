@@ -463,14 +463,19 @@ bool block_prev_hash_exists(struct block *block)
 int block_hash_sign_verify(struct block *block)
 {
     int res = 0;
+    res = block_hash_create(block, block->hash);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to create hash\n", __FUNCTION__);
+        return res;
+    }
+    
     res = block_sign(block);
     if (res < 0)
     {
         magicnet_log("%s failed to sign block\n", __FUNCTION__);
         return res;
     }
-
-    block_hash_create(block, block->hash);
     res = block_verify(block);
     return res;
 }
@@ -560,8 +565,10 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
 {
     char last_hash[SHA256_STRING_LENGTH] = {0};
     struct block *block = calloc(1, sizeof(struct block));
-    block->transaction_group = transaction_group;
-
+    if (transaction_group)
+    {
+        block->transaction_group = block_transaction_group_clone(transaction_group);
+    }
     if (!prev_hash)
     {
         if (magicnet_database_load_last_block(last_hash, NULL) >= 0)
