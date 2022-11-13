@@ -407,10 +407,10 @@ out:
 struct block *block_clone(struct block *block)
 {
 
-    struct block* block_cloned = block_create_with_group(block->hash, block->prev_hash, block->transaction_group);
+    struct block *block_cloned = block_create_with_group(block->hash, block->prev_hash, block->transaction_group);
     block_cloned->key = block->key;
     block_cloned->signature = block->signature;
-    return block;
+    return block_cloned;
 }
 
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out)
@@ -437,7 +437,7 @@ const char *block_transaction_group_hash_create(struct block_transaction_group *
 const char *block_hash_create(struct block *block, char *hash_out)
 {
     struct buffer *tmp_buf = buffer_create();
- 
+
     buffer_write_bytes(tmp_buf, &block->key, sizeof(block->key));
     buffer_write_bytes(tmp_buf, block->prev_hash, strlen(block->prev_hash));
     char transaction_group_hash[SHA256_STRING_LENGTH];
@@ -463,7 +463,7 @@ int block_hash_sign_verify(struct block *block)
     block->key = *MAGICNET_public_key();
 
     block_hash_create(block, block->hash);
-    
+
     res = block_sign(block);
     if (res < 0)
     {
@@ -505,7 +505,7 @@ int block_verify(struct block *block)
     }
 
     // Okay the hashes are correct but was this block signed by the key in the block?
-    
+
     if (public_verify(&block->key, block->hash, sizeof(block->hash), &block->signature) < 0)
     {
         magicnet_log("%s block is invalid, signature did not sign this data\n", __FUNCTION__);
