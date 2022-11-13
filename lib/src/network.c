@@ -2247,7 +2247,7 @@ int magicnet_client_process_request_block_packet(struct magicnet_client *client,
     struct block *cloned_block = block_clone(block);
     vector_push(block_vec, &cloned_block);
     magicnet_signed_data(packet_out)->payload.block_send.blocks = block_vec;
-    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = cloned_block->transaction_group;
+    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = block_transaction_group_clone(cloned_block->transaction_group);
     magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
     res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     block_free(block);
