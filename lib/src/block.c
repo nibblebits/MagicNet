@@ -465,12 +465,7 @@ int block_hash_sign_verify(struct block *block)
     int res = 0;
     block->key = *MAGICNET_public_key();
 
-    res = block_hash_create(block, block->hash);
-    if (res < 0)
-    {
-        magicnet_log("%s failed to create hash\n", __FUNCTION__);
-        return res;
-    }
+    block_hash_create(block, block->hash);
     
     res = block_sign(block);
     if (res < 0)
