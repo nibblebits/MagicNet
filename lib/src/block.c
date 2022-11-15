@@ -253,6 +253,18 @@ int blockchain_create_new_if_required(struct block *block)
     return res;
 }
 
+void block_free_vector(struct vector* block_vec)
+{
+    vector_set_peek_pointer(block_vec, 0);
+    struct block* block = vector_peek_ptr(block_vec);
+    while(block)
+    {
+        block_free(block);
+        block = vector_peek_ptr(block_vec);
+    }
+    vector_free(block_vec);
+}
+
 /**
  * Reformats the blockchain based on the given block. This function is responsible for moving blocks into new blockchains
  * if it is clear that a blockchain is obsolete.
@@ -265,54 +277,14 @@ int blockchain_create_new_if_required(struct block *block)
 int blockchain_reformat(struct block *block)
 {
 
-    // DEPRECATED FOR NOW! ISSUES MANY ISSUES..
-    return 0;
-
     int res = 0;
-    int blockchain_id = -1;
-
-    // If we already received a block with our previous hash we may need to merge a chain.
-    res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL, NULL, NULL);
-    if (res >= 0)
+    struct vector* block_vec = vector_create(sizeof(struct block*));
+    while(magicnet_database_load_blocks(block_vec, 10) >= 0)
     {
-        if (block->blockchain_id != blockchain_id)
-        {
-            block->blockchain_id = blockchain_id;
-            magicnet_database_update_block(block);
-        }
     }
 
-    // Theirs cases where we download the chain from top to bottom as well.. In these circumstances we must check
-    // to see if theirs a block with our previous hash already. If there is we may need to also swap the chain
-    res = magicnet_database_load_block_from_previous_hash(block->hash, NULL, &blockchain_id, NULL);
-    if (res >= 0)
-    {
-        if (block->blockchain_id != blockchain_id)
-        {
-            block->blockchain_id = blockchain_id;
-            magicnet_database_update_block(block);
-        }
-    }
-
-    struct vector *blockchains = vector_create(sizeof(struct blockchain *));
-    res = magicnet_database_blockchain_all(blockchains);
-    struct blockchain *chain = vector_peek_ptr(blockchains);
-    while (chain)
-    {
-        int total_blocks = magicnet_database_blockchain_blocks_count(chain->id);
-        if (total_blocks == 0)
-        {
-            res = magicnet_database_blockchain_delete(chain->id);
-            if (res < 0)
-            {
-                magicnet_log("%s failed to delete blockchain\n", __FUNCTION__);
-            }
-        }
-        blockchain_free(chain);
-        chain = vector_peek_ptr(blockchains);
-    }
-
-    vector_free(blockchains);
+    magicnet_log("%s total blocks %i\n", __FUNCTION__, vector_count(block_vec));
+    block_free_vector(block_vec);
 out:
     return res;
 }
