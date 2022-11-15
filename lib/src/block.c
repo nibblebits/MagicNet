@@ -279,7 +279,7 @@ int blockchain_reorder_block(char* hash)
 {
     int res = 0;
     struct block* block = block_load(hash);
-    if (!sha256_empty(block->prev_hash))
+    if (sha256_empty(block->prev_hash))
     {
         goto out;
     }

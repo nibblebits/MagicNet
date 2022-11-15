@@ -772,8 +772,8 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
         bzero(hash, SHA256_STRING_LENGTH);
         strncpy(hash, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
 
-        bzero(hash, SHA256_STRING_LENGTH);
-        strncpy(hash, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
+        bzero(prev_hash, SHA256_STRING_LENGTH);
+        strncpy(prev_hash, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
 
 
         blockchain_id = sqlite3_column_int(stmt, 2);
@@ -867,7 +867,7 @@ int magicnet_database_update_block(struct block *block)
 
     sqlite3_stmt *stmt = NULL;
 
-    const char *insert_block_sql = "UPDATE blocks SET prev_hash=?, blockchain_id=?, transaction_group_hash=?, key=?,signature=?) WHERE hash=?";
+    const char *insert_block_sql = "UPDATE blocks SET prev_hash=?, blockchain_id=?, transaction_group_hash=?, key=?,signature=? WHERE hash=?";
     res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -890,10 +890,11 @@ int magicnet_database_update_block(struct block *block)
     sqlite3_bind_blob(stmt, 4, &block->key, sizeof(block->key), NULL);
     sqlite3_bind_blob(stmt, 5, &block->signature, sizeof(block->signature), NULL);
 
-    sqlite3_bind_text(stmt, 6, block->prev_hash, strlen(block->prev_hash), NULL);
+    sqlite3_bind_text(stmt, 6, block->hash, strlen(block->hash), NULL);
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
     {
+        res = -1;
         goto out;
     }
 

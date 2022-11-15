@@ -29,6 +29,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
+    blockchain_reformat();
     res = magicnet_network_thread_start(server);
     if (res < 0)
     {
