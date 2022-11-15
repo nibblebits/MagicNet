@@ -807,6 +807,78 @@ out:
     }
     return res;
 }
+
+
+int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, size_t amount)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    int pos = vector_count(block_vec_out);
+    const char *load_block_sql = "SELECT hash, prev_hash, blockchain_id, transaction_group_hash, key, signature FROM blocks WHERE blockchain_id = 0 LIMIT ?, ?";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_int(stmt, 1, pos);
+    sqlite3_bind_int(stmt, 2, amount);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+    
+    while (step == SQLITE_ROW)
+    {
+        char hash[SHA256_STRING_LENGTH];
+        char prev_hash[SHA256_STRING_LENGTH];
+        int blockchain_id = 0;
+        char transaction_group_hash[SHA256_STRING_LENGTH];
+        struct key key;
+        struct signature signature;
+
+        bzero(hash, SHA256_STRING_LENGTH);
+        strncpy(hash, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
+
+        bzero(prev_hash, SHA256_STRING_LENGTH);
+        strncpy(prev_hash, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
+
+
+        blockchain_id = sqlite3_column_int(stmt, 2);
+
+        bzero(transaction_group_hash, SHA256_STRING_LENGTH);
+        if (sqlite3_column_text(stmt, 3))
+        {
+            strncpy(transaction_group_hash, sqlite3_column_text(stmt, 3), SHA256_STRING_LENGTH);
+        }
+
+        if (sqlite3_column_blob(stmt, 4))
+        {
+            memcpy(&key, sqlite3_column_blob(stmt, 4), sizeof(struct key));
+        }
+
+        if (sqlite3_column_blob(stmt, 5))
+        {
+            memcpy(&signature, sqlite3_column_blob(stmt, 5), sizeof(struct signature));
+        }
+        struct block *block = block_create_with_group(hash, prev_hash, NULL);
+        block->blockchain_id = blockchain_id;
+        block->key = key;
+        block->signature = signature;
+        vector_push(block_vec_out, &block);
+        step = sqlite3_step(stmt);
+    }
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+
 int magicnet_database_save_block(struct block *block)
 {
     int res = 0;

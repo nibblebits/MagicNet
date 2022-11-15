@@ -17,6 +17,7 @@ int magicnet_database_blockchain_delete(int blockchain_id);
 int magicnet_database_blockchain_blocks_count(int blockchain_id);
 int magicnet_database_update_block(struct block *block);
 int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount);
+int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, size_t amount);
 int magicnet_database_delete_all_chains_keep_blocks();
 
 /**
