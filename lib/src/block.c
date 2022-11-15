@@ -266,6 +266,45 @@ void block_free_vector(struct vector* block_vec)
 }
 
 /**
+ * This function only works if you call it on every block in the database after adding a new block
+ * 
+ * 1. If our previous hash is NULL do nothing
+2. If we have a previous hash and our blockchain id is 0 create a new blockchain only if the block holding our
+previous hash doesn't exist otherwise blockchain id should be the block holding our previous hash
+3. Iterate down only if we created a blockchain
+
+Forking is not included in this algorithm yet
+*/
+int blockchain_reorder_block(char* hash)
+{
+    int res = 0;
+    struct block* block = block_load(hash);
+    if (!sha256_empty(block->prev_hash))
+    {
+        goto out;
+    }
+    if (block->blockchain_id == 0)
+    {
+        char hash[SHA256_STRING_LENGTH];
+        int blockchain_id = -1;
+        if(magicnet_database_load_block_from_previous_hash(block->hash, hash, &blockchain_id, NULL) >= 0)
+        {
+            block->blockchain_id = blockchain_id;
+            magicnet_database_update_block(block);
+            goto out;
+        }
+
+        // Okay we need to create a blockchain for this
+        block->blockchain_id = blockchain_create_new(block, MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN);
+        magicnet_database_update_block(block);
+        // Now process the next block in this chain
+        res = blockchain_reorder_block(block->prev_hash);
+
+    }
+out:
+    return res;
+}
+/**
  * Reformats the blockchain based on the given block. This function is responsible for moving blocks into new blockchains
  * if it is clear that a blockchain is obsolete.
  *
@@ -278,12 +317,26 @@ int blockchain_reformat(struct block *block)
 {
 
     int res = 0;
+    res = magicnet_database_delete_all_chains_keep_blocks();
+    if (res < 0)
+    {
+        magicnet_log("%s failed to delete blockchains\n", __FUNCTION__);
+        goto out;
+    }
+    
     struct vector* block_vec = vector_create(sizeof(struct block*));
     while(magicnet_database_load_blocks(block_vec, 10) >= 0)
     {
     }
 
-    magicnet_log("%s total blocks %i\n", __FUNCTION__, vector_count(block_vec));
+    magicnet_log("%s reordering total blocks %i\n", __FUNCTION__, vector_count(block_vec));
+    vector_set_peek_pointer(block_vec, 0);
+    struct block* next_block = vector_peek_ptr(block_vec);
+    while(next_block)
+    {
+        blockchain_reorder_block(next_block->hash);
+        next_block = vector_peek_ptr(block_vec);
+    }
     block_free_vector(block_vec);
 out:
     return res;

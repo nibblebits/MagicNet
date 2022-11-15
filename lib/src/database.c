@@ -691,6 +691,53 @@ out:
     return res;
 }
 
+int magicnet_database_delete_all_chains_keep_blocks()
+{
+   int res = 0;
+    pthread_mutex_lock(&db_lock);
+
+    sqlite3_stmt *stmt = NULL;
+
+
+    const char *delete_block_sql = "DELETE FROM blockchains";
+    res = sqlite3_prepare_v2(db, delete_block_sql, strlen(delete_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_finalize(stmt);
+
+    const char *reset_blockchain_on_blocks_sql = "UPDATE blocks set blockchain_id=0";
+    res = sqlite3_prepare_v2(db, reset_blockchain_on_blocks_sql, strlen(reset_blockchain_on_blocks_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_finalize(stmt);
+
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
 int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
 {
     int res = 0;
