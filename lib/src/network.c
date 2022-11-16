@@ -3055,7 +3055,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     if (current_block_sequence_time >= block_time_first_quarter_start && current_block_sequence_time < block_time_second_quarter_start && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
     {
         // Alright lets deal with this
-      //  magicnet_server_client_signup_as_verifier(server);
+        magicnet_server_client_signup_as_verifier(server);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;
     }
     else if (current_block_sequence_time >= block_time_second_quarter_start && current_block_sequence_time < block_time_third_quarter_start && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
