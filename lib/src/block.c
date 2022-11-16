@@ -199,7 +199,18 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     }
 
     int blockchain_id = -1;
-    int res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL, NULL, NULL);
+    int res = 0;
+    
+    res = magicnet_database_count_blocks_with_previous_hash(block->prev_hash);
+    if (res > 1)
+    {
+        // We have more than one block with the previous hash of our block.
+        // This count includes the block here in this function.
+        // This means we need to split the chain and our block be on the split chain
+        return MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN;
+    }
+
+    res = magicnet_database_load_block(block->prev_hash, NULL, &blockchain_id, NULL, NULL, NULL);
     if (res >= 0)
     {
         // We should use the chain of the previous hash here..
@@ -223,6 +234,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
+    // We can't make a chain right now we will try to make one later when we have more known blocks
     return MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE;
 }
 
@@ -273,12 +285,15 @@ int blockchain_block_prepare(struct block *block)
 void blockchain_reformat_individual_block(struct block* block)
 {
     int blockchain_id = blockchain_create_new_if_required(block);
+    block->blockchain_id = 0;
     if (blockchain_id > 0)
     {
         block->blockchain_id = blockchain_id;
-        magicnet_database_update_block(block);
     }
 
+    magicnet_database_update_block(block);
+
+    magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
 }
 
 int blockchain_reformat(struct block* block)
@@ -347,11 +362,6 @@ int block_save(struct block *block)
         goto out;
     }
 
-    res = magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
-    if (res < 0)
-    {
-        goto out;
-    }
 
     res = blockchain_reformat(block);
     if (res < 0)

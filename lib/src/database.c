@@ -813,6 +813,8 @@ int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, si
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
     int pos = vector_count(block_vec_out);
     const char *load_block_sql = "SELECT hash, prev_hash, blockchain_id, transaction_group_hash, key, signature FROM blocks WHERE blockchain_id = 0 LIMIT ?, ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
@@ -876,6 +878,40 @@ out:
     {
         sqlite3_finalize(stmt);
     }
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+
+int magicnet_database_count_blocks_with_previous_hash(const char* prev_hash)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    const char *load_block_sql = "SELECT COUNT(*) FROM blocks WHERE prev_hash=?";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, prev_hash, strlen(prev_hash), NULL);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    res = sqlite3_column_int(stmt, 0);
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    pthread_mutex_unlock(&db_lock);
     return res;
 }
 
