@@ -288,7 +288,7 @@ int blockchain_reformat(struct block* block)
 
     // Reformat all the other blocks that have no chain.
     struct vector* block_vec = vector_create(sizeof(struct block*));
-    while(magicnet_database_load_blocks_with_no_chain(block_vec, 10))
+    while(magicnet_database_load_blocks_with_no_chain(block_vec, 10) >= 0)
     {
     }
 
