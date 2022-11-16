@@ -563,6 +563,7 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
+        res = -1;
         goto out;
     }
 

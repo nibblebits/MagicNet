@@ -189,7 +189,7 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
     return cloned_transaction;
 }
 
-BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchain_id_out)
+BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchain_id_out, char* related_block_hash)
 {
     char empty_hash[SHA256_STRING_LENGTH] = {0};
     if (memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
@@ -215,6 +215,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     {
         // We should use the chain of the previous hash here..
         *blockchain_id_out = blockchain_id;
+        memcpy(related_block_hash, block->prev_hash, sizeof(block->prev_hash));
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
@@ -223,6 +224,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     {
         // We should use the chain of the previous hash here..
         *blockchain_id_out = blockchain_id;
+        memcpy(related_block_hash, block->hash, sizeof(block->hash));
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
@@ -231,6 +233,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     {
         // We should use the chain of the previous hash here..
         *blockchain_id_out = blockchain_id;
+        memcpy(related_block_hash, block->prev_hash, sizeof(block->prev_hash));
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
@@ -254,10 +257,11 @@ out:
     return res;
 }
 
-int blockchain_create_new_if_required(struct block *block)
+int blockchain_create_new_if_required(struct block *block, char* related_block_hash)
 {
     int res = -1;
-    BLOCKCHAIN_TYPE blockchain_type = blockchain_should_create_new(block, &res);
+    BLOCKCHAIN_TYPE blockchain_type = blockchain_should_create_new(block, &res, related_block_hash);
+
     if (blockchain_type != MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN)
     {
         res = blockchain_create_new(block, blockchain_type);
@@ -284,7 +288,21 @@ int blockchain_block_prepare(struct block *block)
 
 void blockchain_reformat_individual_block(struct block* block)
 {
-    int blockchain_id = blockchain_create_new_if_required(block);
+    char related_block_hash[SHA256_STRING_LENGTH] = {0};
+    int blockchain_id = blockchain_create_new_if_required(block, related_block_hash);
+
+    // If we have a blockchain id of zero returned but their was a related block hash
+    // then this means that we need to reformat the related block before ourselves.
+    if (blockchain_id == 0 && !sha256_empty(related_block_hash))
+    {
+        struct block* related_block = block_load(related_block_hash);
+        blockchain_reformat_individual_block(related_block);
+        block_free(related_block);
+
+        // Now we can run this function again since we dealt with the block.
+        blockchain_id = blockchain_create_new_if_required(block, related_block_hash);
+    }
+
     block->blockchain_id = 0;
     if (blockchain_id > 0)
     {
