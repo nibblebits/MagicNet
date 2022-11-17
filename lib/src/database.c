@@ -452,6 +452,39 @@ out:
     return res;
 }
 
+
+int _magicnet_database_blockchain_load_from_id(int id, struct blockchain *blockchain_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *blockchain_load_sql = "SELECT id, type, begin_hash,  proven_verified_blocks, last_hash from blockchains WHERE id = ?";
+    res = sqlite3_prepare_v2(db, blockchain_load_sql, strlen(blockchain_load_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_bind_int(stmt, 1, id);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        goto out;
+    }
+    blockchain_out->id = sqlite3_column_int(stmt, 0);
+    blockchain_out->type = sqlite3_column_int(stmt, 1);
+    strncpy(blockchain_out->begin_hash, sqlite3_column_text(stmt, 2), SHA256_STRING_LENGTH);
+    blockchain_out->proved_verified_blocks = sqlite3_column_int(stmt, 3);
+    strncpy(blockchain_out->last_hash, sqlite3_column_text(stmt, 4), SHA256_STRING_LENGTH);
+    res = blockchain_out->id;
+
+out:
+    sqlite3_finalize(stmt);
+    return res;
+}
+
+
 /**
  * Creates a new blockchain due to the block provided.
  * No checks are preformed you must ensure this is what you want to do before you call this function
@@ -460,6 +493,7 @@ int magicnet_database_blockchain_create(BLOCKCHAIN_TYPE type, const char *begin_
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
+    int last_insert_id = 0;
     pthread_mutex_lock(&db_lock);
 
     const char *create_blockchain_sql = "INSERT INTO blockchains (type, begin_hash, last_hash, proven_verified_blocks) VALUES (?, ?, ?, ?);";
@@ -482,7 +516,23 @@ int magicnet_database_blockchain_create(BLOCKCHAIN_TYPE type, const char *begin_
     }
     sqlite3_finalize(stmt);
 
-    res = _magicnet_database_blockchain_load_from_begin_hash(begin_hash, blockchain_out);
+
+   const char *get_max_id_query = "SELECT MAX(id) FROM  blockchains  ";
+    res = sqlite3_prepare_v2(db, get_max_id_query, strlen(get_max_id_query), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = -1;
+        goto out;
+    }
+    
+    last_insert_id = sqlite3_column_int(stmt, 0);
+    res = _magicnet_database_blockchain_load_from_id(last_insert_id, blockchain_out);
     if (res < 0)
     {
         goto out;

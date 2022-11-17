@@ -263,7 +263,7 @@ void blockchain_reformat_individual_block(struct block* block)
 {
     block->blockchain_id = 0;
     int blockchain_id = blockchain_create_new_if_required(block);
-    if (blockchain_id < 0)
+    if (blockchain_id <= 0)
     {
         // No blockchain id? Then lets try to find it from the previous block.
         // It wont always be possible and if thats the case we will deal with it later when we know the previous block.
@@ -334,6 +334,7 @@ int block_save(struct block *block)
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
+        blockchain_reformat(block);
         res = MAGICNET_BLOCK_SENT_BEFORE;
         goto out;
     }
