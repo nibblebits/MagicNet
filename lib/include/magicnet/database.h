@@ -20,7 +20,7 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount);
 int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, size_t amount);
 int magicnet_database_count_blocks_with_previous_hash(const char* prev_hash);
 int magicnet_database_delete_all_chains_keep_blocks();
-
+int magicnet_database_blockchain_get_active(struct blockchain **blockchain_out);
 /**
  * Creates a new blockchain 
  */

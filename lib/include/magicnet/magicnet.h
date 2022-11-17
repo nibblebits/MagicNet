@@ -528,6 +528,7 @@ int blockchain_init();
 struct blockchain* blockchain_new();
 void blockchain_free(struct blockchain* blockchain);
 
+
 struct block *block_clone(struct block *block);
 struct block_transaction *block_transaction_new();
 

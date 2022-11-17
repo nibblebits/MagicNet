@@ -214,6 +214,39 @@ out:
     return res;
 }
 
+int magicnet_database_blockchain_get_active(struct blockchain **blockchain_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+    const char *blockchain_load_sql = "SELECT id, type, begin_hash, proven_verified_blocks, last_hash from blockchains";
+    res = sqlite3_prepare_v2(db, blockchain_load_sql, strlen(blockchain_load_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = -1;
+        goto out;
+    }
+    struct blockchain *blockchain = blockchain_new();
+    blockchain->id = sqlite3_column_int(stmt, 0);
+    blockchain->type = sqlite3_column_int(stmt, 1);
+    strncpy(blockchain->begin_hash, sqlite3_column_text(stmt, 2), SHA256_STRING_LENGTH);
+    blockchain->proved_verified_blocks = sqlite3_column_int(stmt, 3);
+    strncpy(blockchain->last_hash, sqlite3_column_text(stmt, 4), SHA256_STRING_LENGTH);
+    *blockchain_out = blockchain;
+
+out:
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magicnet_database_blockchain_blocks_count(int blockchain_id)
 {
     int res = 0;
@@ -452,7 +485,6 @@ out:
     return res;
 }
 
-
 int _magicnet_database_blockchain_load_from_id(int id, struct blockchain *blockchain_out)
 {
     int res = 0;
@@ -483,7 +515,6 @@ out:
     sqlite3_finalize(stmt);
     return res;
 }
-
 
 /**
  * Creates a new blockchain due to the block provided.
@@ -516,8 +547,7 @@ int magicnet_database_blockchain_create(BLOCKCHAIN_TYPE type, const char *begin_
     }
     sqlite3_finalize(stmt);
 
-
-   const char *get_max_id_query = "SELECT MAX(id) FROM  blockchains  ";
+    const char *get_max_id_query = "SELECT MAX(id) FROM  blockchains  ";
     res = sqlite3_prepare_v2(db, get_max_id_query, strlen(get_max_id_query), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -530,7 +560,7 @@ int magicnet_database_blockchain_create(BLOCKCHAIN_TYPE type, const char *begin_
         res = -1;
         goto out;
     }
-    
+
     last_insert_id = sqlite3_column_int(stmt, 0);
     res = _magicnet_database_blockchain_load_from_id(last_insert_id, blockchain_out);
     if (res < 0)
@@ -744,11 +774,10 @@ out:
 
 int magicnet_database_delete_all_chains_keep_blocks()
 {
-   int res = 0;
+    int res = 0;
     pthread_mutex_lock(&db_lock);
 
     sqlite3_stmt *stmt = NULL;
-
 
     const char *delete_block_sql = "DELETE FROM blockchains";
     res = sqlite3_prepare_v2(db, delete_block_sql, strlen(delete_block_sql), &stmt, 0);
@@ -784,7 +813,6 @@ int magicnet_database_delete_all_chains_keep_blocks()
 
     sqlite3_finalize(stmt);
 
-
 out:
     pthread_mutex_unlock(&db_lock);
     return res;
@@ -810,7 +838,7 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
         res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
-    
+
     while (step == SQLITE_ROW)
     {
         char hash[SHA256_STRING_LENGTH];
@@ -825,7 +853,6 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
 
         bzero(prev_hash, SHA256_STRING_LENGTH);
         strncpy(prev_hash, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
-
 
         blockchain_id = sqlite3_column_int(stmt, 2);
 
@@ -859,7 +886,6 @@ out:
     return res;
 }
 
-
 int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, size_t amount)
 {
     int res = 0;
@@ -883,7 +909,7 @@ int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, si
         res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
-    
+
     while (step == SQLITE_ROW)
     {
         char hash[SHA256_STRING_LENGTH];
@@ -898,7 +924,6 @@ int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, si
 
         bzero(prev_hash, SHA256_STRING_LENGTH);
         strncpy(prev_hash, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
-
 
         blockchain_id = sqlite3_column_int(stmt, 2);
 
@@ -933,8 +958,7 @@ out:
     return res;
 }
 
-
-int magicnet_database_count_blocks_with_previous_hash(const char* prev_hash)
+int magicnet_database_count_blocks_with_previous_hash(const char *prev_hash)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;

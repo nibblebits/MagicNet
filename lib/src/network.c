@@ -2979,15 +2979,16 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
         transaction = vector_peek_ptr(server->next_block.block_transactions);
     }
 
-    res = magicnet_database_blockchain_all(blockchains);
+    struct blockchain *active_chain = NULL;
+    res = magicnet_database_blockchain_get_active(&active_chain);
     if (res < 0)
     {
-        magicnet_log("%s issue getting blockchains\n", __FUNCTION__);
+        magicnet_log("%s issue getting active blockchain\n", __FUNCTION__);
         goto out;
     }
-    if (vector_empty(blockchains))
+    struct block *block = NULL;
+    if (!active_chain)
     {
-        struct block *block = NULL;
         res = magicnet_server_create_block(server, NULL, transaction_group, &block);
         if (res >= 0)
         {
@@ -2996,27 +2997,16 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     }
     else
     {
-        // We have blockchains, loop through and create a block for each one
-        // this can be optimized in the future to not duplicate the transactions.
-        vector_set_peek_pointer(blockchains, 0);
-        struct blockchain *blockchain = vector_peek_ptr(blockchains);
-        while (blockchain)
+        res = magicnet_server_create_block(server, active_chain->last_hash, transaction_group, &block);
+        if (res >= 0)
         {
-            struct block *block = NULL;
-            res = magicnet_server_create_block(server, blockchain->last_hash, transaction_group, &block);
-            if (res >= 0)
-            {
-                vector_push(block_vector, &block);
-            }
-            blockchain_free(blockchain);
-            blockchain = vector_peek_ptr(blockchains);
+            vector_push(block_vector, &block);
         }
     }
     magicnet_server_add_packet_to_relay(server, packet);
 
 out:
     magicnet_free_packet(packet);
-    vector_free(blockchains);
 }
 
 /**
