@@ -960,6 +960,10 @@ out:
 
 int magicnet_database_count_blocks_with_previous_hash(const char *prev_hash)
 {
+    if (sha256_empty(prev_hash))
+    {
+        return 0;
+    }
     int res = 0;
     sqlite3_stmt *stmt = NULL;
     pthread_mutex_lock(&db_lock);
