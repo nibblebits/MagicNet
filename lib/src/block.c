@@ -9,6 +9,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 pthread_mutex_t blockchain_lock;
 
@@ -192,7 +193,13 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
 BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchain_id_out)
 {
     char empty_hash[SHA256_STRING_LENGTH] = {0};
-    if (memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
+    struct block* current_block = block_load(block->hash);
+    bool block_exists_already = current_block != NULL;
+    if (current_block)
+    {
+        block_free(current_block);
+    }
+    if (!block_exists_already && memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
     {
         // Previous hash is NULL, then this means a new blockchain has been created. We should ensure that we create this chain
         return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
