@@ -200,7 +200,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
 
     int blockchain_id = -1;
     int res = 0;
-    
+
     res = magicnet_database_count_blocks_with_previous_hash(block->prev_hash);
     if (res > 1)
     {
@@ -242,11 +242,11 @@ int blockchain_create_new_if_required(struct block *block)
     return res;
 }
 
-void block_free_vector(struct vector* block_vec)
+void block_free_vector(struct vector *block_vec)
 {
     vector_set_peek_pointer(block_vec, 0);
-    struct block* block = vector_peek_ptr(block_vec);
-    while(block)
+    struct block *block = vector_peek_ptr(block_vec);
+    while (block)
     {
         block_free(block);
         block = vector_peek_ptr(block_vec);
@@ -259,7 +259,7 @@ int blockchain_block_prepare(struct block *block)
     return 0;
 }
 
-void blockchain_reformat_individual_block(struct block* block)
+void blockchain_reformat_individual_block(struct block *block)
 {
     block->blockchain_id = 0;
     int blockchain_id = blockchain_create_new_if_required(block);
@@ -267,10 +267,16 @@ void blockchain_reformat_individual_block(struct block* block)
     {
         // No blockchain id? Then lets try to find it from the previous block.
         // It wont always be possible and if thats the case we will deal with it later when we know the previous block.
-        struct block* previous_block = block_load(block->prev_hash);
+        struct block *previous_block = block_load(block->prev_hash);
         if (previous_block)
         {
+            // Let's start by reformatting the previous indivdual block
+            blockchain_reformat_individual_block(previous_block);
+            // Now free the block and reload it again
+            block_free(previous_block);
+            previous_block = block_load(block->prev_hash);
             blockchain_id = previous_block->blockchain_id;
+            block_free(previous_block);
         }
     }
 
@@ -280,24 +286,22 @@ void blockchain_reformat_individual_block(struct block* block)
     }
 
     magicnet_database_update_block(block);
-
-    magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
 }
 
-int blockchain_reformat(struct block* block)
+int blockchain_reformat(struct block *block)
 {
     int res = 0;
     blockchain_reformat_individual_block(block);
 
     // Reformat all the other blocks that have no chain.
-    struct vector* block_vec = vector_create(sizeof(struct block*));
-    while(magicnet_database_load_blocks_with_no_chain(block_vec, 10) >= 0)
+    struct vector *block_vec = vector_create(sizeof(struct block *));
+    while (magicnet_database_load_blocks_with_no_chain(block_vec, 10) >= 0)
     {
     }
 
     vector_set_peek_pointer(block_vec, 0);
-    struct block* current_block = vector_peek_ptr(block_vec);
-    while(current_block)
+    struct block *current_block = vector_peek_ptr(block_vec);
+    while (current_block)
     {
         blockchain_reformat_individual_block(current_block);
         current_block = vector_peek_ptr(block_vec);
@@ -350,7 +354,6 @@ int block_save(struct block *block)
     {
         goto out;
     }
-
 
     res = blockchain_reformat(block);
     if (res < 0)

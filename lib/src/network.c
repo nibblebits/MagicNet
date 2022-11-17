@@ -2548,6 +2548,7 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
     while (block)
     {
         block_save(block);
+        magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     }
     magicnet_server_add_packet_to_relay(client->server, packet);
@@ -2949,6 +2950,8 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 
     // Save the block
     block_save(block);
+    magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
+
     *block_out = block;
     return 0;
 }

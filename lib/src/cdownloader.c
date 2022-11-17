@@ -31,7 +31,7 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
         goto out;
     }
 
- //   magicnet_chain_downloader_download(server, "3e06403ea70277eb4dcd445e54d3d2d4ed0528ed0d6a12d0ef42527879ac86b3", NULL);
+    magicnet_chain_downloader_download(server, "8d67411e2f0ff1c3f3d46eb486d4546d0873676d5069022b57c8f8b585a27a33", NULL);
 
 out:
     return res;
