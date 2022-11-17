@@ -201,7 +201,6 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         block_free(current_block);
     }
 
-    int blockchain_id = -1;
     int res = 0;
 
     res = magicnet_database_count_blocks_with_previous_hash(block->prev_hash);
@@ -218,6 +217,11 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         // No block with pervious hash? Then we should create one.
         return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
     }
+
+    // Lets get the block with the previous hash
+    struct block* pervious_block = block_load(block->prev_hash);
+    *blockchain_id_out = pervious_block->blockchain_id;
+    
     // We can't make a chain right now we will try to make one later when we have more known blocks
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
