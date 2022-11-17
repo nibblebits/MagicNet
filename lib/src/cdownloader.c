@@ -36,7 +36,7 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
     while (chain)
     {
         // When we first turn on we must download from the chains last hash just in case we are lagging behind
-        magicnet_chain_downloader_download_and_wait(server, chain->last_hash);
+      //  magincnet_chain_downloader_download_a(server, chain->last_hash, NULL);
         blockchain_free(chain);
         chain = vector_peek_ptr(blockchains);
     }
