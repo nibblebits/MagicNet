@@ -201,6 +201,11 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         block_free(current_block);
     }
 
+    if (!block_has_chain && memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
+    {
+        return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
+    }
+
     int res = 0;
 
     res = magicnet_database_count_blocks_with_previous_hash(block->prev_hash);
@@ -212,20 +217,13 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         return MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN;
     }
 
-    if (res == 0)
-    {
-        // No block with pervious hash? Then we should create one.
-        return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
-    }
-
     // Lets get the block with the previous hash
     struct block* pervious_block = block_load(block->prev_hash);
     if (!pervious_block)
     {
-        magicnet_log("%s BUG\n", __FUNCTION__);
+        *blockchain_id_out = pervious_block->blockchain_id;
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
-    *blockchain_id_out = pervious_block->blockchain_id;
     
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
@@ -279,22 +277,6 @@ void blockchain_reformat_individual_block(struct block *block)
 {
     block->blockchain_id = 0;
     int blockchain_id = blockchain_create_new_if_required(block);
-    if (blockchain_id <= 0)
-    {
-        // No blockchain id? Then lets try to find it from the previous block.
-        // It wont always be possible and if thats the case we will deal with it later when we know the previous block.
-        struct block *previous_block = block_load(block->prev_hash);
-        if (previous_block)
-        {
-            // Let's start by reformatting the previous indivdual block
-            blockchain_reformat_individual_block(previous_block);
-            // Now free the block and reload it again
-            block_free(previous_block);
-            previous_block = block_load(block->prev_hash);
-            blockchain_id = previous_block->blockchain_id;
-            block_free(previous_block);
-        }
-    }
 
     if (blockchain_id > 0)
     {
@@ -315,14 +297,16 @@ int blockchain_reformat(struct block *block)
     {
     }
 
-    vector_set_peek_pointer(block_vec, 0);
-    struct block *current_block = vector_peek_ptr(block_vec);
-    while (current_block)
+    for (int i = 0; i < 1000; i++)
     {
-        blockchain_reformat_individual_block(current_block);
-        current_block = vector_peek_ptr(block_vec);
+        vector_set_peek_pointer(block_vec, 0);
+        struct block *current_block = vector_peek_ptr(block_vec);
+        while (current_block)
+        {
+            blockchain_reformat_individual_block(current_block);
+            current_block = vector_peek_ptr(block_vec);
+        }
     }
-
     block_free_vector(block_vec);
     return res;
 }
