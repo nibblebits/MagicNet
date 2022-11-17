@@ -607,7 +607,7 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
     {
         if (sqlite3_column_blob(stmt, 4))
         {
-            memcpy(key, sqlite3_column_blob(stmt, 4), sizeof(struct signature));
+            memcpy(signature, sqlite3_column_blob(stmt, 4), sizeof(struct signature));
         }
     }
 

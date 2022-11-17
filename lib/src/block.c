@@ -379,7 +379,7 @@ struct block *block_clone(struct block *block)
 
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out)
 {
-    if (group->total_transactions == 0)
+    if (!group || group->total_transactions == 0)
     {
         // No hash today....
         memset(hash_out, 0, SHA256_STRING_LENGTH);
@@ -407,7 +407,7 @@ const char *block_hash_create(struct block *block, char *hash_out)
     char transaction_group_hash[SHA256_STRING_LENGTH];
     if (block_transaction_group_hash_create(block->transaction_group, transaction_group_hash))
     {
-        buffer_write_bytes(tmp_buf, transaction_group_hash, sizeof(block->transaction_group->hash));
+        buffer_write_bytes(tmp_buf, transaction_group_hash, sizeof(transaction_group_hash));
     }
     sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
     buffer_free(tmp_buf);

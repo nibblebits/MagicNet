@@ -550,7 +550,7 @@ struct block *magicnet_block_load(const char *hash);
 
 // Blockchain downloader (used for desyncs..)
 int magicnet_chain_downloader_download_and_wait(struct magicnet_server *server, const char *request_hash);
-struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t* thread_id_out);
+struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t* thread_id_out);
 void magicnet_chain_downloader_finish(struct magicnet_chain_downloader* downloader);
 
 #endif

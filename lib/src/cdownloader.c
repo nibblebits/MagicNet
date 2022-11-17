@@ -31,19 +31,8 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
         goto out;
     }
 
-    vector_set_peek_pointer(blockchains, 0);
-    struct blockchain *chain = vector_peek_ptr(blockchains);
-    while (chain)
-    {
-        if (chain->type == MAGICNET_BLOCKCHAIN_TYPE_INCOMPLETE)
-        {
-            // Incomplete chains must be downloaded.
-            magincnet_chain_downloader_download(server, chain->last_hash, NULL);
-        }
-        blockchain_free(chain);
-        chain = vector_peek_ptr(blockchains);
-    }
-    vector_free(blockchains);
+    magicnet_chain_downloader_download(server, "3e06403ea70277eb4dcd445e54d3d2d4ed0528ed0d6a12d0ef42527879ac86b3", NULL);
+
 out:
     return res;
 }
@@ -472,7 +461,7 @@ void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader)
 /**
  * Queues a download for the block with the given previous hash. Downloads the entire chain until NULL is found.
  */
-struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
+struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
 {
     struct magicnet_chain_downloader *downloader = calloc(1, sizeof(struct magicnet_chain_downloader));
     strncpy(downloader->starting_hash, request_hash, sizeof(downloader->starting_hash));
@@ -545,7 +534,7 @@ int magicnet_chain_downloader_download_and_wait(struct magicnet_server *server, 
 {
     int res = 0;
     pthread_t thread_id = -1;
-    struct magicnet_chain_downloader *downloader = magincnet_chain_downloader_download(server, request_hash, &thread_id);
+    struct magicnet_chain_downloader *downloader = magicnet_chain_downloader_download(server, request_hash, &thread_id);
     if (!downloader)
     {
         return -1;
