@@ -463,6 +463,11 @@ void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader)
  */
 struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
 {
+    if (sha256_empty(request_hash))
+    {
+        return NULL;
+    }
+    
     struct magicnet_chain_downloader *downloader = calloc(1, sizeof(struct magicnet_chain_downloader));
     strncpy(downloader->starting_hash, request_hash, sizeof(downloader->starting_hash));
     strncpy(downloader->request_hash, request_hash, sizeof(downloader->request_hash));
