@@ -200,11 +200,6 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     {
         block_free(current_block);
     }
-    if (!block_has_chain && memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
-    {
-        // Previous hash is NULL, then this means a new blockchain has been created. We should ensure that we create this chain
-        return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
-    }
 
     int blockchain_id = -1;
     int res = 0;
@@ -218,6 +213,11 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         return MAGICNET_BLOCKCHAIN_TYPE_SPLIT_CHAIN;
     }
 
+    if (res == 0)
+    {
+        // No block with pervious hash? Then we should create one.
+        return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
+    }
     // We can't make a chain right now we will try to make one later when we have more known blocks
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
