@@ -2550,7 +2550,7 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         block_save(block);
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
         // Start a downloader just in case we are lagging behind.
-        magincnet_chain_downloader_download(client->server, block->hash, NULL);
+        magicnet_chain_downloader_download(client->server, block->hash, NULL);
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     }
     magicnet_server_add_packet_to_relay(client->server, packet);
