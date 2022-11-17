@@ -2984,7 +2984,6 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     if (res < 0)
     {
         magicnet_log("%s issue getting active blockchain\n", __FUNCTION__);
-        goto out;
     }
     struct block *block = NULL;
     if (!active_chain)
