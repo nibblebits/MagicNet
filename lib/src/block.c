@@ -275,9 +275,7 @@ int blockchain_block_prepare(struct block *block)
 
 void blockchain_reformat_individual_block(struct block *block)
 {
-    block->blockchain_id = 0;
     int blockchain_id = blockchain_create_new_if_required(block);
-
     if (blockchain_id > 0)
     {
         block->blockchain_id = blockchain_id;
