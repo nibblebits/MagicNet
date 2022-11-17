@@ -195,7 +195,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     char empty_hash[SHA256_STRING_LENGTH] = {0};
     struct block* current_block = block_load(block->hash);
     bool block_exists_already = current_block != NULL;
-    bool block_has_chain = current_block->blockchain_id != 0;
+    bool block_has_chain = current_block && current_block->blockchain_id != 0;
     if (current_block)
     {
         block_free(current_block);
