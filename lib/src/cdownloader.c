@@ -36,7 +36,7 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
     while (chain)
     {
         // When we first turn on we must download from the chains last hash just in case we are lagging behind
-      //  magincnet_chain_downloader_download_a(server, chain->last_hash, NULL);
+      //  magicnet_chain_downloader_download_a(server, chain->last_hash, NULL);
         blockchain_free(chain);
         chain = vector_peek_ptr(blockchains);
     }
@@ -469,7 +469,7 @@ void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader)
 /**
  * Queues a download for the block with the given previous hash. Downloads the entire chain until NULL is found.
  */
-struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
+struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
 {
     struct magicnet_chain_downloader *downloader = calloc(1, sizeof(struct magicnet_chain_downloader));
     strncpy(downloader->starting_hash, request_hash, sizeof(downloader->starting_hash));
@@ -542,7 +542,7 @@ int magicnet_chain_downloader_download_and_wait(struct magicnet_server *server, 
 {
     int res = 0;
     pthread_t thread_id = -1;
-    struct magicnet_chain_downloader *downloader = magincnet_chain_downloader_download(server, request_hash, &thread_id);
+    struct magicnet_chain_downloader *downloader = magicnet_chain_downloader_download(server, request_hash, &thread_id);
     if (!downloader)
     {
         return -1;
