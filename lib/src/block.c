@@ -193,13 +193,7 @@ struct block_transaction *block_transaction_clone(struct block_transaction *tran
 BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchain_id_out)
 {
     char empty_hash[SHA256_STRING_LENGTH] = {0};
-    struct block* current_block = block_load(block->hash);
-    bool block_exists_already = current_block != NULL;
-    bool block_has_chain = current_block && current_block->blockchain_id != 0;
-    if (current_block)
-    {
-        block_free(current_block);
-    }
+    bool block_has_chain = block->blockchain_id != 0;
 
     if (!block_has_chain && memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
     {
