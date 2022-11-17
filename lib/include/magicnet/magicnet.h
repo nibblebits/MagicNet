@@ -521,6 +521,7 @@ struct block *block_load(const char *hash);
 int block_save(struct block* block);
 int block_sign(struct block *block);
 void block_free(struct block *block);
+void block_free_vector(struct vector *block_vec);
 bool sha256_empty(const char* hash);
 
 int blockchain_init();
