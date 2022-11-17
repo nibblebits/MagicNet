@@ -219,7 +219,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
 
     // Lets get the block with the previous hash
     struct block* pervious_block = block_load(block->prev_hash);
-    if (!pervious_block)
+    if (pervious_block)
     {
         *blockchain_id_out = pervious_block->blockchain_id;
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
