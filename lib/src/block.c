@@ -220,9 +220,13 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
 
     // Lets get the block with the previous hash
     struct block* pervious_block = block_load(block->prev_hash);
+    if (!pervious_block)
+    {
+        magicnet_log("%s BUG\n", __FUNCTION__);
+        return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
+    }
     *blockchain_id_out = pervious_block->blockchain_id;
     
-    // We can't make a chain right now we will try to make one later when we have more known blocks
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
 
