@@ -28,7 +28,7 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
         struct block* prev_block = vector_back_ptr(blocks_to_download);
         if (prev_block)
         {
-            magicnet_chain_downloader_download(server, prev_block->prev_hash);
+            magicnet_chain_downloader_download(server, prev_block->prev_hash, NULL);
         }
     }
 
