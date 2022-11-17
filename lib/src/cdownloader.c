@@ -31,8 +31,16 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
         goto out;
     }
 
-    magicnet_chain_downloader_download(server, "8d67411e2f0ff1c3f3d46eb486d4546d0873676d5069022b57c8f8b585a27a33", NULL);
-
+    vector_set_peek_pointer(blockchains, 0);
+    struct blockchain *chain = vector_peek_ptr(blockchains);
+    while (chain)
+    {
+        // When we first turn on we must download from the chains last hash just in case we are lagging behind
+        magicnet_chain_downloader_download_and_wait(server, chain->last_hash);
+        blockchain_free(chain);
+        chain = vector_peek_ptr(blockchains);
+    }
+    vector_free(blockchains);
 out:
     return res;
 }
@@ -242,11 +250,11 @@ int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct mag
         goto out;
     }
 
-    // if (res == MAGICNET_BLOCK_SENT_BEFORE)
-    // {
-    //     magicnet_log("%s we actually finished downloading the chain as we have a block that we already own\n", __FUNCTION__);
-    //     download_completed = true;
-    // }
+    if (res == MAGICNET_BLOCK_SENT_BEFORE)
+    {
+        magicnet_log("%s we actually finished downloading the chain as we have a block that we already own\n", __FUNCTION__);
+        download_completed = true;
+    }
     magicnet_log("%s saved block %s\n", __FUNCTION__, block->hash);
 
     // Now the request hash must change
@@ -255,12 +263,12 @@ int magicnet_chain_downloader_peer_thread_loop_save_block_from_packet(struct mag
 
     if (sha256_empty(block->prev_hash))
     {
-       download_completed = true;
+        download_completed = true;
     }
 
     if (download_completed)
     {
-         //Finished downloading?
+        // Finished downloading?
         res = MAGICNET_TASK_COMPLETE;
         peer_thread->downloader->download_completed = true;
     }
@@ -461,7 +469,7 @@ void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader)
 /**
  * Queues a download for the block with the given previous hash. Downloads the entire chain until NULL is found.
  */
-struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
+struct magicnet_chain_downloader *magincnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out)
 {
     struct magicnet_chain_downloader *downloader = calloc(1, sizeof(struct magicnet_chain_downloader));
     strncpy(downloader->starting_hash, request_hash, sizeof(downloader->starting_hash));
@@ -534,7 +542,7 @@ int magicnet_chain_downloader_download_and_wait(struct magicnet_server *server, 
 {
     int res = 0;
     pthread_t thread_id = -1;
-    struct magicnet_chain_downloader *downloader = magicnet_chain_downloader_download(server, request_hash, &thread_id);
+    struct magicnet_chain_downloader *downloader = magincnet_chain_downloader_download(server, request_hash, &thread_id);
     if (!downloader)
     {
         return -1;
