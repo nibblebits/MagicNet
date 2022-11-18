@@ -197,6 +197,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
 
     if (!block_has_chain && memcmp(block->prev_hash, empty_hash, sizeof(block->prev_hash)) == 0)
     {
+        magicnet_log("%s new block %p adding new chain\n", __FUNCTION__, block);
         return MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN;
     }
 
