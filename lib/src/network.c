@@ -2966,6 +2966,8 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
     // Save the block
     block_save(block);
     magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
+    magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
+
 
     *block_out = block;
     return 0;
