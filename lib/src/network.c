@@ -2556,6 +2556,14 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         block_save(block);
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
         magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
+        
+        struct block* previous_block =block_load(block->prev_hash);
+        if (!previous_block)
+        {
+            // No previous block? Then we should initiate a download for all blocks with no chain
+            magicnet_chain_downloader_blocks_catchup(client->server);
+        }
+        block_free(previous_block);
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     }
     magicnet_server_add_packet_to_relay(client->server, packet);

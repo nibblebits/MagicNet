@@ -10,18 +10,9 @@
 void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader);
 
 static struct magicnet_active_chain_downloads downloads;
-int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
+
+void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server)
 {
-    int res = 0;
-    bzero(&downloads, sizeof(downloads));
-    if (pthread_mutex_init(&downloads.lock, NULL) != 0)
-    {
-        magicnet_log("%s Failed to initialize the downloder lock\n", __FUNCTION__);
-        goto out;
-    }
-
-    downloads.chain_downloads = vector_create(sizeof(struct magicnet_chain_downloader *));
-
     struct vector* blocks_to_download = vector_create(sizeof(struct block*));
     while(magicnet_database_load_blocks_with_no_chain(blocks_to_download, 1) >= 0)
     {
@@ -33,6 +24,19 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
     }
 
     block_free_vector(blocks_to_download);
+}
+int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
+{
+    int res = 0;
+    bzero(&downloads, sizeof(downloads));
+    if (pthread_mutex_init(&downloads.lock, NULL) != 0)
+    {
+        magicnet_log("%s Failed to initialize the downloder lock\n", __FUNCTION__);
+        goto out;
+    }
+
+    downloads.chain_downloads = vector_create(sizeof(struct magicnet_chain_downloader *));
+    magicnet_chain_downloader_blocks_catchup(server);
 out:
     return res;
 }
