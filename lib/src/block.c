@@ -290,7 +290,7 @@ int blockchain_reformat(struct block *block)
     {
     }
 
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 2; i++)
     {
         vector_set_peek_pointer(block_vec, 0);
         struct block *current_block = vector_peek_ptr(block_vec);
@@ -572,6 +572,20 @@ void magicnet_get_block_path_for_hash(const char *hash, char *block_path_out)
     sprintf(block_path_out, "%s/%s/%s/%s.blk", getenv("HOME"), ".magicnet", MAGICNET_BLOCK_DIRECTORY, hash);
 }
 
+int block_load_transactions(struct block* block)
+{
+    int res = 0;
+    if (!block->transaction_group)
+    {
+        magicnet_log("%s cannot load block transactions when a transaction group does not exist\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    res = magicnet_database_load_block_transactions(block);
+out:
+    return res;
+}
 struct block *block_load(const char *hash)
 {
     int res = 0;
@@ -589,6 +603,7 @@ struct block *block_load(const char *hash)
     }
 
     struct block_transaction_group *group = block_transaction_group_new();
+    memcpy(group->hash, transaction_group_hash, sizeof(group->hash));
     block = block_create_with_group(hash, prev_hash, group);
     block->blockchain_id = blockchain_id;
     block->key = key;

@@ -63,8 +63,7 @@ enum
     MAGICNET_ERROR_ALREADY_EXISTANT = -1003,
     MAGICNET_ERROR_UNKNOWN = -1004,
     MAGICNET_ERROR_SECURITY_RISK = -1005,
-    MAGICNET_ERROR_NO_BLOCK_FOUND = -1006,
-    MAGICNET_ERROR_TOO_LARGE = 1007,
+    MAGICNET_ERROR_TOO_LARGE = 1006,
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
     MAGICNET_ERROR_CRITICAL_ERROR = -1,
@@ -517,6 +516,7 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out);
 struct block_transaction_group* block_transaction_group_clone(struct block_transaction_group* transaction_group_in);
 struct block *block_load(const char *hash);
+int block_load_transactions(struct block* block);
 
 int block_save(struct block* block);
 int block_sign(struct block *block);

@@ -133,7 +133,7 @@ int magicnet_database_load_block_with_previous_hash(const char *prev_hash, char 
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
-        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
 
@@ -163,7 +163,7 @@ int magicnet_database_load_last_block_no_locks(char *hash_out, char *prev_hash_o
     res = sqlite3_step(stmt);
     if (res != SQLITE_ROW)
     {
-        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
 
@@ -440,7 +440,7 @@ int magicnet_database_blockchain_load_from_last_hash(const char *last_hash, stru
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
-        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
     blockchain_out->id = sqlite3_column_int(stmt, 0);
@@ -471,7 +471,7 @@ int _magicnet_database_blockchain_load_from_begin_hash(const char *begin_hash, s
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
-        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
     blockchain_out->id = sqlite3_column_int(stmt, 0);
@@ -501,7 +501,7 @@ int _magicnet_database_blockchain_load_from_id(int id, struct blockchain *blockc
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
-        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
     blockchain_out->id = sqlite3_column_int(stmt, 0);
@@ -604,7 +604,7 @@ int magicnet_database_load_block_from_previous_hash_no_locks(const char *prev_ha
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
-        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
 
@@ -635,6 +635,72 @@ out:
     }
     return res;
 }
+int magicnet_database_load_block_transactions_no_locks(struct block *block)
+{
+    int res = 0;
+    if (block->transaction_group->total_transactions > 0)
+    {
+        return MAGICNET_ERROR_ALREADY_EXISTANT;
+    }
+    sqlite3_stmt *stmt = NULL;
+    const char *load_block_sql = "SELECT hash, signature, key, program_name, time, data_size, data FROM transactions WHERE transaction_group_hash = ?";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, block->transaction_group->hash, sizeof(block->transaction_group->hash), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    while (step == SQLITE_ROW)
+    {
+        struct block_transaction *transaction = block_transaction_new();
+        memcpy(transaction->hash, sqlite3_column_text(stmt, 0), strlen(sqlite3_column_text(stmt, 0)));
+        memcpy(&transaction->signature, sqlite3_column_text(stmt, 1), sizeof(transaction->signature));
+        memcpy(&transaction->key, sqlite3_column_text(stmt, 2), sizeof(transaction->key));
+        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 3), strlen(sqlite3_column_text(stmt, 3)));
+        transaction->data.time = sqlite3_column_int(stmt, 4);
+        transaction->data.size = sqlite3_column_int(stmt, 5);
+        transaction->data.ptr = calloc(1, transaction->data.size);
+        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 6), transaction->data.size);
+        block_transaction_add(block->transaction_group, transaction);
+
+        step = sqlite3_step(stmt);
+    }
+
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+
+int magicnet_database_load_block_transactions(struct block *block)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_block_transactions_no_locks(block);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_block_no_locks(hash, prev_hash_out, blockchain_id, transaction_group_hash, key, signature);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature)
 {
     int res = 0;
@@ -651,7 +717,7 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
-        res = MAGICNET_ERROR_NO_BLOCK_FOUND;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
 
@@ -696,14 +762,6 @@ out:
     {
         sqlite3_finalize(stmt);
     }
-    return res;
-}
-int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature)
-{
-    int res = 0;
-    pthread_mutex_lock(&db_lock);
-    res = magicnet_database_load_block_no_locks(hash, prev_hash_out, blockchain_id, transaction_group_hash, key, signature);
-    pthread_mutex_unlock(&db_lock);
     return res;
 }
 
