@@ -219,7 +219,7 @@ int magicnet_database_blockchain_get_active(struct blockchain **blockchain_out)
     int res = 0;
     sqlite3_stmt *stmt = NULL;
     pthread_mutex_lock(&db_lock);
-    const char *blockchain_load_sql = "SELECT id, type, begin_hash, proven_verified_blocks, last_hash from blockchains";
+    const char *blockchain_load_sql = "SELECT id, type, begin_hash, proven_verified_blocks, last_hash from blockchains ORDER BY proven_verified_blocks desc LIMIT 0,1";
     res = sqlite3_prepare_v2(db, blockchain_load_sql, strlen(blockchain_load_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {

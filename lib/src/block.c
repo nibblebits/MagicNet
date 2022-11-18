@@ -354,11 +354,6 @@ int block_save(struct block *block)
         goto out;
     }
 
-    res = magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
-    if (res < 0)
-    {
-        goto out;
-    }
 
 out:
     pthread_mutex_unlock(&blockchain_lock);

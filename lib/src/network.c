@@ -2543,12 +2543,19 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
+    if (vector_count(magicnet_signed_data(packet)->payload.block_send.blocks) > 1)
+    {
+        magicnet_log("%s this version of the protocol does not allow multiple blocks to be sent. Blocks ignored\n", __FUNCTION__);
+        return 0;
+    }
+
     vector_set_peek_pointer(magicnet_signed_data(packet)->payload.block_send.blocks, 0);
     struct block *block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     while (block)
     {
         block_save(block);
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
+        magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     }
     magicnet_server_add_packet_to_relay(client->server, packet);
