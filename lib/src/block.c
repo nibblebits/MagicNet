@@ -213,13 +213,13 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     }
 
     // Lets get the block with the previous hash
-    struct block *pervious_block = block_load(block->prev_hash);
+    struct block* pervious_block = block_load(block->prev_hash);
     if (pervious_block)
     {
         *blockchain_id_out = pervious_block->blockchain_id;
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
-
+    
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
 
@@ -277,14 +277,6 @@ void blockchain_reformat_individual_block(struct block *block)
     }
 
     magicnet_database_update_block(block);
-
-    struct block* prev_block = block_load(block->prev_hash);
-    if (prev_block)
-    {
-        // Warning this recursion could be a problem if we are dealing with 10000s of blocks.. something to consider.
-        blockchain_reformat_individual_block(prev_block);
-    }
-    block_free(prev_block);
 }
 
 int blockchain_reformat(struct block *block)
@@ -298,14 +290,16 @@ int blockchain_reformat(struct block *block)
     {
     }
 
-    vector_set_peek_pointer(block_vec, 0);
-    struct block *current_block = vector_peek_ptr(block_vec);
-    while (current_block)
+    for (int i = 0; i < 1000; i++)
     {
-        blockchain_reformat_individual_block(current_block);
-        current_block = vector_peek_ptr(block_vec);
+        vector_set_peek_pointer(block_vec, 0);
+        struct block *current_block = vector_peek_ptr(block_vec);
+        while (current_block)
+        {
+            blockchain_reformat_individual_block(current_block);
+            current_block = vector_peek_ptr(block_vec);
+        }
     }
-
     block_free_vector(block_vec);
     return res;
 }
@@ -337,7 +331,7 @@ int block_save(struct block *block)
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
-        // blockchain_reformat(block);
+        //blockchain_reformat(block);
         res = MAGICNET_BLOCK_SENT_BEFORE;
         goto out;
     }
@@ -359,6 +353,7 @@ int block_save(struct block *block)
     {
         goto out;
     }
+
 
 out:
     pthread_mutex_unlock(&blockchain_lock);
