@@ -2268,22 +2268,14 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
 {
 
     int res = 0;
-
-    // No server instance ? Then nothing to send.
-    res = magicnet_read_int(client, NULL);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    if (res == MAGICNET_ENTRY_PROTOCOL_NO_IPS)
-    {
-        // No ips? then we are done
-        goto out;
-    }
-
     // Lets read all the IPS until we get a NULL.
     size_t total_peers = magicnet_read_int(client, NULL);
+    if (total_peers < 0)
+    {
+        res = total_peers;
+        goto out;
+    }
+    
     for (int i = 0; i < total_peers; i++)
     {
         in_addr_t s_addr;
@@ -2415,13 +2407,13 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
         struct magicnet_client *client_to_send = vector_peek(connected_client_vec);
         while (client_to_send)
         {
-            res = magicnet_write_bytes(client, client->client_info.sin_addr.s_addr, sizeof(client->client_info.sin_addr.s_addr), NULL);
+            res = magicnet_write_bytes(client, client_to_send->client_info.sin_addr.s_addr, sizeof(client_to_send->client_info.sin_addr.s_addr), NULL);
             if (res < 0)
             {
                 break;
             }
 
-            res = magicnet_write_bytes(client, &client->peer_info.key, sizeof(client->peer_info.key), NULL);
+            res = magicnet_write_bytes(client, &client_to_send->peer_info.key, sizeof(client_to_send->peer_info.key), NULL);
             if (res < 0)
             {
                 break;
