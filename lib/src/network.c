@@ -531,7 +531,9 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
     int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0);
     if (res < 0)
     {
+        magicnet_server_lock(server);
         magicnet_close(mclient);
+        magicnet_server_unlock(server);
         mclient = NULL;
     }
 
@@ -2349,7 +2351,7 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
     {
         goto out;
     }
-    
+
     client->communication_flags = communication_flags;
 out:
     return res;
@@ -2876,8 +2878,6 @@ int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, ch
         {
             break;
         }
-
-        
     }
     magicnet_server_unlock(server);
 
