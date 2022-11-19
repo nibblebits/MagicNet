@@ -2428,7 +2428,7 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
                 break;
             }
 
-            data_to_send = vector_peek_ptr(connected_client_vec);
+            data_to_send = vector_peek(connected_client_vec);
         }
         vector_free(connected_client_vec);
 
