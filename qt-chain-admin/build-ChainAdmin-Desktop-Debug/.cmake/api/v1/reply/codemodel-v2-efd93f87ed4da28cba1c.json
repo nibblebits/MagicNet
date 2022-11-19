@@ -1,0 +1,79 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-1217335f1bfa8114640c.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.16"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "ChainAdmin",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "ChainAdmin::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ChainAdmin-Debug-ce5bd4132c522c31b2a6.json",
+					"name" : "ChainAdmin",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ChainAdmin_autogen::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ChainAdmin_autogen-Debug-c377a4a72d9f8ca593b0.json",
+					"name" : "ChainAdmin_autogen",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "ChainAdmin_autogen_timestamp_deps::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-ChainAdmin_autogen_timestamp_deps-Debug-3626fe4285c51812f489.json",
+					"name" : "ChainAdmin_autogen_timestamp_deps",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug",
+		"source" : "/home/daniel/MagicNet/qt-chain-admin/ChainAdmin"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 4
+	}
+}

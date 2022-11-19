@@ -22,6 +22,9 @@ int magicnet_database_load_block_transactions(struct block *block);
 int magicnet_database_count_blocks_with_previous_hash(const char* prev_hash);
 int magicnet_database_delete_all_chains_keep_blocks();
 int magicnet_database_blockchain_get_active(struct blockchain **blockchain_out);
+int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key, const char *name, const char *email);
+int magicnet_database_peer_add(const char *ip_address, struct key *key, const char *name, const char *email);
+
 /**
  * Creates a new blockchain 
  */

@@ -43,10 +43,13 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 \"data\"	BLOB,  \
                                 \"data_size\"	INTEGER);",
 
-                               "CREATE TABLE \"ip_addresses\" ("
-                               "\"id\"	INTEGER,"
+                               "CREATE TABLE \"peers\" ("
+                               "\"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,"
                                "\"found_at\"	REAL,"
                                "\"ip_address\"	TEXT,"
+                               "\"key\"	BLOB,  "
+                               "\"name\"	TEXT,  "
+                               "\"email\"	TEXT,  "
                                "PRIMARY KEY(\"id\") "
                                ");",
                                NULL};
@@ -56,6 +59,58 @@ const char *magicnet_database_path()
     static char filepath[PATH_MAX];
     sprintf(filepath, "%s/%s%s", getenv(MAGICNET_DATA_BASE_DIRECTORY_ENV), MAGICNET_DATA_BASE, MAGICNET_DATABASE_SQLITE_FILEPATH);
     return filepath;
+}
+
+int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key, const char *name, const char *email)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_peer_sql = "INSERT INTO  peers (found_at, ip_address, key, name, email) VALUES (?,?, ?, ?, ?);";
+    res = sqlite3_prepare_v2(db, insert_peer_sql, strlen(insert_peer_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_bind_int(stmt, 1, time(NULL));
+    sqlite3_bind_text(stmt, 2, ip_address, strlen(ip_address), NULL);
+    sqlite3_bind_null(stmt, 3);
+    if (key)
+    {
+        sqlite3_bind_blob(stmt, 3, &key, sizeof(key), NULL);
+    }
+    sqlite3_bind_null(stmt, 4);
+    if (name)
+    {
+        sqlite3_bind_text(stmt, 4, name, strlen(name), NULL);
+    }
+    sqlite3_bind_null(stmt, 5);
+
+    if (email)
+    {
+        sqlite3_bind_text(stmt, 5, email, strlen(email), NULL);
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_finalize(stmt);
+out:
+    return res;
+}
+
+int magicnet_database_peer_add(const char *ip_address, struct key *key, const char *name, const char *email)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_peer_add_no_locks(ip_address, key, name, email);
+    pthread_mutex_unlock(&db_lock);
+    return res;
 }
 
 int magicnet_database_create()
@@ -74,6 +129,9 @@ int magicnet_database_create()
         }
         index++;
     }
+
+    // This is the root host the peer everybody knows about.
+    magicnet_database_peer_add_or_update_no_locks("104.248.237.170", NULL, "Root Host", "hello@dragonzap.com");
 
     return res;
 }

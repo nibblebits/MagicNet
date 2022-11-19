@@ -298,8 +298,6 @@ struct magicnet_server
     off_t last_new_connection_attempt;
     const char *loaded_ip_addresses[MAGICNET_MAX_LOADED_IP_ADDRESSES];
     size_t total_loaded_ips;
-    FILE *ip_file;
-    // END
 };
 
 struct block_transaction_data

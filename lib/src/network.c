@@ -102,31 +102,6 @@ bool magicnet_is_ip_loaded(struct magicnet_server *server, const char *ip_addres
     return false;
 }
 
-int magicnet_load_ips(struct magicnet_server *server)
-{
-    // Normally we would load randomly but for now in order.
-
-    magicnet_loaded_ips_add(server, "104.248.237.170");
-    // TODO
-    // size_t read = 0;
-    // size_t len = 0;
-    // char *line = NULL;
-    // while ((read = getline(&line, &len, server->ip_file)) != -1)
-    // {
-    //     magicnet_loaded_ips_add(server, line);
-    // }
-    // return 0;
-}
-
-int magicnet_ip_file_add_ip(struct magicnet_server *server, const char *ip_address)
-{
-    int res = magicnet_loaded_ips_add(server, ip_address);
-    if (res < 0)
-    {
-        return -1;
-    }
-    return fwrite(ip_address, strlen(ip_address), 1, server->ip_file) > 0 ? 0 : -1;
-}
 
 struct magicnet_client *magicnet_client_new()
 {
@@ -188,17 +163,6 @@ struct magicnet_server *magicnet_server_start(int port)
         return NULL;
     }
 
-    char ip_file[PATH_MAX];
-    sprintf(ip_file, "%s/%s/%s", getenv("HOME"), ".magicnet", "ips.txt");
-
-    FILE *ip_file_p = fopen(ip_file, "a");
-    if (!ip_file_p)
-    {
-        magicnet_log("IP file could not be opened\n");
-        return NULL;
-    }
-    server->ip_file = ip_file_p;
-    magicnet_load_ips(server);
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {

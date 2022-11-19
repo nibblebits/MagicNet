@@ -1,0 +1,9 @@
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/ChainAdmin.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/edit_cache.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/rebuild_cache.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/list_install_components.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/install.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/install/local.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/install/strip.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/ChainAdmin_autogen_timestamp_deps.dir
+/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/ChainAdmin_autogen.dir
