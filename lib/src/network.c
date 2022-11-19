@@ -2849,6 +2849,7 @@ int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, ch
 {
 
     int res = magicnet_database_peer_get_random_ip(ip_out);
+    bool found_ip = false;
     if (res < 0)
     {
         goto out;
@@ -2859,16 +2860,24 @@ int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, ch
     {
         if (!magicnet_server_is_ip_connected(server, ip_out))
         {
+            found_ip = true;
             break;
         }
+
         res = magicnet_database_peer_get_random_ip(ip_out);
         if (res < 0)
         {
             break;
         }
+
+        
     }
     magicnet_server_unlock(server);
 
+    if (!found_ip)
+    {
+        res = -1;
+    }
 out:
     return res;
 }
