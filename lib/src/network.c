@@ -2280,7 +2280,7 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
 
     for (int i = 0; i < total_peers; i++)
     {
-        in_addr_t s_addr;
+        struct in_addr s_addr;
         res = magicnet_read_bytes(client, &s_addr, sizeof(s_addr), NULL);
         if (res < 0)
         {
@@ -2415,7 +2415,7 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
         vector_set_peek_pointer(connected_client_vec, 0);
         struct magicnet_connection_exchange_peer_data *data_to_send = vector_peek(connected_client_vec);
         while (data_to_send)
-        {
+        {in_addr_t
             res = magicnet_write_bytes(client, &data_to_send->sin_addr, sizeof(data_to_send->sin_addr), NULL);
             if (res < 0)
             {
