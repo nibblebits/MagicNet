@@ -2401,10 +2401,10 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
     }
     else
     {
-        magicnet_server_lock(client->server);
+    //    magicnet_server_lock(client->server);
         struct vector *connected_client_vec = vector_create(sizeof(struct magicnet_client));
         magicnet_server_get_all_connected_clients(client->server, connected_client_vec);
-        magicnet_server_unlock(client->server);
+     //   magicnet_server_unlock(client->server);
         res = magicnet_write_int(client, vector_count(connected_client_vec), NULL);
         if (res < 0)
         {
