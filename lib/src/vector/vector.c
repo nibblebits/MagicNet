@@ -125,7 +125,7 @@ void *vector_peek_at(struct vector *vector, int index)
 
 void *vector_peek_no_increment(struct vector *vector)
 {
-    if (!vector_in_bounds_for_at(vector, vector->pindex+1))
+    if (!vector_in_bounds_for_at(vector, vector->pindex))
     {
         return NULL;
     }
