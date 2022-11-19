@@ -194,18 +194,12 @@ struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_serve
 
 void magicnet_server_lock(struct magicnet_server *server)
 {
-    if (server)
-    {
-        pthread_mutex_lock(&server->lock);
-    }
+    pthread_mutex_lock(&server->lock);
 }
 
 void magicnet_server_unlock(struct magicnet_server *server)
 {
-    if (server)
-    {
-        pthread_mutex_unlock(&server->lock);
-    }
+    pthread_mutex_unlock(&server->lock);
 }
 
 bool magicnet_server_awaiting_transaction_exists(struct magicnet_server *server, struct block_transaction *transaction)
@@ -2795,10 +2789,16 @@ void *magicnet_client_thread(void *_client)
         res = magicnet_client_manage_next_packet(client);
     }
 out:
-    magicnet_server_lock(client->server);
-    magicnet_close(client);
-    magicnet_server_unlock(client->server);
-
+    if (client->server)
+    {
+        magicnet_server_lock(client->server);
+        magicnet_close(client);
+        magicnet_server_unlock(client->server);
+    }
+    else
+    {
+        magicnet_close(client);
+    }
     return NULL;
 }
 int magicnet_client_thread_start(struct magicnet_client *client)
