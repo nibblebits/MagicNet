@@ -10,6 +10,9 @@
 #define MAGICNET_MAX_AWAITING_PACKETS 1024
 
 #define MAGICNET_MAX_IP_STRING_SIZE 17
+#define MAGICNET_MAX_NAME_SIZE 65
+#define MAGICNET_MAX_EMAIL_SIZE 256
+
 
 // At least 10 seconds must pass for the server to attempt to connect to other peers
 #define MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS 10

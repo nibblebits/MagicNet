@@ -113,7 +113,7 @@ int magicnet_database_peer_add(const char *ip_address, struct key *key, const ch
     return res;
 }
 
-int magicnet_database_peer_get_random_ip(const char *ip_address_out)
+int magicnet_database_peer_get_random_ip(char *ip_address_out)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;

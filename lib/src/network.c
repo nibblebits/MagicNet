@@ -2264,6 +2264,47 @@ out:
     return res;
 }
 
+int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client)
+{
+
+    int res = 0;
+
+    // No server instance ? Then nothing to send.
+    res = magicnet_read_int(client, NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    if (res == MAGICNET_ENTRY_PROTOCOL_NO_IPS)
+    {
+        // No ips? then we are done
+        goto out;
+    }
+
+    // Lets read all the IPS until we get a NULL.
+    size_t total_peers = magicnet_read_int(client, NULL);
+    for (int i = 0; i < total_peers; i++)
+    {
+        in_addr_t s_addr;
+        res = magicnet_read_bytes(client, &s_addr, sizeof(s_addr), NULL);
+        if (res < 0)
+        {
+            goto out;
+        }
+
+        struct key key;
+        res = magicnet_read_bytes(client, &key, sizeof(key), NULL);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+out:
+    return res;
+}
+
 int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
 {
     struct magicnet_server *server = client->server;
@@ -2272,14 +2313,14 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
     if (signature != MAGICNET_ENTRY_SIGNATURE)
     {
         magicnet_log("%s somebody connected to us but doesnt understand our protocol.. Probably some accidental connection.. Dropping\n", __FUNCTION__);
-        return -1;
+        goto out;
     }
 
     int communication_flags = magicnet_read_int(client, NULL);
     if (communication_flags < 0)
     {
         magicnet_log("%s failed to read  valid comminciation flags\n", __FUNCTION__);
-        return -1;
+        goto out;
     }
 
     // We need to find out what they are listening too before we can accept them.
@@ -2288,16 +2329,117 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
     res = magicnet_read_bytes(client, program_name, sizeof(program_name), NULL);
     if (res < 0)
     {
-        return -1;
+        goto out;
     }
 
     memcpy(client->program_name, program_name, sizeof(client->program_name));
     res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE, NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
 
+    res = magicnet_client_entry_protocol_read_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_client_entry_protocol_write_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
     client->communication_flags = communication_flags;
+out:
     return res;
 }
 
+int magicnet_server_get_all_connected_clients(struct magicnet_server *server, struct vector *vector_out)
+{
+    int res = 0;
+    struct magicnet_client tmp_client = {0};
+    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    {
+        struct magicnet_client *client = &server->outgoing_clients[i];
+        if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED)
+        {
+            tmp_client = *client;
+            tmp_client.server = NULL;
+            bzero(&tmp_client.awaiting_packets, sizeof(tmp_client.awaiting_packets));
+            vector_push(vector_out, &tmp_client);
+        }
+    }
+
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    {
+        struct magicnet_client *client = &server->clients[i];
+        if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED)
+        {
+            tmp_client = *client;
+            tmp_client.server = NULL;
+            bzero(&tmp_client.awaiting_packets, sizeof(tmp_client.awaiting_packets));
+            vector_push(vector_out, &tmp_client);
+        }
+    }
+
+    return res;
+}
+
+int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *client)
+{
+    int res = 0;
+
+    if (!client->server)
+    {
+        // No server instance ? Then nothing to send.
+        res = magicnet_write_int(client, 0, NULL);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+    else
+    {
+        magicnet_server_lock(client->server);
+        struct vector *connected_client_vec = vector_create(sizeof(struct magicnet_client));
+        magicnet_server_get_all_connected_clients(client->server, connected_client_vec);
+        magicnet_server_unlock(client->server);
+        res = magicnet_write_int(client, vector_count(connected_client_vec), NULL);
+        if (res < 0)
+        {
+            goto out;
+        }
+        vector_set_peek_pointer(connected_client_vec, 0);
+        struct magicnet_client *client_to_send = vector_peek(connected_client_vec);
+        while (client_to_send)
+        {
+            res = magicnet_write_bytes(client, client->client_info.sin_addr.s_addr, sizeof(client->client_info.sin_addr.s_addr), NULL);
+            if (res < 0)
+            {
+                break;
+            }
+
+            res = magicnet_write_bytes(client, &client->peer_info.key, sizeof(client->peer_info.key), NULL);
+            if (res < 0)
+            {
+                break;
+            }
+
+            client_to_send = vector_peek_ptr(connected_client_vec);
+        }
+        vector_free(connected_client_vec);
+
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+out:
+    return res;
+}
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags)
 {
     int res = 0;
@@ -2332,6 +2474,19 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         // Bad signature
         res = -1;
+        goto out;
+    }
+
+    // Okay let us send the ip addresses we are aware of
+    res = magicnet_client_entry_protocol_write_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_client_entry_protocol_read_known_clients(client);
+    if (res < 0)
+    {
         goto out;
     }
 out:
@@ -2698,10 +2853,10 @@ bool magicnet_server_is_ip_connected(struct magicnet_server *server, const char 
     return false;
 }
 
-int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, const char *ip)
+int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out)
 {
 
-    int res = magicnet_database_peer_get_random_ip(ip);
+    int res = magicnet_database_peer_get_random_ip(ip_out);
     if (res < 0)
     {
         goto out;
@@ -2710,11 +2865,11 @@ int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, co
     // 10 attempts at finding a random ip we havent connected too yet.
     for (int i = 0; i < 10; i++)
     {
-        if (!magicnet_server_is_ip_connected(server, ip))
+        if (!magicnet_server_is_ip_connected(server, ip_out))
         {
             break;
         }
-        res = magicnet_database_peer_get_random_ip(ip);
+        res = magicnet_database_peer_get_random_ip(ip_out);
         if (res < 0)
         {
             break;

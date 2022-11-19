@@ -42,6 +42,7 @@ enum
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
+
 enum
 {
     MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE = 0b00000001,
@@ -72,6 +73,14 @@ enum
     MAGICNET_TASK_COMPLETE = 200,
     MAGICNET_BLOCK_SENT_BEFORE = 201,
 };
+
+// ENTRY PROTOCOL
+enum
+{
+    MAGICNET_ENTRY_PROTOCOL_NO_IPS = 0,
+    MAGICNET_ENTRY_PROTOCOL_HAS_IPS = 1,    
+};
+
 
 struct block;
 
@@ -193,6 +202,15 @@ enum
     // When set the server will not send relayed packets to this client.
     MAGICNET_COMMUNICATION_FLAG_NO_RELAYED_PACKETS = 0b00000001
 };
+
+struct magicnet_peer_information
+{
+    char* ip_address[MAGICNET_MAX_IP_STRING_SIZE];
+    struct key key;
+    char name[MAGICNET_MAX_NAME_SIZE];
+    char email[MAGICNET_MAX_EMAIL_SIZE];
+};
+
 struct magicnet_client
 {
     int sock;
@@ -208,6 +226,7 @@ struct magicnet_client
     struct sockaddr_in client_info;
     off_t relay_packet_pos;
 
+    struct magicnet_peer_information peer_info;
     struct magicnet_server *server;
 };
 
@@ -464,6 +483,9 @@ int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
+int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client);
+int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *client);
+
 
 /**
  * Pushes all connected ip addresses to the output vector.
@@ -493,7 +515,7 @@ struct magicnet_program *magicnet_program(const char *name);
 
 
 // Shared network functions
-int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, const char *ip);
+int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name);
 
 
