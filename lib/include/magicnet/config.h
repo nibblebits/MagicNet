@@ -14,9 +14,6 @@
 // At least 10 seconds must pass for the server to attempt to connect to other peers
 #define MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS 10
 
-// 1024 random ip addresses will be loaded during startup from the IP list file.
-#define MAGICNET_MAX_LOADED_IP_ADDRESSES 1024
-
 // This SINGATURE must be sent when you connect to a server of ours. It proves that 
 // this is a magicnet client not some accidental http request or something.
 // Sent as a 4 byte integer.

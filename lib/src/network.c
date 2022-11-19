@@ -60,49 +60,6 @@ int magicnet_packet_resign_on_send(struct magicnet_packet *packet)
     return 0;
 }
 
-bool magicnet_loaded_ips_full(struct magicnet_server *server)
-{
-    return server->total_loaded_ips >= MAGICNET_MAX_LOADED_IP_ADDRESSES;
-}
-
-const char **magicnet_get_free_loaded_ip_slot(struct magicnet_server *server)
-{
-    for (int i = 0; i < MAGICNET_MAX_LOADED_IP_ADDRESSES; i++)
-    {
-        if (server->loaded_ip_addresses[i] == NULL)
-            return (const char **)&server->loaded_ip_addresses;
-    }
-
-    return NULL;
-}
-
-int magicnet_loaded_ips_add(struct magicnet_server *server, const char *ip_address)
-{
-    if (magicnet_loaded_ips_full(server))
-    {
-        magicnet_log("%s the ip list is full\n", __FUNCTION__);
-        return -1;
-    }
-
-    const char **free_ip_slot = magicnet_get_free_loaded_ip_slot(server);
-    *free_ip_slot = ip_address;
-    server->total_loaded_ips++;
-    return 0;
-}
-bool magicnet_is_ip_loaded(struct magicnet_server *server, const char *ip_address)
-{
-    for (int i = 0; i < MAGICNET_MAX_LOADED_IP_ADDRESSES; i++)
-    {
-        if (strncmp(server->loaded_ip_addresses[i], ip_address, strlen(server->loaded_ip_addresses[i])) == 0)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-
 struct magicnet_client *magicnet_client_new()
 {
     return calloc(1, sizeof(struct magicnet_client));
@@ -162,7 +119,6 @@ struct magicnet_server *magicnet_server_start(int port)
         magicnet_log("Failed to initialize the server lock\n");
         return NULL;
     }
-
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
@@ -2520,8 +2476,8 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         block_save(block);
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
         magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
-        
-        struct block* previous_block =block_load(block->prev_hash);
+
+        struct block *previous_block = block_load(block->prev_hash);
         if (!previous_block)
         {
             // No previous block? Then we should initiate a download for all blocks with no chain
@@ -2742,22 +2698,32 @@ bool magicnet_server_is_ip_connected(struct magicnet_server *server, const char 
     return false;
 }
 
-const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server)
+int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, const char *ip)
 {
-    const char *conn_ip = NULL;
-    for (int i = 0; i < MAGICNET_MAX_LOADED_IP_ADDRESSES; i++)
-    {
-        const char *ip = server->loaded_ip_addresses[i];
-        magicnet_server_lock(server);
-        if (ip && !magicnet_server_is_ip_connected(server, ip))
-        {
-            conn_ip = ip;
-        }
-        magicnet_server_unlock(server);
-        break;
-    }
 
-    return conn_ip;
+    int res = magicnet_database_peer_get_random_ip(ip);
+    if (res < 0)
+    {
+        goto out;
+    }
+    magicnet_server_lock(server);
+    // 10 attempts at finding a random ip we havent connected too yet.
+    for (int i = 0; i < 10; i++)
+    {
+        if (!magicnet_server_is_ip_connected(server, ip))
+        {
+            break;
+        }
+        res = magicnet_database_peer_get_random_ip(ip);
+        if (res < 0)
+        {
+            break;
+        }
+    }
+    magicnet_server_unlock(server);
+
+out:
+    return res;
 }
 
 void *magicnet_server_client_thread(void *_client)
@@ -2777,8 +2743,9 @@ void *magicnet_server_client_thread(void *_client)
 
 void magicnet_server_attempt_new_connections(struct magicnet_server *server)
 {
-    const char *ip = magicnet_server_get_next_ip_to_connect_to(server);
-    if (!ip)
+    char ip[MAGICNET_MAX_IP_STRING_SIZE];
+    int res = magicnet_server_get_next_ip_to_connect_to(server, ip);
+    if (res < 0)
     {
         return;
     }
@@ -2931,7 +2898,6 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
     block_save(block);
     magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
     magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
-
 
     *block_out = block;
     return 0;

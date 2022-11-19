@@ -296,8 +296,6 @@ struct magicnet_server
 
     // BELOW MUST BE PROCESSED ONLY BY THE SERVER THREAD
     off_t last_new_connection_attempt;
-    const char *loaded_ip_addresses[MAGICNET_MAX_LOADED_IP_ADDRESSES];
-    size_t total_loaded_ips;
 };
 
 struct block_transaction_data
@@ -495,7 +493,7 @@ struct magicnet_program *magicnet_program(const char *name);
 
 
 // Shared network functions
-const char *magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server);
+int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, const char *ip);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name);
 
 
