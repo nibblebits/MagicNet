@@ -2414,8 +2414,9 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
         }
         vector_set_peek_pointer(connected_client_vec, 0);
         struct magicnet_connection_exchange_peer_data *data_to_send = vector_peek(connected_client_vec);
+        int c = 0;
         while (data_to_send)
-        {in_addr_t
+        {
             res = magicnet_write_bytes(client, &data_to_send->sin_addr, sizeof(data_to_send->sin_addr), NULL);
             if (res < 0)
             {
@@ -2427,9 +2428,10 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
             {
                 break;
             }
-
+            c++;
             data_to_send = vector_peek(connected_client_vec);
         }
+        magicnet_log("%s count=%i amount=%i\n", __FUNCTION__, vector_count(connected_client_vec), c);
         vector_free(connected_client_vec);
 
         if (res < 0)
