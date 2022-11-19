@@ -453,6 +453,12 @@ struct magicnet_active_chain_downloads
     pthread_mutex_t lock;
 };
 
+struct magicnet_connection_exchange_peer_data
+{
+    struct in_addr sin_addr;
+    struct key public_key;
+};
+
 enum
 {
     MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,

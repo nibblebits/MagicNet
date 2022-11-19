@@ -2358,16 +2358,16 @@ out:
 int magicnet_server_get_all_connected_clients(struct magicnet_server *server, struct vector *vector_out)
 {
     int res = 0;
-    struct magicnet_client tmp_client = {0};
+    struct magicnet_connection_exchange_peer_data data;
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
         struct magicnet_client *client = &server->outgoing_clients[i];
         if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED)
         {
-            tmp_client = *client;
-            tmp_client.server = NULL;
-            bzero(&tmp_client.awaiting_packets, sizeof(tmp_client.awaiting_packets));
-            vector_push(vector_out, &tmp_client);
+            bzero(&data, sizeof(data));
+            data.sin_addr = client->client_info.sin_addr;
+            data.public_key = client->peer_info.key;
+            vector_push(vector_out, &data);
         }
     }
 
@@ -2376,10 +2376,10 @@ int magicnet_server_get_all_connected_clients(struct magicnet_server *server, st
         struct magicnet_client *client = &server->clients[i];
         if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED)
         {
-            tmp_client = *client;
-            tmp_client.server = NULL;
-            bzero(&tmp_client.awaiting_packets, sizeof(tmp_client.awaiting_packets));
-            vector_push(vector_out, &tmp_client);
+            bzero(&data, sizeof(data));
+            data.sin_addr = client->client_info.sin_addr;
+            data.public_key = client->peer_info.key;
+            vector_push(vector_out, &data);
         }
     }
 
@@ -2402,7 +2402,7 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
     else
     {
         magicnet_server_lock(client->server);
-        struct vector *connected_client_vec = vector_create(sizeof(struct magicnet_client));
+        struct vector *connected_client_vec = vector_create(sizeof(struct magicnet_connection_exchange_peer_data));
         magicnet_server_get_all_connected_clients(client->server, connected_client_vec);
         magicnet_server_unlock(client->server);
         res = magicnet_write_int(client, vector_count(connected_client_vec), NULL);
@@ -2411,22 +2411,22 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
             goto out;
         }
         vector_set_peek_pointer(connected_client_vec, 0);
-        struct magicnet_client *client_to_send = vector_peek(connected_client_vec);
-        while (client_to_send)
+        struct magicnet_connection_exchange_peer_data *data_to_send = vector_peek(connected_client_vec);
+        while (data_to_send)
         {
-            res = magicnet_write_bytes(client, &client_to_send->client_info.sin_addr.s_addr, sizeof(client_to_send->client_info.sin_addr.s_addr), NULL);
+            res = magicnet_write_bytes(client, &data_to_send->sin_addr, sizeof(data_to_send->sin_addr), NULL);
             if (res < 0)
             {
                 break;
             }
 
-            res = magicnet_write_bytes(client, &client_to_send->peer_info.key, sizeof(client_to_send->peer_info.key), NULL);
+            res = magicnet_write_bytes(client, &data_to_send->public_key, sizeof(data_to_send->public_key), NULL);
             if (res < 0)
             {
                 break;
             }
 
-            client_to_send = vector_peek_ptr(connected_client_vec);
+            data_to_send = vector_peek_ptr(connected_client_vec);
         }
         vector_free(connected_client_vec);
 
