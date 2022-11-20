@@ -2333,24 +2333,24 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
-    // struct key client_key = {0};
-    // res = magicnet_read_bytes(client, &client_key, sizeof(client_key), NULL);
-    // if (res < 0)
-    // {
-    //     goto out;
-    // }
+    struct key client_key = {0};
+    res = magicnet_read_bytes(client, &client_key, sizeof(client_key), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
 
-    // res = magicnet_client_entry_protocol_read_known_clients(client);
-    // if (res < 0)
-    // {
-    //     goto out;
-    // }
+    res = magicnet_client_entry_protocol_read_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
 
-    // res = magicnet_client_entry_protocol_write_known_clients(client);
-    // if (res < 0)
-    // {
-    //     goto out;
-    // }
+    res = magicnet_client_entry_protocol_write_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
 
     client->communication_flags = communication_flags;
 out:
@@ -2477,18 +2477,25 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
         goto out;
     }
 
-    // // // Okay let us send the ip addresses we are aware of
-    // res = magicnet_client_entry_protocol_write_known_clients(client);
-    // if (res < 0)
-    // {
-    //     goto out;
-    // }
+    // Write our client key
+    res = magicnet_write_bytes(client, MAGICNET_public_key(), sizeof(struct key), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
+    // // Okay let us send the ip addresses we are aware of
+    res = magicnet_client_entry_protocol_write_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
 
-    // res = magicnet_client_entry_protocol_read_known_clients(client);
-    // if (res < 0)
-    // {
-    //     goto out;
-    // }
+    res = magicnet_client_entry_protocol_read_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
 out:
     return res;
 }
