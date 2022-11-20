@@ -210,7 +210,7 @@ int magicnet_database_peer_get_random_ip(char *ip_address_out)
     sqlite3_stmt *stmt = NULL;
 
     pthread_mutex_lock(&db_lock);
-    const char *get_random_ip_sql = "SELECT DISTINCT ip_address FROM peers order by RANDOM() LIMIT 1;";
+    const char *get_random_ip_sql = "SELECT DISTINCT ip_address FROM peers WHERE ip_address != '' order by RANDOM() LIMIT 1;";
     res = sqlite3_prepare_v2(db, get_random_ip_sql, strlen(get_random_ip_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
