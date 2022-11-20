@@ -113,6 +113,96 @@ int magicnet_database_peer_add(const char *ip_address, struct key *key, const ch
     return res;
 }
 
+int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet_peer_information *peer_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+
+    const char *get_random_ip_sql = "SELECT ip_address, name, email, found_out FROM peers WHERE key=?;";
+    res = sqlite3_prepare_v2(db, get_random_ip_sql, strlen(get_random_ip_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    res = sqlite3_bind_blob(stmt, 1, key, sizeof(struct key), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    if (peer_out)
+    {
+        strncpy(peer_out->ip_address, sqlite3_column_text(stmt, 0), sizeof(peer_out->ip_address));
+        strncpy(peer_out->name, sqlite3_column_text(stmt, 1), sizeof(peer_out->name));
+        strncpy(peer_out->email, sqlite3_column_text(stmt, 2), sizeof(peer_out->email));
+        peer_out->found_out = sqlite3_column_int(stmt, 3);
+    }
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+
+int magicnet_database_peer_load_by_key(struct key *key, struct magicnet_peer_information *peer_out)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_peer_load_by_key_no_locks(key, peer_out);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+int magicnet_database_peer_update_or_create(struct magicnet_peer_information *peer_info)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    struct magicnet_peer_information tmp_info;
+    int load_res = magicnet_database_peer_load_by_key_no_locks(&peer_info->key, &tmp_info);
+    if (load_res == MAGICNET_ERROR_NOT_FOUND)
+    {
+       res = magicnet_database_peer_add_no_locks(peer_info->ip_address, &peer_info->key, peer_info->name, peer_info->email);
+       goto out;
+    }
+
+    // Already exists then update?
+    const char *update_peer_info = "UPDATE peers SET ip_address=?, key=?, name=?, email=?  WHERE key=?;";
+    res = sqlite3_prepare_v2(db, update_peer_info, strlen(update_peer_info), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    sqlite3_bind_blob(stmt, 1, &peer_info->ip_address, sizeof(peer_info->ip_address), NULL);
+    sqlite3_bind_blob(stmt, 2, &peer_info->key, sizeof(peer_info->key), NULL);
+    sqlite3_bind_text(stmt, 3, peer_info->name, strlen(peer_info->name), NULL);
+    sqlite3_bind_text(stmt, 4, peer_info->email, strlen(peer_info->email), NULL);
+    sqlite3_bind_blob(stmt, 5, &peer_info->key, sizeof(peer_info->key), NULL);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magicnet_database_peer_get_random_ip(char *ip_address_out)
 {
     int res = 0;

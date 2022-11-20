@@ -1694,6 +1694,8 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
     }
 
+    char *ip_address = inet_ntoa(addr.sin_addr);
+    strncpy(mclient->peer_info.ip_address, ip_address, sizeof(mclient->peer_info.ip_address));
     if (flags & MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE)
     {
         mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
@@ -2298,6 +2300,14 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
 out:
     return res;
 }
+
+int magicnet_save_peer_info(struct magicnet_peer_information* peer_info)
+{
+    int res = 0;
+    res = magicnet_database_peer_update_or_create(peer_info);
+    return res;
+
+}
 int magicnet_read_peer_info(struct magicnet_client *client)
 {
     int res = 0;
@@ -2370,6 +2380,11 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
+    res = magicnet_save_peer_info(&client->peer_info);
+    if (res < 0)
+    {
+        goto out;
+    }
     res = magicnet_write_peer_info(client);
     if (res < 0)
     {
@@ -2525,6 +2540,13 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         goto out;
     }
+
+    res = magicnet_save_peer_info(&client->peer_info);
+    if (res < 0)
+    {
+        goto out;
+    }
+
 
     // // Okay let us send the ip addresses we are aware of
     res = magicnet_client_entry_protocol_write_known_clients(client);

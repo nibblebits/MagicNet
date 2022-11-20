@@ -205,10 +205,11 @@ enum
 
 struct magicnet_peer_information
 {
-    char* ip_address[MAGICNET_MAX_IP_STRING_SIZE];
+    char ip_address[MAGICNET_MAX_IP_STRING_SIZE];
     struct key key;
     char name[MAGICNET_MAX_NAME_SIZE];
     char email[MAGICNET_MAX_EMAIL_SIZE];
+    int found_out;
 };
 
 struct magicnet_client

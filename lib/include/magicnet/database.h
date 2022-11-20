@@ -25,6 +25,9 @@ int magicnet_database_blockchain_get_active(struct blockchain **blockchain_out);
 int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key, const char *name, const char *email);
 int magicnet_database_peer_add(const char *ip_address, struct key *key, const char *name, const char *email);
 int magicnet_database_peer_get_random_ip(char *ip_address_out);
+int magicnet_database_peer_update_or_create(struct magicnet_peer_information* peer_info);
+int magicnet_database_peer_load_by_key(struct key *key, struct magicnet_peer_information *peer_out);
+int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet_peer_information *peer_out);
 
 /**
  * Creates a new blockchain 
