@@ -2298,7 +2298,38 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
 out:
     return res;
 }
+int magicnet_read_peer_info(struct magicnet_client *client)
+{
+    int res = 0;
+    res = magicnet_read_bytes(client, &client->peer_info.key, sizeof(client->peer_info.key), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
 
+out:
+    return res;
+}
+
+int magicnet_write_peer_info(struct magicnet_client* client)
+{
+    int res = 0;
+    if (!client->server)
+    {
+        struct key blank_key = {0};
+        res = magicnet_write_bytes(client, &blank_key, sizeof(blank_key), NULL);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+    else
+    {
+        res = magicnet_write_bytes(client, MAGICNET_public_key(), sizeof(struct key), NULL);
+    }
+out:
+    return res;
+}
 int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
 {
     struct magicnet_server *server = client->server;
@@ -2333,8 +2364,13 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
-    struct key client_key = {0};
-    res = magicnet_read_bytes(client, &client_key, sizeof(client_key), NULL);
+    res = magicnet_read_peer_info(client);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_peer_info(client);
     if (res < 0)
     {
         goto out;
@@ -2478,12 +2514,18 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     }
 
     // Write our client key
-    res = magicnet_write_bytes(client, MAGICNET_public_key(), sizeof(struct key), NULL);
+    res = magicnet_write_peer_info(client);
     if (res < 0)
     {
         goto out;
     }
     
+    res = magicnet_read_peer_info(client);
+    if (res < 0)
+    {
+        goto out;
+    }
+
     // // Okay let us send the ip addresses we are aware of
     res = magicnet_client_entry_protocol_write_known_clients(client);
     if (res < 0)
