@@ -118,10 +118,11 @@ int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet
     int res = 0;
     sqlite3_stmt *stmt = NULL;
 
-    const char *get_random_ip_sql = "SELECT ip_address, name, email, found_out FROM peers WHERE key=?;";
+    const char *get_random_ip_sql = "SELECT ip_address, name, email, found_at FROM peers WHERE key=?;";
     res = sqlite3_prepare_v2(db, get_random_ip_sql, strlen(get_random_ip_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
+        res = -1;
         goto out;
     }
 
