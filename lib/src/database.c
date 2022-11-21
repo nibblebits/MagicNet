@@ -78,7 +78,7 @@ int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key,
     sqlite3_bind_null(stmt, 3);
     if (key)
     {
-        sqlite3_bind_blob(stmt, 3, &key, sizeof(key), NULL);
+        sqlite3_bind_blob(stmt, 3, &key, sizeof(struct key), NULL);
     }
     sqlite3_bind_null(stmt, 4);
     if (name)
