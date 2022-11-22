@@ -341,6 +341,9 @@ int generate_key()
     OPENSSL_free(pub_key_hex);
     EC_KEY_free(eckey);
 
+
+    // This is really the wrong place I should move it. But lets add ourselves as a peer
+    magicnet_database_peer_add_no_locks(NULL,&public_key, "Anonymous", NULL);
     return res;
 }
 

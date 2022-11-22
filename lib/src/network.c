@@ -2329,6 +2329,12 @@ int magicnet_read_peer_info(struct magicnet_client *client)
         goto out;
     }
 
+    if (strlen(client->peer_info.name) == 0)
+    {
+        // No name provided then this peer is anonymous.
+        strncpy(client->peer_info.name, "Anonymous", sizeof(client->peer_info.name));
+    }
+
 out:
     return res;
 }
@@ -2350,9 +2356,12 @@ int magicnet_write_peer_info(struct magicnet_client* client)
             strncpy(name, peer.name, sizeof(name));
             strncpy(email, peer.email, sizeof(email));
         }
-
     }
     
+    if (strlen(name) == 0)
+    {
+        strncpy(name, "Anonymous", sizeof(name));
+    }
     res = magicnet_write_bytes(client, &key, sizeof(struct key), NULL);
     if (res < 0)
     {

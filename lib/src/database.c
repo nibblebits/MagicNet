@@ -89,7 +89,7 @@ int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key,
     sqlite3_bind_null(stmt, 3);
     if (key)
     {
-        sqlite3_bind_blob(stmt, 3, key, sizeof(struct key), NULL);
+        sqlite3_bind_blob(stmt, 3, key->key, sizeof(key->key), NULL);
     }
     sqlite3_bind_null(stmt, 4);
     if (name)
@@ -137,7 +137,7 @@ int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet
         goto out;
     }
 
-    res = sqlite3_bind_blob(stmt, 1, key, sizeof(struct key), NULL);
+    res = sqlite3_bind_blob(stmt, 1, key->key, sizeof(key->key), NULL);
     if (res < 0)
     {
         goto out;
@@ -152,9 +152,20 @@ int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet
 
     if (peer_out)
     {
-        strncpy(peer_out->ip_address, sqlite3_column_text(stmt, 0), sizeof(peer_out->ip_address));
-        strncpy(peer_out->name, sqlite3_column_text(stmt, 1), sizeof(peer_out->name));
-        strncpy(peer_out->email, sqlite3_column_text(stmt, 2), sizeof(peer_out->email));
+        if (sqlite3_column_text(stmt, 0))
+        {
+            strncpy(peer_out->ip_address, sqlite3_column_text(stmt, 0), sizeof(peer_out->ip_address));
+        }
+
+        if (sqlite3_column_text(stmt, 1))
+        {
+            strncpy(peer_out->name, sqlite3_column_text(stmt, 1), sizeof(peer_out->name));
+        }
+
+        if (sqlite3_column_text(stmt, 2))
+        {
+            strncpy(peer_out->email, sqlite3_column_text(stmt, 2), sizeof(peer_out->email));
+        }
         peer_out->found_out = sqlite3_column_int(stmt, 3);
     }
 out:
@@ -197,7 +208,7 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     }
 
     sqlite3_bind_text(stmt, 1, peer_info->ip_address, strlen(peer_info->ip_address), NULL);
-    sqlite3_bind_blob(stmt, 2, &peer_info->key, sizeof(peer_info->key), NULL);
+    sqlite3_bind_blob(stmt, 2, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
     sqlite3_bind_text(stmt, 3, peer_info->name, strlen(peer_info->name), NULL);
     sqlite3_bind_text(stmt, 4, peer_info->email, strlen(peer_info->email), NULL);
     sqlite3_bind_blob(stmt, 5, &peer_info->key, sizeof(peer_info->key), NULL);
@@ -269,9 +280,6 @@ int magicnet_database_create()
 
     // This is the root host the peer everybody knows about.
     magicnet_database_peer_add_no_locks("104.248.237.170", NULL, "Root Host", "hello@dragonzap.com");
-
-    // Lets add ourselves
-    magicnet_database_peer_add_no_locks(NULL,MAGICNET_public_key(), "Anonymous", NULL);
 
     return res;
 }
