@@ -2371,6 +2371,10 @@ out:
     {
         magicnet_log("%s issue with entry protocol for client\n", __FUNCTION__);
     }
+    else
+    {
+        magicnet_log("%s peer %s has completed peer exchange\n", __FUNCTION__, client->peer_info.name);
+    }
     buffer_free(recv_buffer);
     return res;
 }
