@@ -521,6 +521,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
     magicnet_init_client(mclient, server, sockfd, &servaddr);
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
     mclient->relay_packet_pos = server->relay_packets.pos;
+    strncpy(mclient->peer_info.ip_address, ip_address, sizeof(mclient->peer_info.ip_address));
     magicnet_server_unlock(server);
 
     if (program_name)

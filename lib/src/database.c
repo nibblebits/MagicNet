@@ -78,7 +78,7 @@ int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key,
     sqlite3_bind_null(stmt, 3);
     if (key)
     {
-        sqlite3_bind_blob(stmt, 3, &key, sizeof(struct key), NULL);
+        sqlite3_bind_blob(stmt, 3, key, sizeof(struct key), NULL);
     }
     sqlite3_bind_null(stmt, 4);
     if (name)
@@ -185,7 +185,7 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
         goto out;
     }
 
-    sqlite3_bind_blob(stmt, 1, &peer_info->ip_address, sizeof(peer_info->ip_address), NULL);
+    sqlite3_bind_text(stmt, 1, peer_info->ip_address, strlen(peer_info->ip_address), NULL);
     sqlite3_bind_blob(stmt, 2, &peer_info->key, sizeof(peer_info->key), NULL);
     sqlite3_bind_text(stmt, 3, peer_info->name, strlen(peer_info->name), NULL);
     sqlite3_bind_text(stmt, 4, peer_info->email, strlen(peer_info->email), NULL);
@@ -214,6 +214,7 @@ int magicnet_database_peer_get_random_ip(char *ip_address_out)
     res = sqlite3_prepare_v2(db, get_random_ip_sql, strlen(get_random_ip_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
+        res = -1;
         goto out;
     }
 
