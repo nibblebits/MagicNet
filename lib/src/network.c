@@ -128,7 +128,6 @@ struct magicnet_server *magicnet_server_start(int port)
 
     srand(time(NULL));
 
-
     server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
     server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count *));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
@@ -2301,17 +2300,24 @@ out:
     return res;
 }
 
-int magicnet_save_peer_info(struct magicnet_peer_information* peer_info)
+int magicnet_save_peer_info(struct magicnet_peer_information *peer_info)
 {
     int res = 0;
     res = magicnet_database_peer_update_or_create(peer_info);
     return res;
-
 }
-int magicnet_read_peer_info(struct magicnet_client *client)
+int magicnet_read_peer_info(struct magicnet_client *client, int *peer_info_state_out)
 {
     int res = 0;
-    struct buffer* recv_buffer = buffer_create();
+    struct buffer *recv_buffer = buffer_create();
+    res = magicnet_read_int(client, NULL);
+    *peer_info_state_out = res;
+    // If theres no peer info provided then leave.
+    if (res < 0 || res == MAGICNET_ENTRY_PROTOCOL_NO_PEER_INFO_PROVIDED)
+    {
+        goto out;
+    }
+
     res = magicnet_read_bytes(client, &client->peer_info.key, sizeof(client->peer_info.key), NULL);
     if (res < 0)
     {
@@ -2360,13 +2366,13 @@ int magicnet_read_peer_info(struct magicnet_client *client)
         magicnet_log("%s the data provided was not signed by the public key given to us.\n", __FUNCTION__);
         goto out;
     }
+out:
     if (strlen(client->peer_info.name) == 0)
     {
         // No name provided then this peer is anonymous.
         strncpy(client->peer_info.name, "Anonymous", sizeof(client->peer_info.name));
     }
 
-out:
     if (res < 0)
     {
         magicnet_log("%s issue with entry protocol for client\n", __FUNCTION__);
@@ -2379,30 +2385,34 @@ out:
     return res;
 }
 
-int magicnet_write_peer_info(struct magicnet_client* client)
+int magicnet_write_peer_info(struct magicnet_client *client)
 {
     int res = 0;
     struct key key = {0};
     char name[MAGICNET_MAX_NAME_SIZE] = {0};
     char email[MAGICNET_MAX_EMAIL_SIZE] = {0};
-    struct buffer* send_buf = buffer_create();
-    if (client->server)
+    struct buffer *send_buf = buffer_create();
+    if (!client->server)
     {
-        memcpy(&key, MAGICNET_public_key(), sizeof(struct key));
+        res = magicnet_write_int(client, MAGICNET_ENTRY_PROTOCOL_NO_PEER_INFO_PROVIDED, NULL);
+        goto out;
+    }
 
-        struct magicnet_peer_information peer = {0};
-        res = magicnet_database_peer_load_by_key(&key, &peer);
-        if (res >= 0)
-        {
-            strncpy(name, peer.name, sizeof(name));
-            strncpy(email, peer.email, sizeof(email));
-        }
-    }
-    else
+    res = magicnet_write_int(client, MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED, NULL);
+    if (res < 0)
     {
-        magicnet_log("%s no server instance will have to send without signing\n", __FUNCTION__);
+        goto out;
     }
-    
+    memcpy(&key, MAGICNET_public_key(), sizeof(struct key));
+
+    struct magicnet_peer_information peer = {0};
+    res = magicnet_database_peer_load_by_key(&key, &peer);
+    if (res >= 0)
+    {
+        strncpy(name, peer.name, sizeof(name));
+        strncpy(email, peer.email, sizeof(email));
+    }
+
     if (strlen(name) == 0)
     {
         strncpy(name, "Anonymous", sizeof(name));
@@ -2449,7 +2459,6 @@ int magicnet_write_peer_info(struct magicnet_client* client)
         goto out;
     }
 
-
 out:
     buffer_free(send_buf);
     return res;
@@ -2488,16 +2497,20 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
-    res = magicnet_read_peer_info(client);
+    int peer_info_state = -1;
+    res = magicnet_read_peer_info(client, &peer_info_state);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_save_peer_info(&client->peer_info);
-    if (res < 0)
+    if (peer_info_state == MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED)
     {
-        goto out;
+        res = magicnet_save_peer_info(&client->peer_info);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
     res = magicnet_write_peer_info(client);
     if (res < 0)
@@ -2648,19 +2661,22 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         goto out;
     }
-    
-    res = magicnet_read_peer_info(client);
+
+    int peer_info_state = -1;
+    res = magicnet_read_peer_info(client, &peer_info_state);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_save_peer_info(&client->peer_info);
-    if (res < 0)
+    if (peer_info_state == MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED)
     {
-        goto out;
+        res = magicnet_save_peer_info(&client->peer_info);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
-
 
     // // Okay let us send the ip addresses we are aware of
     res = magicnet_client_entry_protocol_write_known_clients(client);
