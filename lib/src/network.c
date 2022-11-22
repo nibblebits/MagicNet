@@ -128,7 +128,6 @@ struct magicnet_server *magicnet_server_start(int port)
 
     srand(time(NULL));
 
-    MAGICNET_load_keypair();
 
     server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
     server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count *));
@@ -2318,6 +2317,18 @@ int magicnet_read_peer_info(struct magicnet_client *client)
         goto out;
     }
 
+    res = magicnet_read_bytes(client, &client->peer_info.name, sizeof(client->peer_info.name), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, &client->peer_info.email, sizeof(client->peer_info.email), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
 out:
     return res;
 }
@@ -2325,19 +2336,41 @@ out:
 int magicnet_write_peer_info(struct magicnet_client* client)
 {
     int res = 0;
-    if (!client->server)
+    struct key key = {0};
+    char name[MAGICNET_MAX_NAME_SIZE] = {0};
+    char email[MAGICNET_MAX_EMAIL_SIZE] = {0};
+    if (client->server)
     {
-        struct key blank_key = {0};
-        res = magicnet_write_bytes(client, &blank_key, sizeof(blank_key), NULL);
-        if (res < 0)
+        memcpy(&key, MAGICNET_public_key(), sizeof(struct key));
+
+        struct magicnet_peer_information peer = {0};
+        res = magicnet_database_peer_load_by_key(&key, &peer);
+        if (res >= 0)
         {
-            goto out;
+            strncpy(name, peer.name, sizeof(name));
+            strncpy(email, peer.email, sizeof(email));
         }
+
     }
-    else
+    
+    res = magicnet_write_bytes(client, &key, sizeof(struct key), NULL);
+    if (res < 0)
     {
-        res = magicnet_write_bytes(client, MAGICNET_public_key(), sizeof(struct key), NULL);
+        goto out;
     }
+
+    res = magicnet_write_bytes(client, name, sizeof(name), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, email, sizeof(email), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
 out:
     return res;
 }
