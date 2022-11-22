@@ -19,7 +19,7 @@
 #include "sha256.h"
 #include "misc.h"
 #include "string.h"
-
+#include "database.h"
 
 pthread_mutex_t key_lock;
 struct key public_key = {};
@@ -32,7 +32,6 @@ void MAGICNET_keys_init()
         magicnet_log("Failed to initialize the key lock\n");
         return;
     }
-
 }
 struct key *MAGICNET_public_key()
 {
@@ -44,7 +43,7 @@ struct key *MAGICNET_private_key()
     return &private_key;
 }
 
-bool key_loaded(struct key* key)
+bool key_loaded(struct key *key)
 {
     struct key blank_key;
     bzero(&blank_key, sizeof(blank_key));
@@ -55,11 +54,11 @@ bool key_cmp(struct key *key, struct key *key2)
 {
     if (!key || !key2)
         return false;
-        
+
     return strncmp(key->key, key2->key, sizeof(key->key)) == 0;
 }
 
-int public_verify(struct key* public_key, const char *data, size_t size, struct signature *sig_in)
+int public_verify(struct key *public_key, const char *data, size_t size, struct signature *sig_in)
 {
     pthread_mutex_lock(&key_lock);
     int res = 0;
@@ -96,7 +95,7 @@ int public_verify(struct key* public_key, const char *data, size_t size, struct 
         goto out;
     }
 
-    if (BN_hex2bn(&ps_sig,sig_in->ps_sig) <= 0)
+    if (BN_hex2bn(&ps_sig, sig_in->ps_sig) <= 0)
     {
         magicnet_log("%s failed to convert hex string back BIGINTEGER\n", __FUNCTION__);
         res = -1;
@@ -108,7 +107,6 @@ int public_verify(struct key* public_key, const char *data, size_t size, struct 
         res = -1;
         goto out;
     }
-
 
     if (ECDSA_do_verify(data, size, sig, eckey) <= 0)
     {
@@ -147,7 +145,7 @@ out:
     return res;
 }
 
-int public_verify_key_sig_hash(struct key_signature_hash* key_sig_hash, const char* hash_to_compare)
+int public_verify_key_sig_hash(struct key_signature_hash *key_sig_hash, const char *hash_to_compare)
 {
     int res = public_verify(&key_sig_hash->key, key_sig_hash->data_hash, sizeof(key_sig_hash->data_hash), &key_sig_hash->signature);
     if (res < 0)
@@ -160,12 +158,12 @@ int public_verify_key_sig_hash(struct key_signature_hash* key_sig_hash, const ch
     return memcmp(hash_to_compare, &key_sig_hash->data_hash, SHA256_STRING_LENGTH) == 0 ? 0 : -1;
 }
 
-struct key* key_from_key_sig_hash(struct key_signature_hash* key_sig_hash)
+struct key *key_from_key_sig_hash(struct key_signature_hash *key_sig_hash)
 {
     return &key_sig_hash->key;
 }
 
-int private_sign_key_sig_hash(struct key_signature_hash* key_sig_hash, void* hash)
+int private_sign_key_sig_hash(struct key_signature_hash *key_sig_hash, void *hash)
 {
     bzero(key_sig_hash, sizeof(struct key_signature_hash));
     strncpy(key_sig_hash->data_hash, hash, sizeof(key_sig_hash->data_hash));
@@ -227,7 +225,6 @@ int private_sign(const char *data, size_t size, struct signature *sig_out)
         res = -1;
         goto out;
     }
-
 
     const BIGNUM *sig_pr = NULL;
     const BIGNUM *sig_ps = NULL;
@@ -292,53 +289,9 @@ const char *MAGICNET_public_key_filepath()
     return filepath;
 }
 
-int MAGICNET_write_private_key(const char *key, size_t size)
-{
-    pthread_mutex_lock(&key_lock);
-    int res = 0;
-    FILE *f = fopen(MAGICNET_private_key_filepath(), "w");
-    if (!f)
-    {
-        res = -1;
-        goto out;
-    }
-
-    res = fwrite(key, size, 1, f);
-    if (res != 1)
-    {
-        res = -1;
-    }
-
-out:
-    fclose(f);
-    pthread_mutex_unlock(&key_lock);
-    return res;
-}
-
-int MAGICNET_write_public_key(const char *key, size_t size)
-{
-    int res = 0;
-    pthread_mutex_lock(&key_lock);
-    FILE *f = fopen(MAGICNET_public_key_filepath(), "w");
-    if (!f)
-    {
-        res = -1;
-        goto out;
-    }
-
-    res = fwrite(key, size, 1, f);
-    if (res != 1)
-    {
-        res = -1;
-    }
-out:
-    fclose(f);
-    pthread_mutex_unlock(&key_lock);
-    return res;
-}
-
 int generate_key()
 {
+    int res = 0;
     int ret;
     ECDSA_SIG *sig;
     EC_KEY *eckey = EC_KEY_new();
@@ -361,85 +314,41 @@ int generate_key()
     //     if(1 != EC_KEY_set_private_key(key, prv)) handleErrors();
     // if(1 != EC_KEY_set_public_key(key, pub)) handleErrors();
 
-    const BIGNUM *private_key = EC_KEY_get0_private_key(eckey);
-    char *priv_key_hex = BN_bn2hex(private_key);
+    const BIGNUM *_private_key = EC_KEY_get0_private_key(eckey);
+    char *priv_key_hex = BN_bn2hex(_private_key);
     const EC_POINT *pub_key = EC_KEY_get0_public_key(eckey);
     char *pub_key_hex = EC_POINT_point2hex(ecgroup, pub_key, POINT_CONVERSION_UNCOMPRESSED, ctx);
     magicnet_log("%s public_key=%s\n", __FUNCTION__, pub_key_hex);
     magicnet_log("%s private_key=%s\n", __FUNCTION__, priv_key_hex);
 
-    MAGICNET_write_public_key(pub_key_hex, strlen(pub_key_hex));
-    MAGICNET_write_private_key(priv_key_hex, strlen(priv_key_hex));
+    memcpy(public_key.key, pub_key_hex, strlen(pub_key_hex));
+    memcpy(private_key.key, priv_key_hex, strlen(priv_key_hex));
+    public_key.size = strlen(pub_key_hex);
+    private_key.size = strlen(priv_key_hex);
+
+    if (magicnet_database_keys_create(&public_key, &private_key) != 0)
+    {
+        magicnet_log("%s issue saving the generated key\n", __FUNCTION__);
+        res = -1;
+    }
+
+    if (magicnet_database_keys_set_default(&public_key) != 0)
+    {
+        magicnet_log("%s issue setting our key as active\n", __FUNCTION__);
+        res = -1;
+    }
     OPENSSL_free(priv_key_hex);
     OPENSSL_free(pub_key_hex);
     EC_KEY_free(eckey);
-    return 0;
+
+    return res;
 }
 
-bool MAGICNET_nulled_signature(struct signature* signature)
+bool MAGICNET_nulled_signature(struct signature *signature)
 {
     struct signature nulled_sig;
     bzero(&nulled_sig, sizeof(nulled_sig));
-
     return memcmp(signature, &nulled_sig, sizeof(nulled_sig)) == 0;
-}
-
-void MAGICNET_load_public_key()
-{
-    pthread_mutex_lock(&key_lock);
-    memset(&public_key, 0, sizeof(public_key));
-    FILE *fp = fopen(MAGICNET_public_key_filepath(), "r");
-    if (!fp)
-    {
-        magicnet_log("Failed to open public key file\n");
-        goto out;
-    }
-
-    fseek(fp, 0, SEEK_END);
-    size_t size = ftell(fp);
-    rewind(fp);
-
-    assert(size <= sizeof(public_key.key));
-    if (fread(public_key.key, size, 1, fp) != 1)
-    {
-        magicnet_log("Failed to read public key file\n");
-    }
-    // -1 because of null terminator
-    public_key.size = size - 1;
-out:
-    pthread_mutex_unlock(&key_lock);
-    return;
-}
-
-void MAGICNET_load_private_key()
-{
-    pthread_mutex_lock(&key_lock);
-    memset(&private_key, 0, sizeof(private_key));
-
-    FILE *fp = fopen(MAGICNET_private_key_filepath(), "r");
-    if (!fp)
-    {
-        magicnet_log("Failed to open private key file\n");
-        goto out;
-    }
-
-    fseek(fp, 0, SEEK_END);
-    size_t size = ftell(fp);
-    rewind(fp);
-
-    assert(size <= sizeof(private_key.key));
-
-    if (fread(private_key.key, size, 1, fp) != 1)
-    {
-        magicnet_log("Failed to read private key file\n");
-    }
-
-    // -1 because of null terminator
-    private_key.size = size - 1;
-out:
-    pthread_mutex_unlock(&key_lock);
-
-    return;
 }
 
 void MAGICNET_load_keypair()
@@ -449,14 +358,17 @@ void MAGICNET_load_keypair()
     {
         return;
     }
-    
+
     MAGICNET_keys_init();
-    
-    if (!file_exists(MAGICNET_private_key_filepath()))
+
+    int res = magicnet_database_keys_get_active(&public_key, &private_key);
+    if (res == MAGICNET_ERROR_NOT_FOUND)
     {
         generate_key();
     }
-
-    MAGICNET_load_public_key();
-    MAGICNET_load_private_key();
+    else if (res < 0)
+    {
+        magicnet_log("%s something unexpected happend\n", __FUNCTION__);
+        return;
+    }
 }

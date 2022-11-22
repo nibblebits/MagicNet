@@ -42,7 +42,14 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 \"time\"	REAL,   \
                                 \"data\"	BLOB,  \
                                 \"data_size\"	INTEGER);",
-
+                                "CREATE TABLE \"keys\" ( \
+                                                        \"pub_key\"	BLOB, \
+                                                        \"pri_key\"	BLOB, \
+                                                        \"pub_key_size\" INTEGER,   \
+                                                        \"pri_key_size\" INTEGER, \
+                                                         \"active\"	INTEGER,        \
+                                                        PRIMARY KEY(\"pub_key\") \
+                            );",
                                "CREATE TABLE \"peers\" ( \
                                 \"id\"	INTEGER,        \
                                 \"ip_address\"	TEXT,   \
@@ -74,7 +81,11 @@ int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key,
     }
 
     sqlite3_bind_int(stmt, 1, time(NULL));
-    sqlite3_bind_text(stmt, 2, ip_address, strlen(ip_address), NULL);
+    sqlite3_bind_null(stmt, 2);
+    if (ip_address)
+    {
+        sqlite3_bind_text(stmt, 2, ip_address, strlen(ip_address), NULL);
+    }
     sqlite3_bind_null(stmt, 3);
     if (key)
     {
@@ -258,6 +269,9 @@ int magicnet_database_create()
 
     // This is the root host the peer everybody knows about.
     magicnet_database_peer_add_no_locks("104.248.237.170", NULL, "Root Host", "hello@dragonzap.com");
+
+    // Lets add ourselves
+    magicnet_database_peer_add_no_locks(NULL,MAGICNET_public_key(), "Anonymous", NULL);
 
     return res;
 }
@@ -755,6 +769,121 @@ out:
     pthread_mutex_unlock(&db_lock);
     return res;
 }
+
+
+
+int magicnet_database_keys_get_active(struct key* key_pub_out, struct key* key_pri_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *load_block_sql = "SELECT pub_key, pri_key, pub_key_size, pri_key_size FROM keys WHERE active = 1";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    key_pub_out->size = sqlite3_column_int(stmt, 2);
+    key_pri_out->size = sqlite3_column_int(stmt, 3);
+
+    memcpy(key_pub_out->key, sqlite3_column_blob(stmt, 0), key_pub_out->size);
+    memcpy(key_pri_out->key, sqlite3_column_blob(stmt, 1), key_pri_out->size);
+
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+
+int magicnet_database_keys_create(struct key* pub_key, struct key* pri_key)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    int last_insert_id = 0;
+    pthread_mutex_lock(&db_lock);
+
+    const char *create_key_sql = "INSERT INTO keys (pub_key, pri_key, pub_key_size, pri_key_size, active) VALUES (?, ?, ?, ?, ?);";
+    res = sqlite3_prepare_v2(db, create_key_sql, strlen(create_key_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_blob(stmt, 1, pub_key, pub_key->size, NULL);
+    sqlite3_bind_blob(stmt, 2, pri_key, pri_key->size, NULL);
+    sqlite3_bind_int(stmt, 3, pub_key->size);
+    sqlite3_bind_int(stmt, 4, pri_key->size);
+    sqlite3_bind_int(stmt, 5, 0);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_keys_set_default(struct key* pub_key)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    int last_insert_id = 0;
+    pthread_mutex_lock(&db_lock);
+
+    const char *update_key_sql_to_zero = "UPDATE keys SET active=0";
+    res = sqlite3_prepare_v2(db, update_key_sql_to_zero, strlen(update_key_sql_to_zero), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_blob(stmt, 1, pub_key, sizeof(pub_key), NULL);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+    const char *update_key_sql = "UPDATE keys SET active=1 WHERE pub_key=?";
+    res = sqlite3_prepare_v2(db, update_key_sql, strlen(update_key_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_blob(stmt, 1, pub_key, pub_key->size, NULL);
+
+    step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+    sqlite3_finalize(stmt);
+
+out:
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+
 int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
 {
     int res = 0;
