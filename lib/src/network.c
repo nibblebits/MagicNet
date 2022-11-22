@@ -2311,24 +2311,55 @@ int magicnet_save_peer_info(struct magicnet_peer_information* peer_info)
 int magicnet_read_peer_info(struct magicnet_client *client)
 {
     int res = 0;
+    struct buffer* recv_buffer = buffer_create();
     res = magicnet_read_bytes(client, &client->peer_info.key, sizeof(client->peer_info.key), NULL);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_read_bytes(client, &client->peer_info.name, sizeof(client->peer_info.name), NULL);
+    res = magicnet_read_bytes(client, &client->peer_info.name, sizeof(client->peer_info.name), recv_buffer);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_read_bytes(client, &client->peer_info.email, sizeof(client->peer_info.email), NULL);
+    res = magicnet_read_bytes(client, &client->peer_info.email, sizeof(client->peer_info.email), recv_buffer);
     if (res < 0)
     {
         goto out;
     }
 
+    // Now lets read the hash of the data and the signature. Then we will verify it was sent by the key holder.
+    char hash_of_data[SHA256_STRING_LENGTH];
+    struct signature signature;
+    res = magicnet_read_bytes(client, hash_of_data, sizeof(hash_of_data), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    char our_hash_of_data[SHA256_STRING_LENGTH];
+    sha256_data(buffer_ptr(recv_buffer), our_hash_of_data, buffer_len(recv_buffer));
+    if (memcmp(hash_of_data, our_hash_of_data, sizeof(hash_of_data)) != 0)
+    {
+        magicnet_log("%s the hash provided does not match the hash we calculated\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, &signature, sizeof(signature), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = public_verify(&client->peer_info.key, hash_of_data, sizeof(hash_of_data), &signature);
+    if (res < 0)
+    {
+        magicnet_log("%s the data provided was not signed by the public key given to us.\n", __FUNCTION__);
+        goto out;
+    }
     if (strlen(client->peer_info.name) == 0)
     {
         // No name provided then this peer is anonymous.
@@ -2336,6 +2367,7 @@ int magicnet_read_peer_info(struct magicnet_client *client)
     }
 
 out:
+    buffer_free(recv_buffer);
     return res;
 }
 
@@ -2345,6 +2377,7 @@ int magicnet_write_peer_info(struct magicnet_client* client)
     struct key key = {0};
     char name[MAGICNET_MAX_NAME_SIZE] = {0};
     char email[MAGICNET_MAX_EMAIL_SIZE] = {0};
+    struct buffer* send_buf = buffer_create();
     if (client->server)
     {
         memcpy(&key, MAGICNET_public_key(), sizeof(struct key));
@@ -2362,25 +2395,50 @@ int magicnet_write_peer_info(struct magicnet_client* client)
     {
         strncpy(name, "Anonymous", sizeof(name));
     }
+
     res = magicnet_write_bytes(client, &key, sizeof(struct key), NULL);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, name, sizeof(name), NULL);
+    res = magicnet_write_bytes(client, name, sizeof(name), send_buf);
     if (res < 0)
     {
         goto out;
     }
 
-    res = magicnet_write_bytes(client, email, sizeof(email), NULL);
+    res = magicnet_write_bytes(client, email, sizeof(email), send_buf);
     if (res < 0)
     {
         goto out;
     }
+
+    char hash_of_data[SHA256_STRING_LENGTH] = {0};
+    sha256_data(buffer_ptr(send_buf), hash_of_data, buffer_len(send_buf));
+
+    struct signature signature = {0};
+    res = private_sign(hash_of_data, sizeof(hash_of_data), &signature);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, hash_of_data, sizeof(hash_of_data), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, &signature, sizeof(signature), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
 
 out:
+    buffer_free(send_buf);
     return res;
 }
 int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
