@@ -2367,6 +2367,10 @@ int magicnet_read_peer_info(struct magicnet_client *client)
     }
 
 out:
+    if (res < 0)
+    {
+        magicnet_log("%s issue with entry protocol for client\n", __FUNCTION__);
+    }
     buffer_free(recv_buffer);
     return res;
 }
@@ -2421,6 +2425,7 @@ int magicnet_write_peer_info(struct magicnet_client* client)
     res = private_sign(hash_of_data, sizeof(hash_of_data), &signature);
     if (res < 0)
     {
+        magicnet_log("%s could not sign data with our private key\n", __FUNCTION__);
         goto out;
     }
 
