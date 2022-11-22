@@ -200,7 +200,7 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     }
 
     // Already exists then update?
-    const char *update_peer_info = "UPDATE peers SET ip_address=?, key=?, name=?, email=?  WHERE key=?;";
+    const char *update_peer_info = "UPDATE peers SET ip_address=?, name=?, email=?  WHERE key=?;";
     res = sqlite3_prepare_v2(db, update_peer_info, strlen(update_peer_info), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -209,10 +209,9 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     }
 
     sqlite3_bind_text(stmt, 1, peer_info->ip_address, strlen(peer_info->ip_address), NULL);
-    sqlite3_bind_blob(stmt, 2, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
-    sqlite3_bind_text(stmt, 3, peer_info->name, strlen(peer_info->name), NULL);
-    sqlite3_bind_text(stmt, 4, peer_info->email, strlen(peer_info->email), NULL);
-    sqlite3_bind_blob(stmt, 5, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
+    sqlite3_bind_text(stmt, 2, peer_info->name, strlen(peer_info->name), NULL);
+    sqlite3_bind_text(stmt, 3, peer_info->email, strlen(peer_info->email), NULL);
+    sqlite3_bind_blob(stmt, 4, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
 
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
