@@ -129,7 +129,7 @@ int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet
     int res = 0;
     sqlite3_stmt *stmt = NULL;
     
-    memcpy(&peer_out->key, key, sizeof(key));
+    memcpy(&peer_out->key, key, sizeof(peer_out->key));
     const char *get_random_ip_sql = "SELECT ip_address, name, email, found_at FROM peers WHERE key=?;";
     res = sqlite3_prepare_v2(db, get_random_ip_sql, strlen(get_random_ip_sql), &stmt, 0);
     if (res != SQLITE_OK)
@@ -212,7 +212,7 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     sqlite3_bind_blob(stmt, 2, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
     sqlite3_bind_text(stmt, 3, peer_info->name, strlen(peer_info->name), NULL);
     sqlite3_bind_text(stmt, 4, peer_info->email, strlen(peer_info->email), NULL);
-    sqlite3_bind_blob(stmt, 5, &peer_info->key, sizeof(peer_info->key), NULL);
+    sqlite3_bind_blob(stmt, 5, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
 
     int step = sqlite3_step(stmt);
     if (step != SQLITE_DONE)
