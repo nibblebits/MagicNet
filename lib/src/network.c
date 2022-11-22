@@ -2398,6 +2398,10 @@ int magicnet_write_peer_info(struct magicnet_client* client)
             strncpy(email, peer.email, sizeof(email));
         }
     }
+    else
+    {
+        magicnet_log("%s no server instance will have to send without signing\n", __FUNCTION__);
+    }
     
     if (strlen(name) == 0)
     {
