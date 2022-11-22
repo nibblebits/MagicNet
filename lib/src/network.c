@@ -3087,7 +3087,7 @@ void *magicnet_server_client_thread(void *_client)
     while (res >= 0)
     {
         // We must ask the server to relay packets to us
-        magicnet_server_poll(client);
+        res = magicnet_server_poll(client);
         usleep(2000000);
     }
     magicnet_close(client);
