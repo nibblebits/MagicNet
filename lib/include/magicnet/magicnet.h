@@ -225,9 +225,27 @@ struct magicnet_client
     int communication_flags;
     time_t last_contact;
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
+
+    /**
+     * Used for localhost applications. Anything added here is an awaiting packet for the application that is listening to this
+     * program name. These awaiting packets will be received directly by the localhost application requesting them.
+    */
     struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
+
+     /**
+      * These are the packets that are directly for this connected client, it is different from a relayed packet
+      * as only this client will receive the packets here. Rather than relay to the whole network you can
+      * add a packet here and when the client requests a packet sync he will be sent these packets
+      * If this packet queue is empty then he will be sent the relayed packets on the server structure.
+     */
+    struct packets_for_client
+    {
+        struct magicnet_packet packets[MAGICNET_MAX_AWAITING_PACKETS];
+        off_t pos_read;
+        off_t pos_write;
+    } packets_for_client;
+
     struct sockaddr_in client_info;
-    off_t relay_packet_pos;
 
     struct magicnet_peer_information peer_info;
     struct magicnet_server *server;
@@ -265,13 +283,6 @@ struct magicnet_server
 
     // Clients our server initiated the connection for
     struct magicnet_client outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
-
-    // Packets that should be relayed. Note when this is full it loops back around erasing the first packet again.
-    struct relay_packets
-    {
-        struct magicnet_packet packets[MAGICNET_MAX_AWAITING_PACKETS];
-        off_t pos;
-    } relay_packets;
 
     // The packets that have been seen already.. If we encounter them again they should be ignored
     struct seen_packets
@@ -401,18 +412,12 @@ struct block
 };
 
 struct magicnet_chain_downloader;
-struct magicnet_chain_downloader_peer_thread
+
+struct magicnet_chain_downloader_hash_to_download
 {
-    struct magicnet_client* client;
-    size_t blocks_downloaded;
-    time_t last_block_received_time;
-    
-    pthread_t thread_id;
-
-    struct magicnet_chain_downloader* downloader;
-
-    // When true this thread should terminate its self at the next possible moment;
-    bool finished;
+    char hash[SHA256_STRING_LENGTH];
+    // The response block.
+    struct block* res_block;
 };
 
 struct magicnet_chain_downloader
@@ -420,23 +425,16 @@ struct magicnet_chain_downloader
     // The download lock. Should be used when dealing with this downloader
     pthread_mutex_t lock;
 
-    // The block hash we should start with. We will download until a NULL previous hash is found.
-    char starting_hash[SHA256_STRING_LENGTH];
-
-    // The request hash. This is the hash of the next block the downloader should request.
-    char request_hash[SHA256_STRING_LENGTH];
+    // Vector of  magicnet_chain_downloader_hash_to_download* . Must free the pointers when done.
+    struct vector* hashes_to_download;
 
     // The current total blocks downloaded
     size_t total_blocks_downloaded;
 
-    pthread_t downloader_thread_id;
+    pthread_t thread_id;
 
     // The server 
     struct magicnet_server* server;
-
-    // The clients we are using to download the chain from.
-    struct magicnet_client* clients[MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS];
-    struct magicnet_chain_downloader_peer_thread* peer_threads[MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS];
 
 
     // When true this thread should terminate its self at the next possible moment
@@ -481,6 +479,8 @@ bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 void magicnet_close_and_free(struct magicnet_client* client);
 
+int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet);
+
 struct signed_data *magicnet_signed_data(struct magicnet_packet *packet);
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
@@ -494,6 +494,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
 int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client);
 int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *client);
+struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key);
 
 
 /**
@@ -577,10 +578,10 @@ const char *block_hash_create(struct block *block, char* hash_out);
 struct block *magicnet_block_load(const char *hash);
 
 
-// Blockchain downloader (used for desyncs..)
-int magicnet_chain_downloader_download_and_wait(struct magicnet_server *server, const char *request_hash);
-struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server, const char *request_hash, pthread_t *thread_id_out);
-void magicnet_chain_downloader_finish(struct magicnet_chain_downloader* downloader);
+// Blockchain downloader
+struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server);
+void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader* downloader, const char* hash);
+int magicnet_chain_downloader_start(struct magicnet_chain_downloader* downloader);
 void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server);
 
 #endif

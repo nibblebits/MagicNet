@@ -122,7 +122,6 @@ struct magicnet_server *magicnet_server_start(int port)
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        magicnet_signed_data(&server->relay_packets.packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
         server->seen_packets.packet_ids[i] = -1;
     }
 
@@ -449,6 +448,7 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
         magicnet_signed_data(&client->awaiting_packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+        magicnet_signed_data(&client->packets_for_client.packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     }
 }
 
@@ -518,7 +518,6 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
     }
     magicnet_init_client(mclient, server, sockfd, &servaddr);
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
-    mclient->relay_packet_pos = server->relay_packets.pos;
     strncpy(mclient->peer_info.ip_address, ip_address, sizeof(mclient->peer_info.ip_address));
     magicnet_server_unlock(server);
 
@@ -577,7 +576,6 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
 
     magicnet_init_client(mclient, server, connfd, &client);
     strncpy(mclient->peer_info.ip_address, inet_ntoa(client.sin_addr), sizeof(mclient->peer_info.ip_address));
-    mclient->relay_packet_pos = server->relay_packets.pos;
     if (strcmp(inet_ntoa(client.sin_addr), "127.0.0.1") == 0)
     {
         // This is a localhost connection, therefore packets that are not signed are allowed.
@@ -1904,45 +1902,7 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
     return 0;
 }
 
-bool magicnet_server_has_relay_packet_been_queued(struct magicnet_server *server, struct magicnet_packet *packet)
-{
-    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
-    {
-        if (magicnet_signed_data(&server->relay_packets.packets[i])->id == magicnet_signed_data(packet)->id)
-        {
-            return true;
-        }
-    }
 
-    return false;
-}
-
-int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
-{
-    if (magicnet_server_has_relay_packet_been_queued(server, packet))
-    {
-        return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
-    }
-
-    if (MAGICNET_nulled_signature(&packet->signature) && !(magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED))
-    {
-        magicnet_log("%s you may not add a packet to relay that has not been signed with a key. We need to know whos sending data on the network. Refused. If you want to force this then assign the flag MAGICNET_PACKET_FLAG_MUST_BE_SIGNED and then it will be signed with our local key before its relayed to any peers.\n", __FUNCTION__);
-        return MAGICNET_ERROR_SECURITY_RISK;
-    }
-
-    // Do we already have this packet to relay?
-    struct magicnet_packet *free_relay_packet = &server->relay_packets.packets[server->relay_packets.pos % MAGICNET_MAX_AWAITING_PACKETS];
-    if (!(magicnet_signed_data(free_relay_packet)->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
-    {
-        magicnet_free_packet_pointers(free_relay_packet);
-    }
-
-    magicnet_copy_packet(free_relay_packet, packet);
-    magicnet_signed_data(free_relay_packet)->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
-
-    server->relay_packets.pos++;
-    return 0;
-}
 
 struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_client *client)
 {
@@ -1952,18 +1912,96 @@ struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_cli
     }
 
     struct magicnet_server *server = client->server;
-    struct magicnet_packet *packet = &server->relay_packets.packets[client->relay_packet_pos % MAGICNET_MAX_AWAITING_PACKETS];
 
+    // First we must check if theirs any packets for relay just for this client. If their isnt then we will choose the global relay
+    struct magicnet_packet *packet = &client->packets_for_client.packets[client->packets_for_client.pos_read % MAGICNET_MAX_AWAITING_PACKETS];
     if (!(magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
-        // Yeah we had a valid packet we can use this.
-        client->relay_packet_pos++;
+        // Yes we have a packet.. lets return
+        client->packets_for_client.pos_read++;
+        return packet;
     }
-    else
+
+
+    return NULL;
+}
+
+void magicnet_client_relay_packet_finished(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    magicnet_free_packet_pointers(packet);
+    memset(packet, 0, sizeof(struct magicnet_packet));
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+}
+
+int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    struct magicnet_packet *packet_out = &client->packets_for_client.packets[client->packets_for_client.pos_write % MAGICNET_MAX_AWAITING_PACKETS];
+    if (!(magicnet_signed_data(packet_out)->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
-        packet = NULL;
+        // Okay we looped back around and overflowed.. This is fine but we must discard this packet to make way
+        // for the new packet we want to add.
+
+        magicnet_free_packet_pointers(packet_out);
+        memset(packet_out, 0, sizeof(struct magicnet_packet));
     }
-    return packet;
+    magicnet_copy_packet(packet_out, packet);
+    magicnet_signed_data(packet_out)->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+    client->packets_for_client.pos_write++;
+    return res;
+}
+
+int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
+{
+    for (int i =0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    {
+        if (magicnet_client_in_use(&server->clients[i]))
+        {
+            magicnet_relay_packet_to_client(&server->clients[i], packet);
+        }
+    }
+
+     for (int i =0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    {
+        if (magicnet_client_in_use(&server->outgoing_clients[i]))
+        {
+            magicnet_relay_packet_to_client(&server->outgoing_clients[i], packet);
+        }
+    }
+
+    return 0;
+}
+
+int magicnet_server_relay_packet_to_client_key(struct magicnet_server *server, struct key *key, struct magicnet_packet *packet)
+{
+    struct magicnet_client *client = magicnet_server_get_client_with_key(server, key);
+    if (!client)
+    {
+        return -1;
+    }
+
+    return magicnet_relay_packet_to_client(client, packet);
+}
+
+struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key)
+{
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    {
+        if (magicnet_client_in_use(&server->clients[i]) && key_cmp(&server->clients[i].peer_info.key, key))
+        {
+            return &server->clients[i];
+        }
+    }
+
+    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    {
+        if (magicnet_client_in_use(&server->outgoing_clients[i]) && key_cmp(&server->outgoing_clients[i].peer_info.key, key))
+        {
+            return &server->outgoing_clients[i];
+        }
+    }
+
+    return NULL;
 }
 /**
  * @brief Marks the packet in the client->awaiting_packets array as processed
@@ -2061,7 +2099,7 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     bool has_packet_to_relay = false;
     // We got to lock this server
     magicnet_server_lock(client->server);
-    struct magicnet_packet const *tmp_packet = magicnet_client_next_packet_to_relay(client);
+    struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
     if (tmp_packet)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
@@ -2163,8 +2201,6 @@ int magicnet_client_process_request_block_packet(struct magicnet_client *client,
     struct block *block = block_load(magicnet_signed_data(packet)->payload.request_block.request_hash);
     if (!block)
     {
-        magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
-        res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
         goto out;
     }
     struct vector *block_vec = vector_create(sizeof(struct block *));
@@ -2193,9 +2229,6 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
             res = magicnet_client_process_server_sync_packet(client, packet);
             break;
 
-        case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
-            res = magicnet_client_process_request_block_packet(client, packet);
-            break;
         case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
             // empty..
             res = 0;
@@ -2903,6 +2936,10 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
         res = magicnet_server_process_transaction_send_packet(client, packet);
         break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
+        res = magicnet_client_process_request_block_packet(client, packet);
+        break;
     };
 
     magicnet_server_lock(client->server);
@@ -2928,6 +2965,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
         flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
+        magicnet_client_relay_packet_finished(client, tmp_packet);
     }
     magicnet_server_unlock(client->server);
     if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
