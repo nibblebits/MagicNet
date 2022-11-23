@@ -576,6 +576,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     }
 
     magicnet_init_client(mclient, server, connfd, &client);
+    strncpy(mclient->peer_info.ip_address, inet_ntoa(client.sin_addr), sizeof(mclient->peer_info.ip_address));
     mclient->relay_packet_pos = server->relay_packets.pos;
     if (strcmp(inet_ntoa(client.sin_addr), "127.0.0.1") == 0)
     {
