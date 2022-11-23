@@ -13,6 +13,8 @@ static struct magicnet_active_chain_downloads downloads;
 
 void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server)
 {
+    return;
+    
     struct magicnet_chain_downloader* downloader = magicnet_chain_downloader_download(server);
     if (!downloader)
     {
