@@ -83,9 +83,9 @@ void magicnet_chain_downloader_blocks_catchup(struct magicnet_server *server)
     while (magicnet_database_load_blocks_with_no_chain(blocks_to_download, 1) >= 0)
     {
         struct block *prev_block = vector_back_ptr(blocks_to_download);
-        if (prev_block)
+        if (prev_block && !sha256_empty(prev_block->prev_hash))
         {
-            magicnet_chain_downloader_queue_for_block_download(prev_block->hash);
+            magicnet_chain_downloader_queue_for_block_download(prev_block->prev_hash);
         }
     }
 
@@ -190,6 +190,14 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader *downlo
     // Already added..
     if (magicnet_chain_downloader_hash_find(downloader, hash, NULL) == 0)
     {
+        return;
+    }
+
+    // Already have the block? Then dont do anything..
+    struct block* block = block_load(hash);
+    if (block)
+    {
+        block_free(block);
         return;
     }
 
