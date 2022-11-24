@@ -2963,6 +2963,7 @@ int magicnet_server_poll(struct magicnet_client *client)
 {
     int res = 0;
 
+    bool should_sleep = false;
     // We also want to send a packet of our own
     int flags = 0;
 
@@ -3002,6 +3003,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     packet = magicnet_recv_next_packet(client, &res);
     if (packet == NULL)
     {
+        should_sleep = true;
         goto out;
     }
 
@@ -3019,9 +3021,16 @@ int magicnet_server_poll(struct magicnet_client *client)
     }
 
 out:
+
     magicnet_free_packet(packet_to_send);
     magicnet_free_packet(packet);
     magicnet_free_packet(packet_to_relay);
+
+    // We don't really want to over whelm the thread... This would be better in the loop however.
+    if (should_sleep)
+    {
+        usleep(2000000);
+    }
     return res;
 }
 void *magicnet_client_thread(void *_client)
@@ -3160,7 +3169,6 @@ void *magicnet_server_client_thread(void *_client)
     {
         // We must ask the server to relay packets to us
         res = magicnet_server_poll(client);
-        usleep(2000000);
     }
     magicnet_server_lock(client->server);
     magicnet_close(client);
