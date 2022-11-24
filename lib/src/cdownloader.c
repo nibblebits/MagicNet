@@ -249,7 +249,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     magicnet_signed_data(req_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     strncpy(magicnet_signed_data(req_packet)->payload.request_block.request_hash, hash_to_find.hash, sizeof(magicnet_signed_data(req_packet)->payload.request_block.request_hash));
     res = magicnet_server_add_packet_to_relay(downloader->server, req_packet);
-
+    sleep(5);
 out:
     magicnet_free_packet(req_packet);
     return 0;
