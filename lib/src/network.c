@@ -590,6 +590,12 @@ void magicnet_close(struct magicnet_client *client)
 {
     close(client->sock);
     client->flags &= ~MAGICNET_CLIENT_FLAG_CONNECTED;
+    // Let's free all the packets
+    for (int i =0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    {
+        magicnet_free_packet_pointers(&client->packets_for_client.packets[i]);
+        magicnet_free_packet_pointers(&client->awaiting_packets[i]);
+    }
     if (client->flags & MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE)
     {
         free(client);
@@ -2209,7 +2215,9 @@ int magicnet_client_process_request_block_packet(struct magicnet_client *client,
     magicnet_signed_data(packet_out)->payload.block_send.blocks = block_vec;
     magicnet_signed_data(packet_out)->payload.block_send.transaction_group = block_transaction_group_clone(cloned_block->transaction_group);
     magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
-    res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    
+    magicnet_server_relay_packet_to_client_key(client->server, &packet->pub_key, packet_out);
+
     block_free(block);
 out:
     magicnet_free_packet(packet_out);
@@ -2876,7 +2884,10 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         block_free(previous_block);
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     }
+
+    magicnet_server_lock(client->server);
     magicnet_server_add_packet_to_relay(client->server, packet);
+    magicnet_server_unlock(client->server);
     return 0;
 }
 
@@ -2954,6 +2965,8 @@ int magicnet_server_poll(struct magicnet_client *client)
 
     // We also want to send a packet of our own
     int flags = 0;
+
+    sizeof(struct magicnet_client);
 
     struct magicnet_packet *packet_to_send = magicnet_packet_new();
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
@@ -3149,7 +3162,10 @@ void *magicnet_server_client_thread(void *_client)
         res = magicnet_server_poll(client);
         usleep(2000000);
     }
+    magicnet_server_lock(client->server);
     magicnet_close(client);
+    magicnet_server_unlock(client->server);
+
 }
 
 void magicnet_server_attempt_new_connections(struct magicnet_server *server)

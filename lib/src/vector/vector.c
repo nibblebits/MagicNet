@@ -230,6 +230,7 @@ void vector_pop_last_peek(struct vector* vector)
 {
     assert(vector->pindex >= 1);
     vector_pop_at(vector, vector->pindex-1);
+    vector->pindex--;
 }
 
 void vector_push(struct vector *vector, void *elem)

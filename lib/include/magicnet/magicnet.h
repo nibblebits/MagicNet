@@ -233,10 +233,8 @@ struct magicnet_client
     struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
 
      /**
-      * These are the packets that are directly for this connected client, it is different from a relayed packet
-      * as only this client will receive the packets here. Rather than relay to the whole network you can
-      * add a packet here and when the client requests a packet sync he will be sent these packets
-      * If this packet queue is empty then he will be sent the relayed packets on the server structure.
+      * These are the packets that are directly for this connected client. When a sync packet is used we will send the
+      * next packet from this array to this client in question.
      */
     struct packets_for_client
     {
@@ -416,8 +414,9 @@ struct magicnet_chain_downloader;
 struct magicnet_chain_downloader_hash_to_download
 {
     char hash[SHA256_STRING_LENGTH];
-    // The response block.
-    struct block* res_block;
+
+    // Equal to the time we last requested this block. Zero if we have not requested it yet.
+    time_t last_request;
 };
 
 struct magicnet_chain_downloader
@@ -469,6 +468,7 @@ enum
 
 };
 
+int magicnet_chain_downloader_queue_for_block_download(const char *block_hash);
 int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server* server);
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
@@ -495,6 +495,7 @@ int magicnet_send_packet(struct magicnet_program *program, int packet_type, void
 int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client);
 int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *client);
 struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key);
+int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magicnet_packet *packet);
 
 
 /**
