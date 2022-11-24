@@ -2879,7 +2879,7 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         if (!previous_block)
         {
             // No previous block? Then we should initiate a download for all blocks with no chain
-            magicnet_chain_downloader_blocks_catchup(client->server);
+            magicnet_chain_downloader_queue_for_block_download(block->prev_hash);
         }
         block_free(previous_block);
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);

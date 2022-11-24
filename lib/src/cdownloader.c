@@ -194,12 +194,12 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader *downlo
     }
 
     // Already have the block? Then dont do anything..
-    struct block* block = block_load(hash);
-    if (block)
-    {
-        block_free(block);
-        return;
-    }
+    // struct block* block = block_load(hash);
+    // if (block)
+    // {
+    //     block_free(block);
+    //     return;
+    // }
 
     struct magicnet_chain_downloader_hash_to_download *hash_to_download = calloc(1, sizeof(struct magicnet_chain_downloader_hash_to_download));
     strncpy(hash_to_download->hash, hash, sizeof(hash_to_download->hash));
