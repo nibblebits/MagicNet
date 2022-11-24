@@ -104,11 +104,12 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
     downloads.chain_downloads = vector_create(sizeof(struct magicnet_chain_downloader *));
 
     // The default downloader will always be running, we can push hashes we want at any time and it will resolve them.
-    struct magicnet_chain_downloader *default_downloader = magicnet_chain_downloader_download(server);
+    default_downloader = magicnet_chain_downloader_download(server);
     if (!default_downloader)
     {
         magicnet_log("%s could not create downloader instance\n", __FUNCTION__);
-        return;
+        res = -1;
+        goto out;
     }
 
     magicnet_chain_downloader_start(default_downloader);
@@ -165,11 +166,13 @@ int magicnet_chain_downloader_hash_find(struct magicnet_chain_downloader *downlo
     {
         if (memcmp(hash_to_download->hash, hash, sizeof(hash_to_download->hash)) == 0)
         {
+            res = 0;
             if (hash_to_download_out)
             {
                 *hash_to_download_out = *hash_to_download;
             }
             break;
+
         }
         hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
     }
@@ -185,13 +188,13 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader *downlo
     }
 
     // Already added..
-    if (magicnet_chain_downloader_hash_find(downloader, hash, NULL) != 0)
+    if (magicnet_chain_downloader_hash_find(downloader, hash, NULL) == 0)
     {
         return;
     }
 
     struct magicnet_chain_downloader_hash_to_download *hash_to_download = calloc(1, sizeof(struct magicnet_chain_downloader_hash_to_download));
-    strncpy(hash_to_download->hash, hash, sizeof(hash));
+    strncpy(hash_to_download->hash, hash, sizeof(hash_to_download->hash));
     vector_push(downloader->hashes_to_download, &hash_to_download);
 }
 
