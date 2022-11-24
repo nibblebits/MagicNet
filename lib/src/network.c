@@ -2199,7 +2199,7 @@ out:
 int magicnet_client_process_request_block_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    magicnet_log("%s request block packet initiated\n", __FUNCTION__);
+    magicnet_log("%s request block packet initiated. Request for block with hash %s\n", __FUNCTION__, magicnet_signed_data(packet)->payload.request_block.request_hash);
     struct magicnet_packet *packet_out = magicnet_packet_new();
 
     magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
