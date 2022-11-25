@@ -219,6 +219,13 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
         *blockchain_id_out = pervious_block->blockchain_id;
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
+
+    int bco = 0;
+    if(magicnet_database_load_block_from_previous_hash(block->hash, NULL, &bco, NULL) >= 0)
+    {
+        *blockchain_id_out = bco;
+        return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
+    }
     
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
