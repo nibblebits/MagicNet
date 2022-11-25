@@ -297,7 +297,7 @@ int blockchain_reformat(struct block *block)
     {
     }
 
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 1000; i++)
     {
         vector_set_peek_pointer(block_vec, 0);
         struct block *current_block = vector_peek_ptr(block_vec);
