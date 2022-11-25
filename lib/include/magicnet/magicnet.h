@@ -243,9 +243,13 @@ struct magicnet_client
     // The total bytes we want to send per second. Rate limiting system..
     size_t max_bytes_send_per_second;
 
-    // When the current time exceeds this time the max bytes per second is reset to the MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND
-    time_t reset_max_bytes_at;
+    // Max bytes received per second
+    size_t max_bytes_recv_per_second;
 
+    // When the current time exceeds this time the max bytes per second is reset to the MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND
+    time_t reset_max_bytes_to_send_at;
+
+    time_t reset_max_bytes_to_recv_at;
 
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
 
