@@ -233,6 +233,9 @@ struct magicnet_client
     // The total bytes this client has ever received
     size_t total_bytes_received;
 
+    // Download microsecond delay.
+    time_t recv_delay;
+
 
 
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];

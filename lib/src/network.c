@@ -254,6 +254,23 @@ bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter
     return false;
 }
 
+
+size_t magicnet_client_time_elapsed(struct magicnet_client* client)
+{
+    return time(NULL) - client->connection_began;
+}
+
+size_t magicnet_client_average_download_speed(struct magicnet_client* client)
+{
+    off_t total_seconds_running = time(NULL) - client->connection_began;
+    return client->total_bytes_received / total_seconds_running;
+}
+
+size_t magicnet_client_average_upload_speed(struct magicnet_client* client)
+{
+    off_t total_seconds_running = magicnet_client_time_elapsed(client);
+    return client->total_bytes_sent / total_seconds_running;
+}
 /**
  * @brief Converts the first 8 bytes of this key into a long.
  *
@@ -588,22 +605,6 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     return mclient;
 }
 
-size_t magicnet_client_time_elapsed(struct magicnet_client* client)
-{
-    return time(NULL) - client->connection_began;
-}
-
-size_t magicnet_client_average_download_speed(struct magicnet_client* client)
-{
-    off_t total_seconds_running = time(NULL) - client->connection_began;
-    return client->total_bytes_received / total_seconds_running;
-}
-
-size_t magicnet_client_average_upload_speed(struct magicnet_client* client)
-{
-    off_t total_seconds_running = magicnet_client_time_elapsed(client);
-    return client->total_bytes_sent / total_seconds_running;
-}
 
 void magicnet_close(struct magicnet_client *client)
 {
@@ -650,6 +651,11 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
         }
 
         client->total_bytes_received += res;
+        if(magicnet_client_average_download_speed(client) > MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
+        {
+            client->recv_delay += 100;
+        }
+        usleep(client->recv_delay);
         amount_read += res;
     }
     client->last_contact = time(NULL);
