@@ -645,6 +645,26 @@ void magicnet_close_and_free(struct magicnet_client *client)
     free(client);
 }
 
+void magicnet_client_readjust_download_speed(struct magicnet_client *client)
+{
+    if (time(NULL) > client->reset_max_bytes_at)
+    {
+        client->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
+    }
+    if (magicnet_client_average_download_speed(client) > client->max_bytes_send_per_second)
+    {
+        client->recv_delay += 10000;
+    }
+    else if (magicnet_client_average_download_speed(client) < client->max_bytes_send_per_second)
+    {
+        client->recv_delay -= 1000;
+    }
+    if (client->recv_delay < 0)
+    {
+        client->recv_delay = 0;
+    }
+}
+
 int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
@@ -666,6 +686,8 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
 
         client->total_bytes_received += res;
         amount_read += res;
+        magicnet_client_readjust_download_speed(client);
+        usleep(client->recv_delay);
     }
     client->last_contact = time(NULL);
     return res;

@@ -233,8 +233,12 @@ struct magicnet_client
     // The total bytes this client has ever received
     size_t total_bytes_received;
 
-    // Download microsecond delay.
+    // Upload microsecond delay.
     time_t send_delay;
+
+    // Download microsecond delay
+    time_t recv_delay;
+
 
     // The total bytes we want to send per second. Rate limiting system..
     size_t max_bytes_send_per_second;
