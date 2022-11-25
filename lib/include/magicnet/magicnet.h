@@ -224,6 +224,17 @@ struct magicnet_client
     // Communication flags are set in the entry protocol they determine the type of packets this peer is willing to accept.
     int communication_flags;
     time_t last_contact;
+
+    time_t connection_began;
+
+    // The total bytes this client has ever sent
+    size_t total_bytes_sent;
+
+    // The total bytes this client has ever received
+    size_t total_bytes_received;
+
+
+
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
 
     /**

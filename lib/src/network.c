@@ -518,6 +518,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
     }
     magicnet_init_client(mclient, server, sockfd, &servaddr);
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+    mclient->connection_began = time(NULL);
     strncpy(mclient->peer_info.ip_address, ip_address, sizeof(mclient->peer_info.ip_address));
     magicnet_server_unlock(server);
 
@@ -586,12 +587,32 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     return mclient;
 }
 
+size_t magicnet_client_time_elapsed(struct magicnet_client* client)
+{
+    return time(NULL) - client->connection_began;
+}
+
+size_t magicnet_client_average_download_speed(struct magicnet_client* client)
+{
+    off_t total_seconds_running = time(NULL) - client->connection_began;
+    return client->total_bytes_received / total_seconds_running;
+}
+
+size_t magicnet_client_average_upload_speed(struct magicnet_client* client)
+{
+    off_t total_seconds_running = magicnet_client_time_elapsed(client);
+    return client->total_bytes_sent / total_seconds_running;
+}
+
 void magicnet_close(struct magicnet_client *client)
 {
+
+    magicnet_log("%s client %p was closed, total bytes read=%i total bytes wrote=%i, average download speed=%i bps, average upload speed=%i bps, time elapsed=%i\n", __FUNCTION__, client, client->total_bytes_received, client->total_bytes_sent, magicnet_client_average_download_speed(client), magicnet_client_average_upload_speed(client), magicnet_client_time_elapsed(client));
+
     close(client->sock);
     client->flags &= ~MAGICNET_CLIENT_FLAG_CONNECTED;
     // Let's free all the packets
-    for (int i =0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
+    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
         magicnet_free_packet_pointers(&client->packets_for_client.packets[i]);
         magicnet_free_packet_pointers(&client->awaiting_packets[i]);
@@ -627,6 +648,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
             buffer_write_bytes(store_in_buffer, ptr_out + amount_read, amount - amount_read);
         }
 
+        client->total_bytes_received += res;
         amount_read += res;
     }
     client->last_contact = time(NULL);
@@ -653,6 +675,7 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
         }
 
         amount_written += res;
+        client->total_bytes_sent += res;
     }
 
     return res;
@@ -1684,6 +1707,7 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     mclient->sock = sockfd;
     mclient->server = NULL;
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+    mclient->connection_began = time(NULL);
     mclient->communication_flags = communication_flags;
 
     // Bit crappy, convert to integer then test...
@@ -1758,6 +1782,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     mclient->sock = sockfd;
     mclient->server = NULL;
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+    mclient->connection_began = time(NULL);
 
     // Bit crappy, convert to integer then test...
     if (strcmp(ip_address, "127.0.0.1") == 0)
@@ -1908,8 +1933,6 @@ int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct m
     return 0;
 }
 
-
-
 struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_client *client)
 {
     if (!client->server)
@@ -1928,11 +1951,10 @@ struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_cli
         return packet;
     }
 
-
     return NULL;
 }
 
-void magicnet_client_relay_packet_finished(struct magicnet_client* client, struct magicnet_packet* packet)
+void magicnet_client_relay_packet_finished(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     magicnet_free_packet_pointers(packet);
     memset(packet, 0, sizeof(struct magicnet_packet));
@@ -1959,7 +1981,7 @@ int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magic
 
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
 {
-    for (int i =0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
         if (magicnet_client_in_use(&server->clients[i]))
         {
@@ -1967,7 +1989,7 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
         }
     }
 
-     for (int i =0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
         if (magicnet_client_in_use(&server->outgoing_clients[i]))
         {
@@ -2215,7 +2237,7 @@ int magicnet_client_process_request_block_packet(struct magicnet_client *client,
     magicnet_signed_data(packet_out)->payload.block_send.blocks = block_vec;
     magicnet_signed_data(packet_out)->payload.block_send.transaction_group = block_transaction_group_clone(cloned_block->transaction_group);
     magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
-    
+
     magicnet_server_relay_packet_to_client_key(client->server, &packet->pub_key, packet_out);
 
     block_free(block);
@@ -3003,7 +3025,7 @@ int magicnet_server_poll(struct magicnet_client *client)
     packet = magicnet_recv_next_packet(client, &res);
     if (packet == NULL)
     {
-        should_sleep = true;
+        should_sleep = false;
         goto out;
     }
 
@@ -3037,7 +3059,6 @@ void *magicnet_client_thread(void *_client)
 {
     int res = 0;
     struct magicnet_client *client = _client;
-
     res = magicnet_client_preform_entry_protocol_read(client);
     if (res < 0)
     {
@@ -3173,7 +3194,6 @@ void *magicnet_server_client_thread(void *_client)
     magicnet_server_lock(client->server);
     magicnet_close(client);
     magicnet_server_unlock(client->server);
-
 }
 
 void magicnet_server_attempt_new_connections(struct magicnet_server *server)
