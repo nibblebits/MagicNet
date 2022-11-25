@@ -661,7 +661,15 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
         client->total_bytes_received += res;
         if(magicnet_client_average_download_speed(client) > MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
         {
-            client->recv_delay += 100;
+            client->recv_delay += 1000;
+        }
+        else if(magicnet_client_average_download_speed(client) < MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
+        {
+            client->recv_delay -= 1000;
+        }
+        if (client->recv_delay < 0)
+        {
+            client->recv_delay = 0;
         }
         usleep(client->recv_delay);
         amount_read += res;
