@@ -443,6 +443,7 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     client->sock = connfd;
     client->server = server;
     client->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
+    client->connection_began = time(NULL);
     memcpy(&client->client_info, addr_in, sizeof(&client->client_info));
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
