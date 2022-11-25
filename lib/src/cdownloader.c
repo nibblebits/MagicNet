@@ -297,7 +297,7 @@ void *magicnet_chain_downloader_thread_loop(void *_downloader)
 
         if (do_sleep)
         {
-            sleep(5);
+          usleep(100);
         }
     }
 
