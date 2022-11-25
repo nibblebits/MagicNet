@@ -641,6 +641,14 @@ void magicnet_close(struct magicnet_client *client)
         magicnet_free_packet_pointers(&client->packets_for_client.packets[i]);
         magicnet_free_packet_pointers(&client->awaiting_packets[i]);
     }
+
+    // If we closed the connection of a client who was last to send the block then we must set it to NULL
+    // on the server, since the client is no longer accessible.
+    if (client->server && client->server->last_client_to_send_block == client)
+    {
+        client->server->last_client_to_send_block = NULL;
+    }
+
     if (client->flags & MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE)
     {
         free(client);
@@ -2955,6 +2963,7 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
 
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
+    bool hash_is_requested = false;
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
     if (vector_count(magicnet_signed_data(packet)->payload.block_send.blocks) > 1)
     {
@@ -2962,10 +2971,12 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         return 0;
     }
 
+    client->server->last_client_to_send_block = client;
     vector_set_peek_pointer(magicnet_signed_data(packet)->payload.block_send.blocks, 0);
     struct block *block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     while (block)
     {
+        hash_is_requested = magicnet_default_downloader_is_hash_queued(block->hash);
         block_save(block);
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
         magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
@@ -2980,9 +2991,14 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     }
 
-    magicnet_server_lock(client->server);
-    magicnet_server_add_packet_to_relay(client->server, packet);
-    magicnet_server_unlock(client->server);
+    // We don't relay if this was a block we requested.
+    if (!hash_is_requested)
+    {
+        magicnet_server_lock(client->server);
+        magicnet_server_add_packet_to_relay(client->server, packet);
+        magicnet_server_unlock(client->server);
+    }
+
     return 0;
 }
 

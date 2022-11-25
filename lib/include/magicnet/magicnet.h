@@ -309,6 +309,9 @@ struct magicnet_server
     // Clients our server initiated the connection for
     struct magicnet_client outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
 
+    // This is the last client that sent a block to us.
+    struct magicnet_client* last_client_to_send_block;
+
     // The packets that have been seen already.. If we encounter them again they should be ignored
     struct seen_packets
     {
@@ -611,5 +614,6 @@ struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magi
 void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader* downloader, const char* hash);
 int magicnet_chain_downloader_start(struct magicnet_chain_downloader* downloader);
 void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server);
+bool magicnet_default_downloader_is_hash_queued(const char* hash);
 
 #endif
