@@ -461,6 +461,13 @@ int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct ke
 
     return 0;
 }
+
+void magicnet_client_set_max_bytes_to_send_per_second(struct magicnet_client* client, size_t total_bytes, int reset_in_seconds)
+{
+    client->max_bytes_send_per_second = total_bytes;
+    client->reset_max_bytes_at = time(NULL) + reset_in_seconds;
+}
+
 void magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in)
 {
     memset(client, 0, sizeof(struct magicnet_client));
@@ -468,6 +475,7 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     client->server = server;
     client->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
     client->connection_began = time(NULL);
+    client->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     memcpy(&client->client_info, addr_in, sizeof(&client->client_info));
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
@@ -665,11 +673,15 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
 
 void magicnet_client_readjust_upload_speed(struct magicnet_client *client)
 {
-    if (magicnet_client_average_upload_speed(client) > MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
+    if (time(NULL) > client->reset_max_bytes_at)
+    {
+        client->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
+    }
+    if (magicnet_client_average_upload_speed(client) > client->max_bytes_send_per_second)
     {
         client->send_delay += 10000;
     }
-    else if (magicnet_client_average_upload_speed(client) < MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
+    else if (magicnet_client_average_upload_speed(client) < client->max_bytes_send_per_second)
     {
         client->send_delay -= 1000;
     }
@@ -1735,7 +1747,9 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     mclient->server = NULL;
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
     mclient->connection_began = time(NULL);
+    mclient->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     mclient->communication_flags = communication_flags;
+    
 
     // Bit crappy, convert to integer then test...
     // CHECK FOR INTEGER HERE
@@ -1810,6 +1824,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     mclient->server = NULL;
     mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED;
     mclient->connection_began = time(NULL);
+    mclient->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
 
     // Bit crappy, convert to integer then test...
     if (strcmp(ip_address, "127.0.0.1") == 0)
@@ -3005,6 +3020,9 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     magicnet_server_lock(client->server);
     res = magicnet_server_add_seen_packet(client->server, packet);
     magicnet_server_unlock(client->server);
+
+    // Since we processed something lets for the next 10 seconds increase the bandwidth just in case theres more to send
+    magicnet_client_set_max_bytes_to_send_per_second(client, MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_WHEN_PROCESSING_PACKETS, 10);
 
     return res;
 }

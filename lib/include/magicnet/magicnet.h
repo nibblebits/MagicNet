@@ -236,6 +236,11 @@ struct magicnet_client
     // Download microsecond delay.
     time_t send_delay;
 
+    // The total bytes we want to send per second. Rate limiting system..
+    size_t max_bytes_send_per_second;
+
+    // When the current time exceeds this time the max bytes per second is reset to the MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND
+    time_t reset_max_bytes_at;
 
 
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
