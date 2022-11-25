@@ -300,6 +300,8 @@ void *magicnet_chain_downloader_thread_loop(void *_downloader)
             sleep(5);
         }
     }
+
+    return NULL;
 }
 int magicnet_chain_downloader_start(struct magicnet_chain_downloader *downloader)
 {
