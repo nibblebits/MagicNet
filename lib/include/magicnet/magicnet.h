@@ -234,7 +234,7 @@ struct magicnet_client
     size_t total_bytes_received;
 
     // Download microsecond delay.
-    time_t recv_delay;
+    time_t send_delay;
 
 
 

@@ -254,13 +254,12 @@ bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter
     return false;
 }
 
-
-size_t magicnet_client_time_elapsed(struct magicnet_client* client)
+size_t magicnet_client_time_elapsed(struct magicnet_client *client)
 {
     return time(NULL) - client->connection_began;
 }
 
-size_t magicnet_client_average_download_speed(struct magicnet_client* client)
+size_t magicnet_client_average_download_speed(struct magicnet_client *client)
 {
     off_t total_seconds_running = time(NULL) - client->connection_began;
     if (total_seconds_running == 0)
@@ -270,7 +269,7 @@ size_t magicnet_client_average_download_speed(struct magicnet_client* client)
     return client->total_bytes_received / total_seconds_running;
 }
 
-size_t magicnet_client_average_upload_speed(struct magicnet_client* client)
+size_t magicnet_client_average_upload_speed(struct magicnet_client *client)
 {
     off_t total_seconds_running = magicnet_client_time_elapsed(client);
     if (total_seconds_running == 0)
@@ -613,7 +612,6 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     return mclient;
 }
 
-
 void magicnet_close(struct magicnet_client *client)
 {
 
@@ -659,25 +657,27 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
         }
 
         client->total_bytes_received += res;
-        if(magicnet_client_average_download_speed(client) > MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
-        {
-            client->recv_delay += 10000;
-        }
-        else if(magicnet_client_average_download_speed(client) < MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
-        {
-            client->recv_delay -= 1000;
-        }
-        if (client->recv_delay < 0)
-        {
-            client->recv_delay = 0;
-        }
-        usleep(client->recv_delay);
         amount_read += res;
     }
     client->last_contact = time(NULL);
     return res;
 }
 
+void magicnet_client_readjust_upload_speed(struct magicnet_client *client)
+{
+    if (magicnet_client_average_upload_speed(client) > MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
+    {
+        client->send_delay += 10000;
+    }
+    else if (magicnet_client_average_upload_speed(client) < MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND)
+    {
+        client->send_delay -= 1000;
+    }
+    if (client->send_delay < 0)
+    {
+        client->send_delay = 0;
+    }
+}
 int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
@@ -697,8 +697,12 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
             buffer_write_bytes(store_in_buffer, ptr_out + amount_written, amount - amount_written);
         }
 
+        magicnet_client_readjust_upload_speed(client);
+
         amount_written += res;
         client->total_bytes_sent += res;
+        usleep(client->send_delay);
+
     }
 
     return res;
@@ -3074,7 +3078,7 @@ out:
     // We don't really want to over whelm the thread... This would be better in the loop however.
     if (should_sleep)
     {
-    //   usleep(2000000);
+        //   usleep(2000000);
     }
     return res;
 }
