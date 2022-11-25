@@ -4,11 +4,23 @@
 #include "magicnet/init.h"
 #include <time.h>
 #include <stdio.h>
+#include <signal.h>
 
+struct magicnet_server* server = NULL;
+void sig_int_handler(int sig_num)
+{
+    printf("Shutting down please wait!\n");
+    if (server)
+    {
+        magicnet_server_shutdown(server);
+    }
+    
+}
 int main(int argc, char** argv)
 {
     int res = 0;
     printf("Starting MagicNet server\n");
+    signal(SIGINT, sig_int_handler);
     res = magicnet_server_init();
     if (res < 0)
     {
@@ -16,7 +28,7 @@ int main(int argc, char** argv)
         return res;
     }
 
-    struct magicnet_server* server = magicnet_server_start(MAGICNET_SERVER_PORT);
+    server = magicnet_server_start(MAGICNET_SERVER_PORT);
     if (!server)
     {
         printf("The  magic net server could not be started\n");

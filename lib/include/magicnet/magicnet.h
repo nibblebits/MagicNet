@@ -355,8 +355,11 @@ struct magicnet_server
     time_t first_block_cycle;
     pthread_mutex_t lock;
 
+    // When true the server will refuse new connections and attempt to shutdown.
+    bool shutdown;
     // BELOW MUST BE PROCESSED ONLY BY THE SERVER THREAD
     off_t last_new_connection_attempt;
+    
 };
 
 struct block_transaction_data
@@ -502,6 +505,7 @@ int magicnet_chain_downloader_queue_for_block_download(const char *block_hash);
 int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server* server);
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
+void magicnet_server_shutdown(struct magicnet_server* server);
 struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
 struct magicnet_client* magicnet_client_new();
 void magicnet_client_free(struct magicnet_client* client);

@@ -33,6 +33,13 @@ int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
+
+void magicnet_server_shutdown(struct magicnet_server* server)
+{
+    magicnet_server_lock(server);
+    server->shutdown = true;
+    magicnet_server_unlock(server);
+}
 struct signed_data *magicnet_signed_data(struct magicnet_packet *packet)
 {
     return &packet->signed_data;
@@ -585,6 +592,19 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
 {
     struct sockaddr_in client;
     int client_len = sizeof(client);
+    bool server_is_shutting_down = false;
+    magicnet_server_lock(server);
+    if (server->shutdown)
+    {   
+        server_is_shutting_down = true;
+    }
+    magicnet_server_unlock(server);
+
+    // Refuse connections if we are shutting down.
+    if (server_is_shutting_down)
+    {
+        return NULL;
+    }
 
     int connfd = accept(server->sock, (struct sockaddr *)&client, &client_len);
     if (connfd < 0)
@@ -3151,6 +3171,7 @@ out:
 void *magicnet_client_thread(void *_client)
 {
     int res = 0;
+    bool server_shutting_down = false;
     struct magicnet_client *client = _client;
     res = magicnet_client_preform_entry_protocol_read(client);
     if (res < 0)
@@ -3159,9 +3180,20 @@ void *magicnet_client_thread(void *_client)
         goto out;
     }
 
-    while (res != MAGICNET_ERROR_CRITICAL_ERROR)
+    while (res != MAGICNET_ERROR_CRITICAL_ERROR && !server_shutting_down)
     {
         res = magicnet_client_manage_next_packet(client);
+        if (client->server)
+        {
+            magicnet_server_lock(client->server);
+            server_shutting_down = client->server->shutdown;
+            if (server_shutting_down)
+            {
+                magicnet_log("%s the server is shutting down suspending client\n", __FUNCTION__);
+            }
+            magicnet_server_unlock(client->server);
+        }
+
     }
 out:
     if (client->server)
@@ -3607,10 +3639,18 @@ int magicnet_server_process(struct magicnet_server *server)
 }
 void *magicnet_server_thread(void *_server)
 {
+    bool server_shutting_down = false;
     struct magicnet_server *server = _server;
-    while (1)
+    while (!server_shutting_down)
     {
         magicnet_server_process(server);
+        magicnet_server_lock(server);
+        server_shutting_down = server->shutdown;
+        if (server_shutting_down)
+        {
+            magicnet_log("%s suspending server thread\n", __FUNCTION__);
+        }
+        magicnet_server_unlock(server);
         usleep(500000);
     }
 }
