@@ -263,12 +263,20 @@ size_t magicnet_client_time_elapsed(struct magicnet_client* client)
 size_t magicnet_client_average_download_speed(struct magicnet_client* client)
 {
     off_t total_seconds_running = time(NULL) - client->connection_began;
+    if (total_seconds_running == 0)
+    {
+        return 0;
+    }
     return client->total_bytes_received / total_seconds_running;
 }
 
 size_t magicnet_client_average_upload_speed(struct magicnet_client* client)
 {
     off_t total_seconds_running = magicnet_client_time_elapsed(client);
+    if (total_seconds_running == 0)
+    {
+        return 0;
+    }
     return client->total_bytes_sent / total_seconds_running;
 }
 /**
