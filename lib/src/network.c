@@ -3052,7 +3052,7 @@ out:
     // We don't really want to over whelm the thread... This would be better in the loop however.
     if (should_sleep)
     {
-        usleep(2000000);
+    //   usleep(2000000);
     }
     return res;
 }

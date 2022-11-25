@@ -288,6 +288,7 @@ void blockchain_reformat_individual_block(struct block *block)
 
 int blockchain_reformat(struct block *block)
 {
+    return 0;
     int res = 0;
     blockchain_reformat_individual_block(block);
 
