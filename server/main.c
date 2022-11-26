@@ -2,6 +2,7 @@
 #include "magicnet/magicnet.h"
 #include "magicnet/database.h"
 #include "magicnet/init.h"
+#include <memory.h>
 #include <time.h>
 #include <stdio.h>
 #include <signal.h>
@@ -18,6 +19,24 @@ void sig_int_handler(int sig_num)
     exit(1);
     
 }
+
+void make_fake_chain()
+{
+    printf("making new chain\n");
+    char prev_hash[SHA256_STRING_LENGTH] = {0};
+    struct block_transaction_group* group = block_transaction_group_new();
+    struct block* b = block_create(group, prev_hash);
+    for (int i = 0; i < 10000000; i++)
+    {
+        block_hash_create(b, b->hash);
+        block_save(b);
+        memcpy(prev_hash, b->hash, sizeof(prev_hash));
+        b->transaction_group = NULL;
+        block_free(b);
+        b = block_create(group, prev_hash);
+    }
+    printf("done\n");
+}
 int main(int argc, char** argv)
 {
     int res = 0;
@@ -30,19 +49,23 @@ int main(int argc, char** argv)
         return res;
     }
 
+
     server = magicnet_server_start(MAGICNET_SERVER_PORT);
     if (!server)
     {
         printf("The  magic net server could not be started\n");
         return -1;
     }
+
+
+
     res = magicnet_network_thread_start(server);
     if (res < 0)
     {
         printf("failed to start magic server thread\n");
         return -1;
     }
-    
+
     res = magicnet_chain_downloaders_setup_and_poll(server);
     if (res < 0)
     {
