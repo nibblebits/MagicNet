@@ -14,6 +14,8 @@ void sig_int_handler(int sig_num)
     {
         magicnet_server_shutdown(server);
     }
+
+    exit(1);
     
 }
 int main(int argc, char** argv)
