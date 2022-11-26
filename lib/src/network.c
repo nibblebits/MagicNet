@@ -1700,12 +1700,12 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         }
 
         packet->pub_key = *MAGICNET_public_key();
-        res = private_sign(packet->datahash, sizeof(packet->datahash), &packet->signature);
-        if (res < 0)
-        {
-            magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
-            goto out;
-        }
+        // res = private_sign(packet->datahash, sizeof(packet->datahash), &packet->signature);
+        // if (res < 0)
+        // {
+        //     magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
+        //     goto out;
+        // }
     }
 
     // Its possible packet was already signed
