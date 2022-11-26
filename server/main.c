@@ -43,12 +43,12 @@ int main(int argc, char** argv)
         return -1;
     }
     
-    // res = magicnet_chain_downloaders_setup_and_poll(server);
-    // if (res < 0)
-    // {
-    //     printf("There was a problem setting up the chain downloaders\n");
-    //     return -1;
-    // }
+    res = magicnet_chain_downloaders_setup_and_poll(server);
+    if (res < 0)
+    {
+        printf("There was a problem setting up the chain downloaders\n");
+        return -1;
+    }
 
 
 

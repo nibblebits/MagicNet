@@ -3651,7 +3651,7 @@ void *magicnet_server_thread(void *_server)
             magicnet_log("%s suspending server thread\n", __FUNCTION__);
         }
         magicnet_server_unlock(server);
-     //   usleep(500000);
+        usleep(5000000);
     }
 }
 
