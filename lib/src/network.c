@@ -106,12 +106,11 @@ struct magicnet_server *magicnet_server_start(int port)
         return NULL;
     }
     
-    if (setsockopt(sockfd, SOL_SOCKET, TCP_NODELAY, &_true, sizeof(int)) < 0)
+    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
     }
-    
 
     // Binding newly created socket to given IP
     if ((bind(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr))) != 0)
@@ -559,13 +558,12 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         return NULL;
     }
 
-    int _true = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, TCP_NODELAY, &_true, sizeof(int)) < 0)
+   int _true = 1;
+    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
     }
-    
 
     // connect the client socket to server socket
     if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) != 0)
@@ -640,8 +638,8 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
         magicnet_log("Failed to set socket timeout\n");
         return NULL;
     }
-    int _true = 1;
-    if (setsockopt(connfd, SOL_SOCKET, TCP_NODELAY, &_true, sizeof(int)) < 0)
+ int _true = 1;
+    if (setsockopt(connfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
@@ -1813,9 +1811,8 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
         // magicnet_log("Failed to set socket timeout\n");
         return NULL;
     }
-
-    int _true = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, TCP_NODELAY, &_true, sizeof(int)) < 0)
+int _true = 1;
+    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
@@ -1900,8 +1897,8 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
         return NULL;
     }
     
-    int _true = 1;
-    if (setsockopt(sockfd, SOL_SOCKET, TCP_NODELAY, &_true, sizeof(int)) < 0)
+  int _true = 1;
+    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
