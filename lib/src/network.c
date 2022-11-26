@@ -726,7 +726,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
     size_t amount_read = 0;
     while (amount_read < amount)
     {
-        res = recv(client->sock, ptr_out + amount_read, amount - amount_read, 0);
+        res = recv(client->sock, ptr_out + amount_read, amount - amount_read, MSG_WAITALL);
         if (res <= 0)
         {
             res = -1;
