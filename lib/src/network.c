@@ -3134,7 +3134,6 @@ int magicnet_server_poll(struct magicnet_client *client)
     {
         goto out;
     }
-
     packet = magicnet_recv_next_packet(client, &res);
     if (packet == NULL)
     {

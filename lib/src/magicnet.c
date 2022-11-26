@@ -272,12 +272,6 @@ int _magicnet_next_packet(struct magicnet_program *program, void** packet_out, b
         {
             packet_found = false;
         }
-
-        if (!packet_found)
-        {
-            // We've to wait a bit.. lets not do damage.
-            usleep(5000000);
-        }
     }
 
     int payload_packet_type = magicnet_signed_data(packet)->payload.user_defined.type;
