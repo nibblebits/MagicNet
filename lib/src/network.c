@@ -3348,7 +3348,6 @@ void *magicnet_server_client_thread(void *_client)
     {
         // We must ask the server to relay packets to us
         res = magicnet_server_poll(client);
-        magicnet_log("test\n");
     }
     magicnet_server_lock(client->server);
     magicnet_close(client);
