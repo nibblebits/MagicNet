@@ -2,30 +2,41 @@
 #include "magicnet/magicnet.h"
 #include "magicnet/database.h"
 #include "magicnet/init.h"
+#include "magicnet/log.h"
 #include <memory.h>
 #include <time.h>
 #include <stdio.h>
 #include <signal.h>
 
-struct magicnet_server* server = NULL;
+struct magicnet_server *server = NULL;
+bool sig_int_was_sent = false;
+int sig_int_thread_id;
 void sig_int_handler(int sig_num)
 {
-    printf("Shutting down please wait!\n");
+    if (sig_int_was_sent)
+    {
+        magicnet_log("Be patient we are shutting down!\n");
+        return;
+    }
+    sig_int_was_sent = true;
+    magicnet_log("Shutting down please wait!\n");
+    magicnet_chain_downloaders_shutdown();
     if (server)
     {
-        magicnet_server_shutdown(server);
+        magicnet_server_shutdown_server_instance(server);
+        magicnet_server_free(server);
     }
 
+    magicnet_database_close();
     exit(1);
-    
 }
 
 void make_fake_chain()
 {
     printf("making new chain\n");
     char prev_hash[SHA256_STRING_LENGTH] = {0};
-    struct block_transaction_group* group = block_transaction_group_new();
-    struct block* b = block_create(group, prev_hash);
+    struct block_transaction_group *group = block_transaction_group_new();
+    struct block *b = block_create(group, prev_hash);
     for (int i = 0; i < 10000000; i++)
     {
         block_hash_create(b, b->hash);
@@ -37,10 +48,28 @@ void make_fake_chain()
     }
     printf("done\n");
 }
-int main(int argc, char** argv)
+
+void *sig_int_listener_thread(void *ptr)
+{
+#
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_UNBLOCK, &set, NULL);
+
+    while (1)
+    {
+        sleep(1);
+    }
+}
+int main(int argc, char **argv)
 {
     int res = 0;
     printf("Starting MagicNet server\n");
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
     signal(SIGINT, sig_int_handler);
     res = magicnet_server_init();
     if (res < 0)
@@ -49,15 +78,12 @@ int main(int argc, char** argv)
         return res;
     }
 
-
     server = magicnet_server_start(MAGICNET_SERVER_PORT);
     if (!server)
     {
         printf("The  magic net server could not be started\n");
         return -1;
     }
-
-
 
     res = magicnet_network_thread_start(server);
     if (res < 0)
@@ -73,17 +99,22 @@ int main(int argc, char** argv)
         return -1;
     }
 
-
+    if (pthread_create(&sig_int_thread_id, NULL, &sig_int_listener_thread, NULL))
+    {
+        magicnet_log("%s failed to start the sigint thread\n", __FUNCTION__);
+        return -1;
+    }
 
     // Accept the clients
-    while(1)
+    while (1)
     {
-        struct magicnet_client* client = magicnet_accept(server);
+        struct magicnet_client *client = magicnet_accept(server);
         if (client)
         {
             // Start the client thread.
             magicnet_client_thread_start(client);
         }
 
-    }    
+        usleep(1000);
+    }
 }

@@ -11,6 +11,7 @@
         "type_traits": "c",
         "dirent.h": "c",
         "unistd.h": "c",
-        "magicnet.h": "c"
+        "magicnet.h": "c",
+        "pthread.h": "c"
     }
 }

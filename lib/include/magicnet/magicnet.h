@@ -303,6 +303,9 @@ struct block_transaction;
 struct magicnet_server
 {
     int sock;
+
+    // vector of pthread_t . Holds all the thread ids for every thread created in this server instance.
+    struct vector* thread_ids;
     // Clients our server accepted.
     struct magicnet_client clients[MAGICNET_MAX_INCOMING_CONNECTIONS];
 
@@ -454,9 +457,6 @@ struct magicnet_chain_downloader_hash_to_download
 
 struct magicnet_chain_downloader
 {
-    // The download lock. Should be used when dealing with this downloader
-    pthread_mutex_t lock;
-
     // Vector of  magicnet_chain_downloader_hash_to_download* . Must free the pointers when done.
     struct vector* hashes_to_download;
 
@@ -505,7 +505,7 @@ int magicnet_chain_downloader_queue_for_block_download(const char *block_hash);
 int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server* server);
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
-void magicnet_server_shutdown(struct magicnet_server* server);
+void magicnet_server_shutdown_server_instance(struct magicnet_server* server);
 struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
 struct magicnet_client* magicnet_client_new();
 void magicnet_client_free(struct magicnet_client* client);
@@ -563,7 +563,7 @@ struct magicnet_program *magicnet_program(const char *name);
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name);
 
-
+void magicnet_server_free(struct magicnet_server* server);
 /**
  * @brief Creates a new block in memory, no block is added to the chain.
  *
@@ -619,5 +619,6 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader* downlo
 int magicnet_chain_downloader_start(struct magicnet_chain_downloader* downloader);
 void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server);
 bool magicnet_default_downloader_is_hash_queued(const char* hash);
+void magicnet_chain_downloaders_shutdown();
 
 #endif

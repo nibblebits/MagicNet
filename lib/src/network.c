@@ -33,13 +33,58 @@ int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
-
-void magicnet_server_shutdown(struct magicnet_server* server)
+void magicnet_server_reset_block_sequence(struct magicnet_server *server);
+void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
+    vector_set_peek_pointer(server->thread_ids, 0);
+    pthread_t *thread_id = vector_peek(server->thread_ids);
+    while (thread_id)
+    {
+        vector_push(thread_id_vec_out, thread_id);
+        thread_id = vector_peek(server->thread_ids);
+    }
+}
+void magicnet_server_shutdown_server_instance(struct magicnet_server *server)
+{
+    struct vector *thread_ids = vector_create(sizeof(pthread_t));
     magicnet_server_lock(server);
     server->shutdown = true;
+    magicnet_server_get_thread_ids(server, thread_ids);
     magicnet_server_unlock(server);
+
+    magicnet_log("%s waiting on %i threads in the server instance to finish\n", __FUNCTION__, vector_count(thread_ids));
+
+    vector_set_peek_pointer(thread_ids, 0);
+    pthread_t *thread_id = vector_peek(thread_ids);
+    while (thread_id)
+    {
+        pthread_join(*thread_id, NULL);
+        thread_id = vector_peek(thread_ids);
+    }
+
+    vector_free(thread_ids);
 }
+
+void magicnet_server_add_thread(struct magicnet_server *server, pthread_t thread_id)
+{
+    vector_push(server->thread_ids, &thread_id);
+}
+
+void magicnet_server_remove_thread(struct magicnet_server *server, pthread_t thread_id)
+{
+    vector_set_peek_pointer(server->thread_ids, 0);
+    pthread_t *_thread_id = vector_peek(server->thread_ids);
+    while (_thread_id)
+    {
+        if (thread_id == *_thread_id)
+        {
+            vector_pop_last_peek(server->thread_ids);
+            break;
+        }
+        _thread_id = vector_peek(server->thread_ids);
+    }
+}
+
 struct signed_data *magicnet_signed_data(struct magicnet_packet *packet)
 {
     return &packet->signed_data;
@@ -76,6 +121,20 @@ void magicnet_client_free(struct magicnet_client *client)
     free(client);
 }
 
+void magicnet_server_free(struct magicnet_server *server)
+{
+    if (!server)
+    {
+        return;
+    }
+    magicnet_server_reset_block_sequence(server);
+    vector_free(server->next_block.block_transactions);
+    vector_free(server->next_block.signed_up_verifiers);
+    vector_free(server->next_block.verifier_votes.vote_counts);
+    vector_free(server->next_block.verifier_votes.votes);
+    vector_free(server->thread_ids);
+    free(server);
+}
 struct magicnet_server *magicnet_server_start(int port)
 {
     int sockfd, len;
@@ -105,7 +164,7 @@ struct magicnet_server *magicnet_server_start(int port)
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
     }
-    
+
     if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
@@ -146,6 +205,7 @@ struct magicnet_server *magicnet_server_start(int port)
     server->next_block.block_transactions = vector_create(sizeof(struct block_transaction *));
     server->server_started = time(NULL);
     server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
+    server->thread_ids = vector_create(sizeof(pthread_t));
     return server;
 }
 
@@ -558,7 +618,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         return NULL;
     }
 
-   int _true = 1;
+    int _true = 1;
     if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
@@ -608,7 +668,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     bool server_is_shutting_down = false;
     magicnet_server_lock(server);
     if (server->shutdown)
-    {   
+    {
         server_is_shutting_down = true;
     }
     magicnet_server_unlock(server);
@@ -638,13 +698,13 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
         magicnet_log("Failed to set socket timeout\n");
         return NULL;
     }
- int _true = 1;
+    int _true = 1;
     if (setsockopt(connfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
     }
-    
+
     magicnet_server_lock(server);
     struct magicnet_client *mclient = magicnet_find_free_client(server);
     if (!mclient)
@@ -1811,13 +1871,12 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
         // magicnet_log("Failed to set socket timeout\n");
         return NULL;
     }
-int _true = 1;
+    int _true = 1;
     if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
     }
-    
 
     // connect the client socket to server socket
     if (connect(sockfd, (const struct sockaddr *)&addr, sizeof(addr)) != 0)
@@ -1896,14 +1955,13 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
         // magicnet_log("Failed to set socket timeout\n");
         return NULL;
     }
-    
-  int _true = 1;
+
+    int _true = 1;
     if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
     {
         magicnet_log("Failed to set socket reusable option\n");
         return NULL;
     }
-    
 
     // connect the client socket to server socket
     if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) != 0)
@@ -2768,7 +2826,7 @@ int magicnet_server_get_all_connected_clients(struct magicnet_server *server, st
 int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *client)
 {
     int res = 0;
-
+    struct vector *connected_client_vec = NULL;
     if (!client->server)
     {
         // No server instance ? Then nothing to send.
@@ -2781,7 +2839,7 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
     else
     {
         magicnet_server_lock(client->server);
-        struct vector *connected_client_vec = vector_create(sizeof(struct magicnet_connection_exchange_peer_data));
+        connected_client_vec = vector_create(sizeof(struct magicnet_connection_exchange_peer_data));
         magicnet_server_get_all_connected_clients(client->server, connected_client_vec);
         magicnet_server_unlock(client->server);
         res = magicnet_write_int(client, vector_count(connected_client_vec), NULL);
@@ -2806,8 +2864,6 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
             }
             data_to_send = vector_peek(connected_client_vec);
         }
-        vector_free(connected_client_vec);
-
         if (res < 0)
         {
             goto out;
@@ -2815,6 +2871,10 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
     }
 
 out:
+    if (connected_client_vec)
+    {
+        vector_free(connected_client_vec);
+    }
     return res;
 }
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags)
@@ -3025,7 +3085,6 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         return 0;
     }
 
-    client->server->last_client_to_send_block = client;
     vector_set_peek_pointer(magicnet_signed_data(packet)->payload.block_send.blocks, 0);
     struct block *block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     while (block)
@@ -3206,13 +3265,22 @@ void *magicnet_client_thread(void *_client)
     int res = 0;
     bool server_shutting_down = false;
     struct magicnet_client *client = _client;
+
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
+    magicnet_server_lock(client->server);
+    magicnet_server_add_thread(client->server, pthread_self());
+    magicnet_server_unlock(client->server);
+
     res = magicnet_client_preform_entry_protocol_read(client);
     if (res < 0)
     {
         // entry protocol failed.. illegal client!
         goto out;
     }
-
     while (res != MAGICNET_ERROR_CRITICAL_ERROR && !server_shutting_down)
     {
         res = magicnet_client_manage_next_packet(client);
@@ -3226,13 +3294,13 @@ void *magicnet_client_thread(void *_client)
             }
             magicnet_server_unlock(client->server);
         }
-
     }
 out:
     if (client->server)
     {
         magicnet_server_lock(client->server);
         magicnet_close(client);
+        magicnet_server_remove_thread(client->server, pthread_self());
         magicnet_server_unlock(client->server);
     }
     else
@@ -3341,16 +3409,24 @@ out:
 void *magicnet_server_client_thread(void *_client)
 {
     struct magicnet_client *client = _client;
+    bool shutdown = false;
     magicnet_log("%s new outbound connection created\n", __FUNCTION__);
+    magicnet_server_lock(client->server);
+    magicnet_server_add_thread(client->server, pthread_self());
+    magicnet_server_unlock(client->server);
 
     int res = 0;
-    while (res >= 0)
+    while (res >= 0 && !shutdown)
     {
         // We must ask the server to relay packets to us
         res = magicnet_server_poll(client);
+        magicnet_server_lock(client->server);
+        shutdown = client->server->shutdown;
+        magicnet_server_unlock(client->server);
     }
     magicnet_server_lock(client->server);
     magicnet_close(client);
+    magicnet_server_remove_thread(client->server, pthread_self());
     magicnet_server_unlock(client->server);
 }
 
@@ -3672,8 +3748,17 @@ int magicnet_server_process(struct magicnet_server *server)
 }
 void *magicnet_server_thread(void *_server)
 {
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
     bool server_shutting_down = false;
     struct magicnet_server *server = _server;
+    magicnet_server_lock(server);
+    magicnet_server_add_thread(server, pthread_self());
+    magicnet_server_unlock(server);
+
     while (!server_shutting_down)
     {
         magicnet_server_process(server);
@@ -3686,6 +3771,11 @@ void *magicnet_server_thread(void *_server)
         magicnet_server_unlock(server);
         usleep(5000000);
     }
+
+    magicnet_server_lock(server);
+    magicnet_server_remove_thread(server, pthread_self());
+        magicnet_server_unlock(server);
+
 }
 
 int magicnet_network_thread_start(struct magicnet_server *server)

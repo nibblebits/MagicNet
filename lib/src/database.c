@@ -219,9 +219,8 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
         res = -1;
         goto out;
     }
-    sqlite3_finalize(stmt);
-
 out:
+    sqlite3_finalize(stmt);
     pthread_mutex_unlock(&db_lock);
     return res;
 }
@@ -322,6 +321,11 @@ int magicnet_database_load()
 
 out:
     return res;
+}
+
+void magicnet_database_close()
+{
+    sqlite3_close(db);
 }
 
 int magicnet_database_load_block_with_previous_hash(const char *prev_hash, char *hash_out)

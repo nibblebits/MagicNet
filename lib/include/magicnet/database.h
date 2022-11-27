@@ -40,4 +40,7 @@ int magicnet_database_load_block_with_previous_hash(const char *prev_hash, char 
 int magicnet_database_blockchain_all(struct vector *blockchain_vector_out);
 int magincet_database_save_transaction_group(struct block_transaction_group *transaction_group);
 
+
+void magicnet_database_close();
+
 #endif

@@ -21,8 +21,10 @@ int magicnet_create_files()
         sprintf(data_directory, "%s/%s/%s", getenv("HOME"), ".magicnet", MAGICNET_BLOCK_DIRECTORY);
         mkdir(data_directory, 0775);
     }
+    closedir(dir);
     return 0;
 }
+
 int magicnet_server_init()
 {
     int res = 0;
@@ -53,6 +55,7 @@ int magicnet_server_init()
     {
         goto out;
     }
+
 
 out:
     return res;

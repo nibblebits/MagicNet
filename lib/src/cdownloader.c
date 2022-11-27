@@ -5,30 +5,83 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
+#include <signal.h>
+
 #include "database.h"
 
 void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader);
+void magicnet_chain_downloader_free_general_data(struct magicnet_chain_downloader *downloader);
 
 static struct magicnet_active_chain_downloads downloads;
 static struct magicnet_chain_downloader *default_downloader = NULL;
 
-
-void magicnet_chain_downloader_lock(struct magicnet_chain_downloader *downloader)
+void magicnet_chain_downloader_finish(struct magicnet_chain_downloader *downloader)
 {
-    pthread_mutex_lock(&downloader->lock);
+    pthread_t thread_id = -1;
+    pthread_mutex_lock(&downloads.lock);
+    downloader->finished = true;
+    thread_id = downloader->thread_id;
+    pthread_mutex_unlock(&downloads.lock);
+
+    pthread_join(thread_id, NULL);
+
+    pthread_mutex_lock(&downloads.lock);
+    magicnet_downloads_remove(downloader);
+    if (downloader == default_downloader)
+    {
+        default_downloader = NULL;
+    }
+    magicnet_chain_downloader_free_general_data(downloader);
+    free(downloader);
+    pthread_mutex_unlock(&downloads.lock);
 }
 
-void magicnet_chain_downloader_unlock(struct magicnet_chain_downloader *downloader)
+int magicnet_chain_downloader_shutdown_last()
 {
-    pthread_mutex_unlock(&downloader->lock);
+    pthread_t thread_id;
+    struct magicnet_chain_downloader *downloader = NULL;
+    pthread_mutex_lock(&downloads.lock);
+    downloader = vector_back_ptr_or_null(downloads.chain_downloads);
+    if (!downloader)
+    {
+        return -1;
+        pthread_mutex_unlock(&downloads.lock);
+    }
+    pthread_mutex_unlock(&downloads.lock);
+
+    magicnet_chain_downloader_finish(downloader);
+
+    return 0;
+}
+void magicnet_chain_downloaders_shutdown()
+{
+    magicnet_log("%s terminating downloaders please wait..\n", __FUNCTION__);
+
+    size_t count = 0;
+    while (magicnet_chain_downloader_shutdown_last() >= 0)
+    {
+        magicnet_log("%s ended a chain downloader\n", __FUNCTION__);
+        count++;
+    }
+
+    vector_free(downloads.chain_downloads);
+    magicnet_log("%s ended %i chain downloader threads\n", __FUNCTION__, count);
+
+    magicnet_log("%s downloaders terminated\n", __FUNCTION__);
 }
 
-
-bool magicnet_default_downloader_is_hash_queued_no_locks(const char* hash)
+bool magicnet_default_downloader_is_hash_queued_no_locks(const char *hash)
 {
+    // No default downloader instance right now.
+    if (!default_downloader)
+    {
+        return false;
+    }
+
     vector_set_peek_pointer(default_downloader->hashes_to_download, 0);
-    struct magicnet_chain_downloader_hash_to_download* hash_to_download = vector_peek_ptr(default_downloader->hashes_to_download);
-    while(hash_to_download)
+    struct magicnet_chain_downloader_hash_to_download *hash_to_download = vector_peek_ptr(default_downloader->hashes_to_download);
+    while (hash_to_download)
     {
         if (memcmp(hash_to_download->hash, hash, sizeof(hash_to_download->hash)) == 0)
         {
@@ -39,15 +92,19 @@ bool magicnet_default_downloader_is_hash_queued_no_locks(const char* hash)
 
     return false;
 }
-bool magicnet_default_downloader_is_hash_queued(const char* hash)
+bool magicnet_default_downloader_is_hash_queued(const char *hash)
 {
     bool res = false;
-    magicnet_chain_downloader_lock(default_downloader);
+    pthread_mutex_lock(&downloads.lock);
+    if (!default_downloader)
+    {
+        pthread_mutex_unlock(&downloads.lock);
+        return NULL;
+    }
     res = magicnet_default_downloader_is_hash_queued_no_locks(hash);
-    magicnet_chain_downloader_unlock(default_downloader);
+    pthread_mutex_unlock(&downloads.lock);
     return res;
 }
-
 
 void magicnet_downloads_add(struct magicnet_chain_downloader *downloader)
 {
@@ -68,7 +125,6 @@ void magicnet_downloads_remove(struct magicnet_chain_downloader *downloader)
         current_downloader = vector_peek_ptr(downloads.chain_downloads);
     }
 }
-
 
 void magicnet_chain_downloader_remove_hash(struct magicnet_chain_downloader *downloader, struct block *block)
 {
@@ -91,9 +147,7 @@ void magicnet_chain_downloaders_remove_hash_no_locks(struct block *block)
     struct magicnet_chain_downloader *downloader = vector_peek_ptr(downloads.chain_downloads);
     while (downloader)
     {
-        magicnet_chain_downloader_lock(downloader);
         magicnet_chain_downloader_remove_hash(downloader, block);
-        magicnet_chain_downloader_unlock(downloader);
         downloader = vector_peek_ptr(downloads.chain_downloads);
     }
 }
@@ -140,14 +194,14 @@ int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server)
         goto out;
     }
 
-    magicnet_chain_downloader_start(default_downloader);
-
     magicnet_chain_downloader_blocks_catchup(server);
+
+    magicnet_chain_downloader_start(default_downloader);
 out:
     return res;
 }
 
-void magicnet_chain_downloader_free(struct magicnet_chain_downloader *downloader)
+void magicnet_chain_downloader_free_general_data(struct magicnet_chain_downloader *downloader)
 {
     vector_set_peek_pointer(downloader->hashes_to_download, 0);
     struct magicnet_chain_downloader_hash_to_download *hash = vector_peek_ptr(downloader->hashes_to_download);
@@ -157,11 +211,7 @@ void magicnet_chain_downloader_free(struct magicnet_chain_downloader *downloader
         hash = vector_peek_ptr(downloader->hashes_to_download);
     }
 
-    if (default_downloader == downloader)
-    {
-        default_downloader = NULL;
-    }
-    free(downloader);
+    vector_free(downloader->hashes_to_download);
 }
 
 bool magicnet_chain_downloader_accepted_packet(struct magicnet_packet *packet)
@@ -175,12 +225,6 @@ struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magi
     struct magicnet_chain_downloader *downloader = calloc(1, sizeof(struct magicnet_chain_downloader));
     downloader->server = server;
     downloader->hashes_to_download = vector_create(sizeof(const char *));
-
-    if (pthread_mutex_init(&downloader->lock, NULL) != 0)
-    {
-        magicnet_log("Failed to initialize the downloader lock\n");
-        return NULL;
-    }
 
     return downloader;
 }
@@ -200,7 +244,6 @@ int magicnet_chain_downloader_hash_find(struct magicnet_chain_downloader *downlo
                 *hash_to_download_out = *hash_to_download;
             }
             break;
-
         }
         hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
     }
@@ -222,7 +265,7 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader *downlo
     }
 
     // Already have the block? Then dont do anything..
-    struct block* block = block_load(hash);
+    struct block *block = block_load(hash);
     if (block)
     {
         block_free(block);
@@ -236,12 +279,14 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader *downlo
 
 int magicnet_chain_downloader_queue_for_block_download(const char *block_hash)
 {
+    pthread_mutex_lock(&downloads.lock);
     if (!default_downloader)
     {
+        pthread_mutex_unlock(&downloads.lock);
         return -1;
     }
-
     magicnet_chain_downloader_hash_add(default_downloader, block_hash);
+    pthread_mutex_unlock(&downloads.lock);
     return 0;
 }
 
@@ -251,12 +296,12 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     struct magicnet_chain_downloader_hash_to_download hash_to_find;
     struct magicnet_chain_downloader_hash_to_download *hash = NULL;
     struct magicnet_packet *req_packet = magicnet_packet_new();
-    magicnet_chain_downloader_lock(downloader);
+    pthread_mutex_lock(&downloads.lock);
     vector_set_peek_pointer(downloader->hashes_to_download, 0);
 
     // Lets find the next hash to request, It will be the first hash we encounter whose had its request delay.
     hash = vector_peek_ptr(downloader->hashes_to_download);
-    while(hash && !(time(NULL) - hash->last_request > MAGICNET_CHAIN_DOWNLOADER_BLOCK_REQUEST_DELAY_SECONDS))
+    while (hash && !(time(NULL) - hash->last_request > MAGICNET_CHAIN_DOWNLOADER_BLOCK_REQUEST_DELAY_SECONDS))
     {
         hash = vector_peek_ptr(downloader->hashes_to_download);
     }
@@ -266,7 +311,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         hash->last_request = time(NULL);
         hash_to_find = *hash;
     }
-    magicnet_chain_downloader_unlock(downloader);
+    pthread_mutex_unlock(&downloads.lock);
 
     if (!hash)
     {
@@ -276,19 +321,9 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     magicnet_signed_data(req_packet)->type = MAGICNET_PACKET_TYPE_REQUEST_BLOCK;
     magicnet_signed_data(req_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     strncpy(magicnet_signed_data(req_packet)->payload.request_block.request_hash, hash_to_find.hash, sizeof(magicnet_signed_data(req_packet)->payload.request_block.request_hash));
-    struct magicnet_client* client_we_asked = NULL;
+    struct magicnet_client *client_we_asked = NULL;
     magicnet_server_lock(downloader->server);
-    if (downloader->server->last_client_to_send_block)
-    {
-        // We have a client who recently sent us a block. So not to congest the network we will ask this client for this hash
-        // Failing that we will ask the whole network
-        res = magicnet_relay_packet_to_client(downloader->server->last_client_to_send_block, req_packet);
-        client_we_asked = downloader->server->last_client_to_send_block;
-    }
-    else
-    {
-        res = magicnet_server_add_packet_to_relay(downloader->server, req_packet);
-    }
+    res = magicnet_server_add_packet_to_relay(downloader->server, req_packet);
     magicnet_server_unlock(downloader->server);
 
 out:
@@ -296,13 +331,13 @@ out:
     return 0;
 }
 
-void magicnet_chain_downloader_check_blocks_received(struct magicnet_chain_downloader* downloader)
+void magicnet_chain_downloader_check_blocks_received(struct magicnet_chain_downloader *downloader)
 {
     vector_set_peek_pointer(downloader->hashes_to_download, 0);
-    struct magicnet_chain_downloader_hash_to_download* hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
-    while(hash_to_download)
+    struct magicnet_chain_downloader_hash_to_download *hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
+    while (hash_to_download)
     {
-        struct block* block = block_load(hash_to_download->hash);
+        struct block *block = block_load(hash_to_download->hash);
         if (block)
         {
             // Oh we have the block now thats great... Let us delete the request hash
@@ -316,13 +351,20 @@ void magicnet_chain_downloader_check_blocks_received(struct magicnet_chain_downl
 void *magicnet_chain_downloader_thread_loop(void *_downloader)
 {
     struct magicnet_chain_downloader *downloader = _downloader;
+
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
     bool running = true;
     bool do_sleep = false;
     while (running)
     {
         do_sleep = false;
         magicnet_chain_downloader_thread_ask_for_blocks(downloader);
-        magicnet_chain_downloader_lock(downloader);
+        pthread_mutex_lock(&downloads.lock);
+
         // Let's check if we received the blocks we asked for. This is non-blocking we will come around a couple times most likely
         // when the block is there the request hash is removed from the downloader.
         magicnet_chain_downloader_check_blocks_received(downloader);
@@ -335,15 +377,15 @@ void *magicnet_chain_downloader_thread_loop(void *_downloader)
         {
             running = false;
         }
-        magicnet_chain_downloader_unlock(downloader);
+        pthread_mutex_unlock(&downloads.lock);
 
         if (do_sleep)
         {
-          usleep(1000);
+            usleep(1000);
         }
     }
 
-    return NULL;
+    return downloader;
 }
 int magicnet_chain_downloader_start(struct magicnet_chain_downloader *downloader)
 {
