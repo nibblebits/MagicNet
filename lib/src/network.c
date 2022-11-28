@@ -47,7 +47,7 @@ void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vecto
 void magicnet_server_shutdown_server_instance(struct magicnet_server *server)
 {
     struct vector *thread_ids = vector_create(sizeof(pthread_t));
-    magicnet_server_read_lock(server);
+    magicnet_server_lock(server);
     server->shutdown = true;
     magicnet_server_get_thread_ids(server, thread_ids);
     magicnet_server_unlock(server);
@@ -265,7 +265,7 @@ struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_serve
 
 void magicnet_server_read_lock(struct magicnet_server* server)
 {
-    pthread_rwlock_rdlock(&server->lock);
+    pthread_rwlock_wrlock(&server->lock);
 }
 
 void magicnet_server_lock(struct magicnet_server *server)
