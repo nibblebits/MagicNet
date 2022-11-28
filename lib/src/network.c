@@ -1015,7 +1015,10 @@ out:
 
 int magicnet_client_read_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
-    return 0;
+    void* ptr = malloc(1024*1024*2);
+    int res = magicnet_read_bytes(client, ptr, 1024*1024*2, NULL);
+    free(ptr);
+    return res;
 }
 
 int magicnet_client_read_verifier_signup_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
@@ -1546,8 +1549,10 @@ out:
 
 int magicnet_client_write_packet_empty(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-
-    return 0;
+    char* data = malloc(1024*1024*2);
+    int res = magicnet_write_bytes(client, data, 1024*1024*2, NULL);
+    free(data);
+    return res;
 }
 
 int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
