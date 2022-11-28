@@ -15,6 +15,7 @@ void magicnet_chain_downloader_free_general_data(struct magicnet_chain_downloade
 
 static struct magicnet_active_chain_downloads downloads;
 static struct magicnet_chain_downloader *default_downloader = NULL;
+bool downloaders_shut_down = false;
 
 void magicnet_chain_downloader_finish(struct magicnet_chain_downloader *downloader)
 {
@@ -45,8 +46,8 @@ int magicnet_chain_downloader_shutdown_last()
     downloader = vector_back_ptr_or_null(downloads.chain_downloads);
     if (!downloader)
     {
-        return -1;
         pthread_mutex_unlock(&downloads.lock);
+        return -1;
     }
     pthread_mutex_unlock(&downloads.lock);
 
@@ -64,13 +65,18 @@ void magicnet_chain_downloaders_shutdown()
         magicnet_log("%s ended a chain downloader\n", __FUNCTION__);
         count++;
     }
-
-    vector_free(downloads.chain_downloads);
     magicnet_log("%s ended %i chain downloader threads\n", __FUNCTION__, count);
 
     magicnet_log("%s downloaders terminated\n", __FUNCTION__);
 }
 
+void magicnet_chain_downloaders_cleanup()
+{
+    magicnet_log("%s cleaning up downloaders memory\n", __FUNCTION__);
+    pthread_mutex_destroy(&downloads.lock);
+    vector_free(downloads.chain_downloads);
+
+}
 bool magicnet_default_downloader_is_hash_queued_no_locks(const char *hash)
 {
     // No default downloader instance right now.
@@ -258,6 +264,11 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader *downlo
         return;
     }
 
+    if (!downloader)
+    {
+        return;
+    }
+
     // Already added..
     if (magicnet_chain_downloader_hash_find(downloader, hash, NULL) == 0)
     {
@@ -343,8 +354,8 @@ void magicnet_chain_downloader_check_blocks_received(struct magicnet_chain_downl
             // Oh we have the block now thats great... Let us delete the request hash
             free(hash_to_download);
             vector_pop_last_peek(downloader->hashes_to_download);
+            block_free(block);
         }
-        block_free(block);
         hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
     }
 }

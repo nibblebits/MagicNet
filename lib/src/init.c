@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include "database.h"
+
 int magicnet_create_files()
 {
     char data_directory[PATH_MAX];

@@ -58,6 +58,11 @@ void block_transaction_group_free(struct block_transaction_group *transaction_gr
 }
 struct block_transaction_group *block_transaction_group_clone(struct block_transaction_group *transaction_group_in)
 {
+    if (!transaction_group_in)
+    {
+        return NULL;
+    }
+
     struct block_transaction_group *cloned_transaction_group = block_transaction_group_new();
     for (int i = 0; i < transaction_group_in->total_transactions; i++)
     {
@@ -217,6 +222,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     if (pervious_block)
     {
         *blockchain_id_out = pervious_block->blockchain_id;
+        block_free(pervious_block);
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
 
@@ -370,7 +376,7 @@ out:
 struct block *block_clone(struct block *block)
 {
 
-    struct block *block_cloned = block_create_with_group(block->hash, block->prev_hash, block->transaction_group);
+    struct block *block_cloned = block_create_with_group(block->hash, block->prev_hash, block_transaction_group_clone(block->transaction_group));
     block_cloned->key = block->key;
     block_cloned->signature = block->signature;
     return block_cloned;
@@ -516,11 +522,8 @@ struct block *block_create_with_group(const char *hash, const char *prev_hash, s
     {
         memcpy(block->prev_hash, prev_hash, sizeof(block->prev_hash));
     }
-    if (group)
-    {
-        block->transaction_group = block_transaction_group_clone(group);
-    }
-    else
+    block->transaction_group = group;
+    if (!group)
     {
         block->transaction_group = block_transaction_group_new();
     }

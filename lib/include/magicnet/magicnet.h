@@ -620,5 +620,6 @@ int magicnet_chain_downloader_start(struct magicnet_chain_downloader* downloader
 void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server);
 bool magicnet_default_downloader_is_hash_queued(const char* hash);
 void magicnet_chain_downloaders_shutdown();
+void magicnet_chain_downloaders_cleanup();
 
 #endif

@@ -802,7 +802,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
         client->total_bytes_received += res;
         amount_read += res;
         magicnet_client_readjust_download_speed(client);
-        usleep(client->recv_delay);
+     //   usleep(client->recv_delay);
     }
     client->last_contact = time(NULL);
     return res;
@@ -850,7 +850,7 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
 
         amount_written += res;
         client->total_bytes_sent += res;
-        usleep(client->send_delay);
+       // usleep(client->send_delay);
     }
 
     return res;
@@ -1218,16 +1218,16 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
             break;
         }
 
-        struct block *block = block_create_with_group(hash, prev_hash, transaction_group);
-        block->key = key;
-        block->signature = signature;
-
+        struct block *block = block_create_with_group(hash, prev_hash, block_transaction_group_clone(transaction_group));
         if (!block)
         {
             res = MAGICNET_ERROR_UNKNOWN;
-            block_free(block);
             break;
         }
+        
+        block->key = key;
+        block->signature = signature;
+
         res = block_verify(block);
         if (res < 0)
         {
@@ -3271,9 +3271,12 @@ void *magicnet_client_thread(void *_client)
     sigaddset(&set, SIGINT);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
-    magicnet_server_lock(client->server);
-    magicnet_server_add_thread(client->server, pthread_self());
-    magicnet_server_unlock(client->server);
+    if (client->server)
+    {
+        magicnet_server_lock(client->server);
+        magicnet_server_add_thread(client->server, pthread_self());
+        magicnet_server_unlock(client->server);
+    }
 
     res = magicnet_client_preform_entry_protocol_read(client);
     if (res < 0)
@@ -3410,6 +3413,11 @@ void *magicnet_server_client_thread(void *_client)
 {
     struct magicnet_client *client = _client;
     bool shutdown = false;
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
     magicnet_log("%s new outbound connection created\n", __FUNCTION__);
     magicnet_server_lock(client->server);
     magicnet_server_add_thread(client->server, pthread_self());
@@ -3419,10 +3427,13 @@ void *magicnet_server_client_thread(void *_client)
     while (res >= 0 && !shutdown)
     {
         // We must ask the server to relay packets to us
+        magicnet_log("POLL START\n");
         res = magicnet_server_poll(client);
         magicnet_server_lock(client->server);
         shutdown = client->server->shutdown;
         magicnet_server_unlock(client->server);
+                magicnet_log("POLL END\n");
+
     }
     magicnet_server_lock(client->server);
     magicnet_close(client);
@@ -3774,7 +3785,7 @@ void *magicnet_server_thread(void *_server)
 
     magicnet_server_lock(server);
     magicnet_server_remove_thread(server, pthread_self());
-        magicnet_server_unlock(server);
+    magicnet_server_unlock(server);
 
 }
 

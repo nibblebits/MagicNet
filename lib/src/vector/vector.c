@@ -30,6 +30,7 @@ struct vector *vector_create_no_saves(size_t esize)
     vector->pindex = 0;
     vector->esize = esize;
     vector->count = 0;
+    return vector;
 }
 
 size_t vector_total_size(struct vector *vector)
@@ -65,6 +66,10 @@ struct vector *vector_create(size_t esize)
 void vector_free(struct vector *vector)
 {
     free(vector->data);
+    if (vector->saves)
+    {
+        vector_free(vector->saves);
+    }
     free(vector);
 }
 

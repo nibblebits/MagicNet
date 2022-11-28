@@ -13,6 +13,11 @@ bool sig_int_was_sent = false;
 int sig_int_thread_id;
 void sig_int_handler(int sig_num)
 {
+    sigset_t set;
+    sigemptyset(&set);
+    sigaddset(&set, SIGINT);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
+
     if (sig_int_was_sent)
     {
         magicnet_log("Be patient we are shutting down!\n");
@@ -27,6 +32,9 @@ void sig_int_handler(int sig_num)
         magicnet_server_free(server);
     }
 
+    // Theres still a chance that during the server shutdown some threads might be using the downloaders
+    // hence why we shutdown the downloaders and server instances before we do a memory cleanup.
+    magicnet_chain_downloaders_cleanup();
     magicnet_database_close();
     exit(1);
 }
@@ -51,14 +59,16 @@ void make_fake_chain()
 
 void *sig_int_listener_thread(void *ptr)
 {
-#
+
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
     pthread_sigmask(SIG_UNBLOCK, &set, NULL);
 
+    time_t t = time(NULL);
     while (1)
-    {
+    {   
+
         sleep(1);
     }
 }
@@ -70,7 +80,7 @@ int main(int argc, char **argv)
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
-    signal(SIGINT, sig_int_handler);
+   signal(SIGINT, sig_int_handler);
     res = magicnet_server_init();
     if (res < 0)
     {
@@ -106,8 +116,18 @@ int main(int argc, char **argv)
     }
 
     // Accept the clients
-    while (1)
+    bool server_shutdown = false;
+    while (!server_shutdown)
     {
+        // Has the server shutdown
+        magicnet_server_lock(server);
+        server_shutdown = server->shutdown;
+        magicnet_server_unlock(server);
+        if (server_shutdown)
+        {
+            break;
+        }
+
         struct magicnet_client *client = magicnet_accept(server);
         if (client)
         {
@@ -116,5 +136,11 @@ int main(int argc, char **argv)
         }
 
         usleep(1000);
+    }
+
+    magicnet_log("%s awaiting termination of main thread\n", __FUNCTION__);
+    while (1)
+    {
+        sleep(1);
     }
 }

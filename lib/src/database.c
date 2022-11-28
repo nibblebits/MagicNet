@@ -1424,9 +1424,8 @@ int magicnet_database_save_block(struct block *block)
         goto out;
     }
 
-    sqlite3_finalize(stmt);
-
 out:
+    sqlite3_finalize(stmt);
     pthread_mutex_unlock(&db_lock);
     return res;
 }
