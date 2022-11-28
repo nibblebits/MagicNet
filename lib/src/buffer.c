@@ -60,7 +60,7 @@ void buffer_printf_no_terminator(struct buffer* buffer, const char* fmt, ...)
     va_end(args);
 }
 
-inline void buffer_write(struct buffer* buffer, char c)
+void buffer_write(struct buffer* buffer, char c)
 {
     buffer_need(buffer, sizeof(char));
 

@@ -21,7 +21,7 @@ char buffer_peek(struct buffer* buffer);
 void buffer_extend(struct buffer* buffer, size_t size);
 void buffer_printf(struct buffer* buffer, const char* fmt, ...);
 void buffer_printf_no_terminator(struct buffer* buffer, const char* fmt, ...);
-inline void buffer_write(struct buffer* buffer, char c);
+void buffer_write(struct buffer* buffer, char c);
 int buffer_write_bytes(struct buffer *buffer, void *ptr, size_t amount);
 int buffer_write_int(struct buffer *buffer, int value);
 int buffer_write_long(struct buffer *buffer, long value);
