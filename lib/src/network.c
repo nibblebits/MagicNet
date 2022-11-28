@@ -809,7 +809,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
         client->total_bytes_received += res;
         amount_read += res;
        // magicnet_client_readjust_download_speed(client);
-     //   usleep(client->recv_delay);
+        usleep(client->recv_delay);
     }
     client->last_contact = time(NULL);
     return res;
@@ -857,7 +857,7 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
 
         amount_written += res;
         client->total_bytes_sent += res;
-       // usleep(client->send_delay);
+        usleep(client->send_delay);
     }
 
     return res;
