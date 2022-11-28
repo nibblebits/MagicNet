@@ -47,7 +47,7 @@ void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vecto
 void magicnet_server_shutdown_server_instance(struct magicnet_server *server)
 {
     struct vector *thread_ids = vector_create(sizeof(pthread_t));
-    magicnet_server_lock(server);
+    magicnet_server_read_lock(server);
     server->shutdown = true;
     magicnet_server_get_thread_ids(server, thread_ids);
     magicnet_server_unlock(server);
@@ -133,6 +133,7 @@ void magicnet_server_free(struct magicnet_server *server)
     vector_free(server->next_block.verifier_votes.vote_counts);
     vector_free(server->next_block.verifier_votes.votes);
     vector_free(server->thread_ids);
+    pthread_rwlock_destroy(&server->lock);
     free(server);
 }
 struct magicnet_server *magicnet_server_start(int port)
@@ -186,7 +187,7 @@ struct magicnet_server *magicnet_server_start(int port)
 
     struct magicnet_server *server = calloc(1, sizeof(struct magicnet_server));
     server->sock = sockfd;
-    if (pthread_mutex_init(&server->lock, NULL) != 0)
+    if (pthread_rwlock_init(&server->lock, NULL) != 0)
     {
         magicnet_log("Failed to initialize the server lock\n");
         return NULL;
@@ -262,14 +263,19 @@ struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_serve
     return NULL;
 }
 
+void magicnet_server_read_lock(struct magicnet_server* server)
+{
+    pthread_rwlock_rdlock(&server->lock);
+}
+
 void magicnet_server_lock(struct magicnet_server *server)
 {
-    pthread_mutex_lock(&server->lock);
+    pthread_rwlock_wrlock(&server->lock);
 }
 
 void magicnet_server_unlock(struct magicnet_server *server)
 {
-    pthread_mutex_unlock(&server->lock);
+    pthread_rwlock_unlock(&server->lock);
 }
 
 bool magicnet_server_awaiting_transaction_exists(struct magicnet_server *server, struct block_transaction *transaction)
@@ -631,7 +637,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         return NULL;
     }
 
-    magicnet_server_lock(server);
+    magicnet_server_read_lock(server);
     struct magicnet_client *mclient = magicnet_find_free_outgoing_client(server);
     if (!mclient)
     {
@@ -666,7 +672,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     struct sockaddr_in client;
     int client_len = sizeof(client);
     bool server_is_shutting_down = false;
-    magicnet_server_lock(server);
+    magicnet_server_read_lock(server);
     if (server->shutdown)
     {
         server_is_shutting_down = true;
@@ -2249,7 +2255,7 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
     magicnet_log("%s polling packet request\n", __FUNCTION__);
     struct magicnet_packet *packet_to_process = NULL;
     struct magicnet_packet *packet_to_send = NULL;
-    magicnet_server_lock(client->server);
+    magicnet_server_read_lock(client->server);
     packet_to_process = magicnet_client_get_next_packet_to_process(client);
     magicnet_server_unlock(client->server);
 
@@ -2319,7 +2325,7 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
     bool has_packet_to_relay = false;
     // We got to lock this server
-    magicnet_server_lock(client->server);
+    magicnet_server_read_lock(client->server);
     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
     if (tmp_packet)
     {
@@ -2838,7 +2844,7 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
     }
     else
     {
-        magicnet_server_lock(client->server);
+        magicnet_server_read_lock(client->server);
         connected_client_vec = vector_create(sizeof(struct magicnet_connection_exchange_peer_data));
         magicnet_server_get_all_connected_clients(client->server, connected_client_vec);
         magicnet_server_unlock(client->server);
@@ -3142,7 +3148,7 @@ out:
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    magicnet_server_lock(client->server);
+    magicnet_server_read_lock(client->server);
     if (magicnet_server_has_seen_packet(client->server, packet))
     {
         magicnet_server_unlock(client->server);
@@ -3201,15 +3207,19 @@ int magicnet_server_poll(struct magicnet_client *client)
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
     magicnet_signed_data(packet_to_relay)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     struct magicnet_packet *packet = NULL;
-    magicnet_server_lock(client->server);
+    magicnet_server_read_lock(client->server);
     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+    magicnet_server_unlock(client->server);
+
     if (tmp_packet)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
         flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
+        magicnet_server_lock(client->server);
         magicnet_client_relay_packet_finished(client, tmp_packet);
+        magicnet_server_unlock(client->server);
+
     }
-    magicnet_server_unlock(client->server);
     if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
     {
         magicnet_log("non empty packet to send\n");
@@ -3429,10 +3439,10 @@ void *magicnet_server_client_thread(void *_client)
         // We must ask the server to relay packets to us
         magicnet_log("POLL START\n");
         res = magicnet_server_poll(client);
-        magicnet_server_lock(client->server);
+        magicnet_server_read_lock(client->server);
         shutdown = client->server->shutdown;
         magicnet_server_unlock(client->server);
-                magicnet_log("POLL END\n");
+        magicnet_log("POLL END\n");
 
     }
     magicnet_server_lock(client->server);
@@ -3773,7 +3783,7 @@ void *magicnet_server_thread(void *_server)
     while (!server_shutting_down)
     {
         magicnet_server_process(server);
-        magicnet_server_lock(server);
+        magicnet_server_read_lock(server);
         server_shutting_down = server->shutdown;
         if (server_shutting_down)
         {

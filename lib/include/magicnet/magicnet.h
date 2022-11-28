@@ -356,7 +356,7 @@ struct magicnet_server
     time_t server_started;
     // THe first time the block cycle begins for this server instance
     time_t first_block_cycle;
-    pthread_mutex_t lock;
+    pthread_rwlock_t  lock;
 
     // When true the server will refuse new connections and attempt to shutdown.
     bool shutdown;
@@ -503,6 +503,7 @@ enum
 
 int magicnet_chain_downloader_queue_for_block_download(const char *block_hash);
 int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server* server);
+void magicnet_server_read_lock(struct magicnet_server* server);
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
 void magicnet_server_shutdown_server_instance(struct magicnet_server* server);
