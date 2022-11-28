@@ -265,19 +265,16 @@ struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_serve
 
 void magicnet_server_read_lock(struct magicnet_server* server)
 {
-    return;
     pthread_rwlock_rdlock(&server->lock);
 }
 
 void magicnet_server_lock(struct magicnet_server *server)
 {
-    return;
     pthread_rwlock_wrlock(&server->lock);
 }
 
 void magicnet_server_unlock(struct magicnet_server *server)
 {
-    return;
     pthread_rwlock_unlock(&server->lock);
 }
 

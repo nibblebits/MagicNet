@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <memory.h>
 
 struct buffer* buffer_create()
 {
@@ -59,7 +60,7 @@ void buffer_printf_no_terminator(struct buffer* buffer, const char* fmt, ...)
     va_end(args);
 }
 
-void buffer_write(struct buffer* buffer, char c)
+inline void buffer_write(struct buffer* buffer, char c)
 {
     buffer_need(buffer, sizeof(char));
 
@@ -71,11 +72,10 @@ void buffer_write(struct buffer* buffer, char c)
 int buffer_write_bytes(struct buffer *buffer, void *ptr, size_t amount)
 {
     int res = 0;
-    for (int i = 0; i < amount; i++)
-    {
-        buffer_write(buffer, ((char*)ptr)[i]);
-    }
-
+    buffer_need(buffer, amount);
+    memcpy(buffer->data[buffer->len], ptr, amount);
+    buffer->len += amount;
+    res = amount;
     return res;
 }
 
