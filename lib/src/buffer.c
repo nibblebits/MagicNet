@@ -73,7 +73,7 @@ int buffer_write_bytes(struct buffer *buffer, void *ptr, size_t amount)
 {
     int res = 0;
     buffer_need(buffer, amount);
-    memcpy(buffer->data[buffer->len], ptr, amount);
+    memcpy(&buffer->data[buffer->len], ptr, amount);
     buffer->len += amount;
     res = amount;
     return res;
