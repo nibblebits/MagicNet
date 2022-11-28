@@ -3215,9 +3215,9 @@ int magicnet_server_poll(struct magicnet_client *client)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
         flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
-        magicnet_server_lock(client->server);
+    //    magicnet_server_lock(client->server);
         magicnet_client_relay_packet_finished(client, tmp_packet);
-        magicnet_server_unlock(client->server);
+     //   magicnet_server_unlock(client->server);
 
     }
     if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
@@ -3437,12 +3437,10 @@ void *magicnet_server_client_thread(void *_client)
     while (res >= 0 && !shutdown)
     {
         // We must ask the server to relay packets to us
-        magicnet_log("POLL START\n");
         res = magicnet_server_poll(client);
         magicnet_server_read_lock(client->server);
         shutdown = client->server->shutdown;
         magicnet_server_unlock(client->server);
-        magicnet_log("POLL END\n");
 
     }
     magicnet_server_lock(client->server);
