@@ -265,7 +265,7 @@ struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_serve
 
 void magicnet_server_read_lock(struct magicnet_server* server)
 {
-    pthread_rwlock_wrlock(&server->lock);
+    pthread_rwlock_rdlock(&server->lock);
 }
 
 void magicnet_server_lock(struct magicnet_server *server)
@@ -637,10 +637,11 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         return NULL;
     }
 
-    magicnet_server_read_lock(server);
+    magicnet_server_lock(server);
     struct magicnet_client *mclient = magicnet_find_free_outgoing_client(server);
     if (!mclient)
     {
+        magicnet_server_unlock(server);
         return NULL;
     }
     magicnet_init_client(mclient, server, sockfd, &servaddr);
@@ -3788,7 +3789,7 @@ void *magicnet_server_thread(void *_server)
             magicnet_log("%s suspending server thread\n", __FUNCTION__);
         }
         magicnet_server_unlock(server);
-        usleep(5000000);
+        sleep(5);
     }
 
     magicnet_server_lock(server);
