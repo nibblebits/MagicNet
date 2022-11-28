@@ -3215,9 +3215,9 @@ int magicnet_server_poll(struct magicnet_client *client)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
         flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
-    //    magicnet_server_lock(client->server);
+        magicnet_server_lock(client->server);
         magicnet_client_relay_packet_finished(client, tmp_packet);
-     //   magicnet_server_unlock(client->server);
+        magicnet_server_unlock(client->server);
 
     }
     if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
