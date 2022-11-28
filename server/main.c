@@ -20,11 +20,11 @@ void sig_int_handler(int sig_num)
 
     if (sig_int_was_sent)
     {
-        magicnet_log("Be patient we are shutting down!\n");
+        magicnet_important("Be patient we are shutting down!\n");
         return;
     }
     sig_int_was_sent = true;
-    magicnet_log("Shutting down please wait!\n");
+    magicnet_important("Shutting down please wait!\n");
     magicnet_chain_downloaders_shutdown();
     if (server)
     {

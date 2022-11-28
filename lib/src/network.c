@@ -52,7 +52,7 @@ void magicnet_server_shutdown_server_instance(struct magicnet_server *server)
     magicnet_server_get_thread_ids(server, thread_ids);
     magicnet_server_unlock(server);
 
-    magicnet_log("%s waiting on %i threads in the server instance to finish\n", __FUNCTION__, vector_count(thread_ids));
+    magicnet_important("%s waiting on %i threads in the server instance to finish\n", __FUNCTION__, vector_count(thread_ids));
 
     vector_set_peek_pointer(thread_ids, 0);
     pthread_t *thread_id = vector_peek(thread_ids);
@@ -736,7 +736,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
 void magicnet_close(struct magicnet_client *client)
 {
 
-    magicnet_log("%s client %p was closed, total bytes read=%i total bytes wrote=%i, average download speed=%i bps, average upload speed=%i bps, time elapsed=%i\n", __FUNCTION__, client, client->total_bytes_received, client->total_bytes_sent, magicnet_client_average_download_speed(client), magicnet_client_average_upload_speed(client), magicnet_client_time_elapsed(client));
+    magicnet_important("%s client %p was closed, total bytes read=%i total bytes wrote=%i, average download speed=%i bps, average upload speed=%i bps, time elapsed=%i\n", __FUNCTION__, client, client->total_bytes_received, client->total_bytes_sent, magicnet_client_average_download_speed(client), magicnet_client_average_upload_speed(client), magicnet_client_time_elapsed(client));
 
     close(client->sock);
     client->flags &= ~MAGICNET_CLIENT_FLAG_CONNECTED;
@@ -3490,7 +3490,7 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     int res = magicnet_server_add_packet_to_relay(server, packet);
     if (res < 0)
     {
-        magicnet_log("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
+        magicnet_error("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
     }
 
     magicnet_free_packet(packet);
@@ -3512,14 +3512,14 @@ void magicnet_server_client_vote_for_verifier(struct magicnet_server *server)
     struct key *verifier_key = magicnet_server_get_random_block_verifier(server);
     if (!verifier_key)
     {
-        magicnet_log("%s we went to cast a vote for a verifier but their isnt any verifiers available\n", __FUNCTION__);
+        magicnet_error("%s we went to cast a vote for a verifier but their isnt any verifiers available\n", __FUNCTION__);
         return;
     }
 
     int res = magicnet_server_cast_verifier_vote(server, MAGICNET_public_key(), verifier_key);
     if (res < 0)
     {
-        magicnet_log("%s we failed to cast a vote on our local client\n", __FUNCTION__);
+        magicnet_error("%s we failed to cast a vote on our local client\n", __FUNCTION__);
         return;
     }
 
@@ -3591,14 +3591,14 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 
     if (block_hash_sign_verify(block) < 0)
     {
-        magicnet_log("%s could not hash sign and verify the block\n", __FUNCTION__);
+        magicnet_error("%s could not hash sign and verify the block\n", __FUNCTION__);
         block_free(block);
         return -1;
     }
 
     if (block_verify(block) < 0)
     {
-        magicnet_log("%s failed to verify the block we created. We did something wrong\n");
+        magicnet_error("%s failed to verify the block we created. We did something wrong\n");
         return -1;
     }
 
@@ -3614,7 +3614,7 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 void magicnet_server_create_and_send_block(struct magicnet_server *server)
 {
     int res = 0;
-    magicnet_log("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
+    magicnet_important("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
 
     struct vector *blockchains = vector_create(sizeof(struct blockchain *));
     struct vector *block_vector = vector_create(sizeof(struct block *));
@@ -3707,7 +3707,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     }
     else if (current_block_sequence_time >= block_time_second_quarter_start && current_block_sequence_time < block_time_third_quarter_start && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
     {
-        magicnet_log("%s second quarter in the block sequence, lets create a random vote\n", __FUNCTION__);
+        magicnet_important("%s second quarter in the block sequence, lets create a random vote\n", __FUNCTION__);
         magicnet_server_client_vote_for_verifier(server);
         server->next_block.step = BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK;
     }
@@ -3717,11 +3717,11 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         struct key *key_who_won = magicnet_server_verifier_who_won(server);
         if (!key_who_won)
         {
-            magicnet_log("%s no verifier key won the vote.\n", __FUNCTION__);
+            magicnet_important("%s no verifier key won the vote.\n", __FUNCTION__);
         }
         else
         {
-            magicnet_log("%s awaiting for new block from voted verifier: %s \n", __FUNCTION__, key_who_won->key);
+            magicnet_important("%s awaiting for new block from voted verifier: %s \n", __FUNCTION__, key_who_won->key);
         }
         if (key_cmp(key_who_won, MAGICNET_public_key()))
         {

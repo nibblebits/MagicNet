@@ -34,6 +34,14 @@
 #define MAGICNET_BLOCK_DIRECTORY "/blocks"
 #define MAGICNET_PUBLIC_KEY_FILEPATH "/key.pub"
 #define MAGICNET_PRIVATE_KEY_FILEPATH "/key.pri"
+
+
+//LOGGING
+//#define MAGICNET_SHOW_INFO_LOGS
+#define MAGICNET_SHOW_IMPORTANT_LOGS
+#define MAGICNET_SHOW_ERROR_LOGS
+
+
 // CRYPTOGRAPHY
 
 // 64 bytes for hashed key then +1 for null terminator

@@ -57,22 +57,22 @@ int magicnet_chain_downloader_shutdown_last()
 }
 void magicnet_chain_downloaders_shutdown()
 {
-    magicnet_log("%s terminating downloaders please wait..\n", __FUNCTION__);
+    magicnet_important("%s terminating downloaders please wait..\n", __FUNCTION__);
 
     size_t count = 0;
     while (magicnet_chain_downloader_shutdown_last() >= 0)
     {
-        magicnet_log("%s ended a chain downloader\n", __FUNCTION__);
+        magicnet_important("%s ended a chain downloader\n", __FUNCTION__);
         count++;
     }
-    magicnet_log("%s ended %i chain downloader threads\n", __FUNCTION__, count);
+    magicnet_important("%s ended %i chain downloader threads\n", __FUNCTION__, count);
 
-    magicnet_log("%s downloaders terminated\n", __FUNCTION__);
+    magicnet_important("%s downloaders terminated\n", __FUNCTION__);
 }
 
 void magicnet_chain_downloaders_cleanup()
 {
-    magicnet_log("%s cleaning up downloaders memory\n", __FUNCTION__);
+    magicnet_important("%s cleaning up downloaders memory\n", __FUNCTION__);
     pthread_mutex_destroy(&downloads.lock);
     vector_free(downloads.chain_downloads);
 
