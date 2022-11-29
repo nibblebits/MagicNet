@@ -379,6 +379,12 @@ struct magicnet_server
     // This is our ipv4 ip address based on what all connected clients have told us it is.
     // empty if not known.
     char our_ip[MAGICNET_MAX_IP_STRING_SIZE];
+
+    // This is true if we are able to accept incoming connections from our IP address. If this is false
+    // we are unable to receive incoming traffic and can only create ourgoing connections.
+    // THis is not something we choose, we either can receive traffic or we cannot. This boolean if it is true
+    // means we have successfully tested that we are able to receive incoming connections.
+    bool port_forwarded;
     
 };
 

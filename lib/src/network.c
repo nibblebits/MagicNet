@@ -195,6 +195,25 @@ const char *magicnet_ip_count_get_dominant(struct vector *ip_count_vec)
 
     return NULL;
 }
+
+void magicnet_server_test_port_forwarded(struct magicnet_server *server)
+{
+    server->port_forwarded = false;
+    struct magicnet_client *client =
+        magicnet_tcp_network_connect_for_ip_for_server(server, server->our_ip, MAGICNET_SERVER_PORT, "port-forward-program");
+
+    if (client)
+    {
+        magicnet_log("%s we have detected we are port forwarded and can receive incoming connections\n", __FUNCTION__);
+        server->port_forwarded = true;
+        magicnet_close(client);
+    }
+    else
+    {
+        magicnet_log("%s we have detected we have not port forwarded. We recommend port forwarding for better preformance on the network\n", __FUNCTION__);
+    }
+}
+
 void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 {
     struct vector *ip_vec = vector_create(sizeof(struct magicnet_ip_count *));
@@ -217,19 +236,24 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 
     const char *dominant_ip = magicnet_ip_count_get_dominant(ip_vec);
 
-    // We must never allow 127.0.0.1 to be see nas our global ip address
+    // We must never allow 127.0.0.1 to be seen as our global ip address
     // this may allow exploitable things to happen.
     if (dominant_ip && strncmp(dominant_ip, "127.0.0.1", sizeof(dominant_ip)) != 0)
     {
         if (strncmp(server->our_ip, dominant_ip, sizeof(server->our_ip)) != 0)
         {
-            magicnet_log("%s our ip address has been detected as %s", __FUNCTION__, dominant_ip);
+            magicnet_log("%s our ip address has been detected as %s\n", __FUNCTION__, dominant_ip);
+            if (!server->port_forwarded)
+            {
+                magicnet_server_test_port_forwarded(server);
+            }
         }
         strncpy(server->our_ip, dominant_ip, sizeof(server->our_ip));
     }
 
     magicnet_ip_count_vec_free(ip_vec);
 }
+
 struct magicnet_server *magicnet_server_start(int port)
 {
     int sockfd, len;
