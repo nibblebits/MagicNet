@@ -2734,6 +2734,7 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
 {
     struct magicnet_server *server = client->server;
     int res = 0;
+    
     int signature = magicnet_read_int(client, NULL);
     if (signature != MAGICNET_ENTRY_SIGNATURE)
     {
@@ -2747,6 +2748,25 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         magicnet_log("%s failed to read  valid comminciation flags\n", __FUNCTION__);
         goto out;
     }
+
+    res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read my ip address from the client peer\n", __FUNCTION__);
+        goto out;
+    }
+
+    const char* client_ip = inet_ntoa(client->client_info.sin_addr);
+    char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
+    strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
+    // Lets tell the client what his IP is
+    res = magicnet_write_bytes(client, client_ip_buf, sizeof(client_ip_buf), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+
 
     // We need to find out what they are listening too before we can accept them.
     // What is the program they are subscribing too, lets read it.
@@ -2921,6 +2941,23 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         // Bad signature
         res = -1;
+        goto out;
+    }
+
+    const char* client_ip = inet_ntoa(client->client_info.sin_addr);
+    char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
+    strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
+    // Lets tell the client what his IP is
+    res = magicnet_write_bytes(client, client_ip_buf, sizeof(client_ip_buf), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Lets read what the client says our ip address is.
+    res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
+    if (res < 0)
+    {
         goto out;
     }
 
@@ -3205,19 +3242,20 @@ int magicnet_server_poll(struct magicnet_client *client)
     // We also want to send a packet of our own
     int flags = 0;
 
-    sizeof(struct magicnet_client);
-
     struct magicnet_packet *packet_to_send = magicnet_packet_new();
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
     magicnet_signed_data(packet_to_relay)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     struct magicnet_packet *packet = NULL;
     magicnet_server_read_lock(client->server);
     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+    if (tmp_packet)
+    {
+        magicnet_copy_packet(packet_to_relay, tmp_packet);
+    }
     magicnet_server_unlock(client->server);
 
     if (tmp_packet)
     {
-        magicnet_copy_packet(packet_to_relay, tmp_packet);
         flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
         magicnet_server_lock(client->server);
         magicnet_client_relay_packet_finished(client, tmp_packet);

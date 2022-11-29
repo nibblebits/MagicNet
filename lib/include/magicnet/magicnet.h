@@ -221,6 +221,11 @@ struct magicnet_client
     // not to be set or updated by command of a remote host.
     int flags;
 
+    // This is our ipv4 ip address from the prespective of the connected client.
+    // We store per client to prevent someone telling us an ip address is ours when it is not.
+    // Our real ip address is the one that most peers think is ours.
+    char my_ip_address_to_client[MAGICNET_MAX_IP_STRING_SIZE];
+
     // Communication flags are set in the entry protocol they determine the type of packets this peer is willing to accept.
     int communication_flags;
     time_t last_contact;
@@ -362,6 +367,10 @@ struct magicnet_server
     bool shutdown;
     // BELOW MUST BE PROCESSED ONLY BY THE SERVER THREAD
     off_t last_new_connection_attempt;
+
+    // This is our ipv4 ip address based on what all connected clients have told us it is.
+    // empty if not known.
+    char our_ip[MAGICNET_MAX_IP_STRING_SIZE];
     
 };
 
