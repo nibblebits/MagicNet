@@ -2749,22 +2749,6 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
-    res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
-    if (res < 0)
-    {
-        magicnet_log("%s failed to read my ip address from the client peer\n", __FUNCTION__);
-        goto out;
-    }
-
-    const char* client_ip = inet_ntoa(client->client_info.sin_addr);
-    char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
-    strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
-    // Lets tell the client what his IP is
-    res = magicnet_write_bytes(client, client_ip_buf, sizeof(client_ip_buf), NULL);
-    if (res < 0)
-    {
-        goto out;
-    }
 
 
 
@@ -2784,6 +2768,24 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
+
+    res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read my ip address from the client peer\n", __FUNCTION__);
+        goto out;
+    }
+
+    const char* client_ip = inet_ntoa(client->client_info.sin_addr);
+    char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
+    strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
+    // Lets tell the client what his IP is
+    res = magicnet_write_bytes(client, client_ip_buf, sizeof(client_ip_buf), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
     int peer_info_state = -1;
     res = magicnet_read_peer_info(client, &peer_info_state);
     if (res < 0)
