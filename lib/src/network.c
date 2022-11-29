@@ -199,9 +199,7 @@ const char *magicnet_ip_count_get_dominant(struct vector *ip_count_vec)
 void magicnet_server_test_port_forwarded(struct magicnet_server *server)
 {
     server->port_forwarded = false;
-    struct magicnet_client *client =
-        magicnet_tcp_network_connect_for_ip_for_server(server, server->our_ip, MAGICNET_SERVER_PORT, "port-forward-program");
-
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(server->our_ip, MAGICNET_SERVER_PORT, 0, "test-program");
     if (client)
     {
         magicnet_log("%s we have detected we are port forwarded and can receive incoming connections\n", __FUNCTION__);
@@ -243,10 +241,6 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
         if (strncmp(server->our_ip, dominant_ip, sizeof(server->our_ip)) != 0)
         {
             magicnet_log("%s our ip address has been detected as %s\n", __FUNCTION__, dominant_ip);
-            if (!server->port_forwarded)
-            {
-                magicnet_server_test_port_forwarded(server);
-            }
         }
         strncpy(server->our_ip, dominant_ip, sizeof(server->our_ip));
     }

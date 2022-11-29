@@ -85,9 +85,7 @@ enum
 
 
 struct block;
-
 struct blockchain;
-
 
 struct magicnet_packet
 {
