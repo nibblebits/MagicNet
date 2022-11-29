@@ -136,6 +136,100 @@ void magicnet_server_free(struct magicnet_server *server)
     pthread_rwlock_destroy(&server->lock);
     free(server);
 }
+
+void magicnet_ip_count_vec_free(struct vector *vec)
+{
+    vector_set_peek_pointer(vec, 0);
+    struct magicnet_ip_count *ip_vec_count = vector_peek_ptr(vec);
+    while (ip_vec_count)
+    {
+        free(ip_vec_count);
+        ip_vec_count = vector_peek_ptr(vec);
+    }
+
+    vector_free(vec);
+}
+
+void magicnet_ip_count_vec_add_or_increment(struct vector *vec, const char *ip_addr)
+{
+    vector_set_peek_pointer(vec, 0);
+    struct magicnet_ip_count *ip_vec_count = vector_peek_ptr(vec);
+    while (ip_vec_count)
+    {
+        if (strncmp(ip_vec_count->ip_address, ip_addr, sizeof(ip_vec_count->ip_address)) == 0)
+        {
+            ip_vec_count->count++;
+            break;
+        }
+        ip_vec_count = vector_peek_ptr(vec);
+    }
+
+    if (!ip_vec_count)
+    {
+        ip_vec_count = calloc(1, sizeof(struct magicnet_ip_count));
+        ip_vec_count->count = 1;
+        strncpy(ip_vec_count->ip_address, ip_addr, sizeof(ip_vec_count->ip_address));
+        vector_push(vec, &ip_vec_count);
+    }
+}
+
+const char *magicnet_ip_count_get_dominant(struct vector *ip_count_vec)
+{
+    struct magicnet_ip_count *dominant_ip_count = NULL;
+    vector_set_peek_pointer(ip_count_vec, 0);
+    struct magicnet_ip_count *ip_count = vector_peek_ptr(ip_count_vec);
+    dominant_ip_count = ip_count;
+    while (ip_count)
+    {
+        if (ip_count->count > dominant_ip_count->count)
+        {
+            dominant_ip_count = ip_count;
+        }
+        ip_count = vector_peek_ptr(ip_count_vec);
+    }
+
+    if (dominant_ip_count)
+    {
+        return dominant_ip_count->ip_address;
+    }
+
+    return NULL;
+}
+void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
+{
+    struct vector *ip_vec = vector_create(sizeof(struct magicnet_ip_count *));
+
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    {
+        if (magicnet_connected(&server->clients[i]))
+        {
+            magicnet_ip_count_vec_add_or_increment(ip_vec, server->clients[i].my_ip_address_to_client);
+        }
+    }
+
+    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    {
+        if (magicnet_connected(&server->outgoing_clients[i]))
+        {
+            magicnet_ip_count_vec_add_or_increment(ip_vec, server->outgoing_clients[i].my_ip_address_to_client);
+        }
+    }
+
+    const char *dominant_ip = magicnet_ip_count_get_dominant(ip_vec);
+
+    // We must never allow 127.0.0.1 to be see nas our global ip address
+    // this may allow exploitable things to happen.
+    if (dominant_ip && strncmp(dominant_ip, "127.0.0.1", sizeof(dominant_ip) != 0))
+    {
+        if (strncmp(server->our_ip, dominant_ip, sizeof(server->our_ip)) != 0)
+        {
+            magicnet_log("%s our ip address has been detected as %s", __FUNCTION__, dominant_ip);
+        }
+        strncpy(server->our_ip, dominant_ip, sizeof(server->our_ip));
+    }
+
+    magicnet_ip_count_vec_free(ip_vec);
+}
 struct magicnet_server *magicnet_server_start(int port)
 {
     int sockfd, len;
@@ -263,7 +357,7 @@ struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_serve
     return NULL;
 }
 
-void magicnet_server_read_lock(struct magicnet_server* server)
+void magicnet_server_read_lock(struct magicnet_server *server)
 {
     pthread_rwlock_rdlock(&server->lock);
 }
@@ -1020,8 +1114,6 @@ int magicnet_client_read_packet_empty(struct magicnet_client *client, struct mag
 
 int magicnet_client_read_verifier_signup_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
-    char* ptr = malloc(1024*1024*2);
-    return magicnet_read_bytes(client, ptr, 1024*1024*2, NULL);
     return 0;
 }
 
@@ -1233,7 +1325,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
             res = MAGICNET_ERROR_UNKNOWN;
             break;
         }
-        
+
         block->key = key;
         block->signature = signature;
 
@@ -1553,10 +1645,7 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 
 int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
 {
- char* data = malloc(1024*1024*2);
-    int res = magicnet_write_bytes(client, data, 1024*1024*2, NULL);
-    free(data);
-    return res;
+    return 0;
 }
 
 int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *client, struct magicnet_packet *packet)
@@ -2734,7 +2823,7 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
 {
     struct magicnet_server *server = client->server;
     int res = 0;
-    
+
     int signature = magicnet_read_int(client, NULL);
     if (signature != MAGICNET_ENTRY_SIGNATURE)
     {
@@ -2748,9 +2837,6 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         magicnet_log("%s failed to read  valid comminciation flags\n", __FUNCTION__);
         goto out;
     }
-
-
-
 
     // We need to find out what they are listening too before we can accept them.
     // What is the program they are subscribing too, lets read it.
@@ -2768,7 +2854,6 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
-
     res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
     if (res < 0)
     {
@@ -2776,7 +2861,7 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
-    const char* client_ip = inet_ntoa(client->client_info.sin_addr);
+    const char *client_ip = inet_ntoa(client->client_info.sin_addr);
     char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
     strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
     // Lets tell the client what his IP is
@@ -2785,7 +2870,7 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
     {
         goto out;
     }
-    
+
     int peer_info_state = -1;
     res = magicnet_read_peer_info(client, &peer_info_state);
     if (res < 0)
@@ -2946,7 +3031,7 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
         goto out;
     }
 
-    const char* client_ip = inet_ntoa(client->client_info.sin_addr);
+    const char *client_ip = inet_ntoa(client->client_info.sin_addr);
     char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
     strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
     // Lets tell the client what his IP is
@@ -3262,7 +3347,6 @@ int magicnet_server_poll(struct magicnet_client *client)
         magicnet_server_lock(client->server);
         magicnet_client_relay_packet_finished(client, tmp_packet);
         magicnet_server_unlock(client->server);
-
     }
     if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
     {
@@ -3338,6 +3422,11 @@ void *magicnet_client_thread(void *_client)
         // entry protocol failed.. illegal client!
         goto out;
     }
+
+    magicnet_server_lock(client->server);
+    magicnet_server_recalculate_my_ip(client->server);
+    magicnet_server_unlock(client->server);
+
     while (res != MAGICNET_ERROR_CRITICAL_ERROR && !server_shutting_down)
     {
         res = magicnet_client_manage_next_packet(client);
@@ -3475,6 +3564,7 @@ void *magicnet_server_client_thread(void *_client)
     magicnet_log("%s new outbound connection created\n", __FUNCTION__);
     magicnet_server_lock(client->server);
     magicnet_server_add_thread(client->server, pthread_self());
+    magicnet_server_recalculate_my_ip(client->server);
     magicnet_server_unlock(client->server);
 
     int res = 0;
@@ -3485,7 +3575,6 @@ void *magicnet_server_client_thread(void *_client)
         magicnet_server_read_lock(client->server);
         shutdown = client->server->shutdown;
         magicnet_server_unlock(client->server);
-
     }
     magicnet_server_lock(client->server);
     magicnet_close(client);
@@ -3838,7 +3927,6 @@ void *magicnet_server_thread(void *_server)
     magicnet_server_lock(server);
     magicnet_server_remove_thread(server, pthread_self());
     magicnet_server_unlock(server);
-
 }
 
 int magicnet_network_thread_start(struct magicnet_server *server)

@@ -296,6 +296,14 @@ struct magicnet_vote_count
     size_t voters;
 };
 
+// This is used for calculating the ip address of our client. The total count is how many peers
+// believe the ip address to be ours. We need this system to prevent fakers telling us ips that we are not.
+struct magicnet_ip_count
+{
+    char ip_address[MAGICNET_MAX_IP_STRING_SIZE];
+    size_t count;
+};
+
 enum
 {
     BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS,
