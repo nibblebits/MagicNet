@@ -241,6 +241,7 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
         if (strncmp(server->our_ip, dominant_ip, sizeof(server->our_ip)) != 0)
         {
             magicnet_log("%s our ip address has been detected as %s\n", __FUNCTION__, dominant_ip);
+            magicnet_server_test_port_forwarded(server);
         }
         strncpy(server->our_ip, dominant_ip, sizeof(server->our_ip));
     }
