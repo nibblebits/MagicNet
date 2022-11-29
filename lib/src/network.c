@@ -219,7 +219,7 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 
     // We must never allow 127.0.0.1 to be see nas our global ip address
     // this may allow exploitable things to happen.
-    if (dominant_ip && strncmp(dominant_ip, "127.0.0.1", sizeof(dominant_ip) != 0))
+    if (dominant_ip && strncmp(dominant_ip, "127.0.0.1", sizeof(dominant_ip)) != 0)
     {
         if (strncmp(server->our_ip, dominant_ip, sizeof(server->our_ip)) != 0)
         {
@@ -3423,9 +3423,12 @@ void *magicnet_client_thread(void *_client)
         goto out;
     }
 
-    magicnet_server_lock(client->server);
-    magicnet_server_recalculate_my_ip(client->server);
-    magicnet_server_unlock(client->server);
+    if (client->server)
+    {
+        magicnet_server_lock(client->server);
+        magicnet_server_recalculate_my_ip(client->server);
+        magicnet_server_unlock(client->server);
+    }
 
     while (res != MAGICNET_ERROR_CRITICAL_ERROR && !server_shutting_down)
     {
