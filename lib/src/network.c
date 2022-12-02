@@ -1381,7 +1381,7 @@ int magicnet_client_read_request_block_packet(struct magicnet_client *client, st
         goto out;
     }
 
-    int res =  magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    res = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
@@ -1402,7 +1402,7 @@ int magicnet_client_read_request_block_response_packet(struct magicnet_client *c
         goto out;
     }
 
-    int res =  magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    res = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;

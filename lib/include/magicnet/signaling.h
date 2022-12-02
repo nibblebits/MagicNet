@@ -2,6 +2,8 @@
 #define MAGICNET_SIGNALING
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdbool.h>
+
 #include "config.h"
 
 struct magicnet_signal

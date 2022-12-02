@@ -2,6 +2,7 @@
 #include <signal.h>
 #include <errno.h>
 #include <memory.h>
+
 #include "magicnet.h"
 #include "signaling.h"
 #include "log.h"
@@ -27,7 +28,14 @@ int magicnet_signals_init()
             res = -1;
             goto out;
         }
-        signals[i].id = rand() % (i * 1000) + (i * 1000) + 999; 
+        if (i == 0)
+        {
+            signals[i].id = rand() % 999;
+        }
+        else
+        {
+            signals[i].id = rand() % (i * 1000) + (i * 1000) + 999; 
+        }
         signals[i].free = true;
     }
 
