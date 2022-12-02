@@ -200,17 +200,17 @@ const char *magicnet_ip_count_get_dominant(struct vector *ip_count_vec)
 void magicnet_server_test_port_forwarded(struct magicnet_server *server)
 {
     server->port_forwarded = false;
-    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(server->our_ip, MAGICNET_SERVER_PORT, 0, "test-program");
-    if (client)
-    {
-        magicnet_log("%s we have detected we are port forwarded and can receive incoming connections\n", __FUNCTION__);
-        server->port_forwarded = true;
-        magicnet_close(client);
-    }
-    else
-    {
-        magicnet_log("%s we have detected we have not port forwarded. We recommend port forwarding for better preformance on the network\n", __FUNCTION__);
-    }
+    // struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(server->our_ip, MAGICNET_SERVER_PORT, 0, "test-program");
+    // if (client)
+    // {
+    //     magicnet_log("%s we have detected we are port forwarded and can receive incoming connections\n", __FUNCTION__);
+    //     server->port_forwarded = true;
+    //     magicnet_close(client);
+    // }
+    // else
+    // {
+    //     magicnet_log("%s we have detected we have not port forwarded. We recommend port forwarding for better preformance on the network\n", __FUNCTION__);
+    // }
 }
 
 void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
@@ -1395,7 +1395,7 @@ out:
 
 int magicnet_client_read_request_block_response_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
-    int res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.request_block_response.request_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block.request_hash), packet_out->not_sent.tmp_buf);
+    int res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.request_block_response.request_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block_response.request_hash), packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         magicnet_log("%s failed to read previous hash for request block response packet\n", __FUNCTION__);
