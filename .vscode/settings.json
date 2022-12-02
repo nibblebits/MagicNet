@@ -12,6 +12,8 @@
         "dirent.h": "c",
         "unistd.h": "c",
         "magicnet.h": "c",
-        "pthread.h": "c"
+        "pthread.h": "c",
+        "semaphore.h": "c",
+        "errno.h": "c"
     }
 }

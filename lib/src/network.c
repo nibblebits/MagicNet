@@ -23,6 +23,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include "magicnet/signaling.h"
 #include "magicnet/database.h"
 #include "magicnet/config.h"
 #include "magicnet/magicnet.h"
@@ -238,12 +239,13 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
     // this may allow exploitable things to happen.
     if (dominant_ip && strncmp(dominant_ip, "127.0.0.1", sizeof(dominant_ip)) != 0)
     {
-        if (strncmp(server->our_ip, dominant_ip, sizeof(server->our_ip)) != 0)
+        bool different_ip = strncmp(server->our_ip, dominant_ip, sizeof(server->our_ip)) != 0;
+        strncpy(server->our_ip, dominant_ip, sizeof(server->our_ip));
+        if (different_ip)
         {
             magicnet_log("%s our ip address has been detected as %s\n", __FUNCTION__, dominant_ip);
             magicnet_server_test_port_forwarded(server);
         }
-        strncpy(server->our_ip, dominant_ip, sizeof(server->our_ip));
     }
 
     magicnet_ip_count_vec_free(ip_vec);
@@ -1379,9 +1381,39 @@ int magicnet_client_read_request_block_packet(struct magicnet_client *client, st
         goto out;
     }
 
+    int res =  magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    magicnet_signed_data(packet_out)->payload.request_block.signal_id = res;
+
+
 out:
     return res;
 }
+
+int magicnet_client_read_request_block_response_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.request_block_response.request_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block.request_hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read previous hash for request block response packet\n", __FUNCTION__);
+        goto out;
+    }
+
+    int res =  magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    magicnet_signed_data(packet_out)->payload.request_block_response.signal_id = res;
+
+
+out:
+    return res;
+}
+
 
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
@@ -1468,6 +1500,11 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
             magicnet_log("%s failed to read block request packet\n", __FUNCTION__);
         }
         break;
+    
+    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
+        res = magicnet_client_read_request_block_response_packet(client, packet_out);
+        break;
+
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_client_read_block_send_packet(client, packet_out);
         if (res < 0)
@@ -1822,9 +1859,38 @@ int magicnet_client_write_packet_request_block(struct magicnet_client *client, s
 {
     int res = 0;
     res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.request_block.request_hash, sizeof(magicnet_signed_data(packet)->payload.request_block.request_hash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
 
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.request_block.signal_id, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
     return res;
 }
+
+int magicnet_client_write_packet_request_block_response(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.request_block_response.request_hash, sizeof(magicnet_signed_data(packet)->payload.request_block.request_hash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.request_block_response.signal_id, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
+    return res;
+}
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -1877,6 +1943,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
         res = magicnet_client_write_packet_request_block(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
+        res = magicnet_client_write_packet_request_block_response(client, packet);
         break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         res = magicnet_client_write_packet_block_send(client, packet);
@@ -2119,6 +2189,16 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     return mclient;
 }
 
+
+struct magicnet_client* magicnet_connection_new(struct magicnet_client* client)
+{
+    if (!client->server)
+    {
+        return NULL;
+    }
+
+
+}
 struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client, int *res_out)
 {
     struct magicnet_packet *packet = magicnet_packet_new();
@@ -2532,30 +2612,53 @@ out:
 int magicnet_client_process_request_block_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    magicnet_log("%s request block packet initiated. Request for block with hash %s\n", __FUNCTION__, magicnet_signed_data(packet)->payload.request_block.request_hash);
-    struct magicnet_packet *packet_out = magicnet_packet_new();
-
-    magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    struct magicnet_packet *packet_out = NULL;
 
     struct block *block = block_load(magicnet_signed_data(packet)->payload.request_block.request_hash);
     if (!block)
     {
         goto out;
     }
-    struct vector *block_vec = vector_create(sizeof(struct block *));
-    struct block *cloned_block = block_clone(block);
-    vector_push(block_vec, &cloned_block);
-    magicnet_signed_data(packet_out)->payload.block_send.blocks = block_vec;
-    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = block_transaction_group_clone(cloned_block->transaction_group);
-    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
+
+    magicnet_log("%s request block packet initiated. Request for block with hash %s\n", __FUNCTION__, magicnet_signed_data(packet)->payload.request_block.request_hash);
+    packet_out = magicnet_packet_new();
+    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE;
+    magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    memcpy(magicnet_signed_data(packet_out)->payload.request_block_response.request_hash, magicnet_signed_data(packet)->payload.request_block.request_hash, sizeof(magicnet_signed_data(packet_out)->payload.request_block_response.request_hash));
+    magicnet_signed_data(packet_out)->payload.request_block_response.signal_id = magicnet_signed_data(packet)->payload.request_block_response.signal_id;
 
     magicnet_server_relay_packet_to_client_key(client->server, &packet->pub_key, packet_out);
-
-    block_free(block);
 out:
-    magicnet_free_packet(packet_out);
+    if (packet_out)
+    {
+        magicnet_free_packet(packet_out);
+    }
     return res;
 }
+
+int magicnet_client_process_request_block_response_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+
+    // Get the signal that is waiting on the request block response.
+    struct magicnet_signal* signal = magicnet_signal_get_by_id_and_type("downloader-req-block-signal", magicnet_signed_data(packet)->payload.request_block_response.signal_id);
+    if (!signal)
+    {
+        // todo ban the client for trying to request a fake signal.. Could be an attack attempt ban them.
+        res = -1;
+        goto out;
+    }
+
+    // Clone the public key of the client who sent the response packet.
+    // Then post it to the signal. Signal waiter will be responsible to free the memory.
+    struct key* key = calloc(1, sizeof(struct key));
+    memcpy(key, &packet->pub_key, sizeof(struct key));
+    magicnet_signal_post(signal, key);
+
+out:
+    return res;
+}
+
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
@@ -3327,6 +3430,10 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
         res = magicnet_client_process_request_block_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
+        res = magicnet_client_process_request_block_response_packet(client, packet);
         break;
     };
 

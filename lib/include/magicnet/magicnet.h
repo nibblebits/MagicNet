@@ -6,6 +6,7 @@
 #include <netinet/tcp.h>
 #include <time.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include "magicnet/vector.h"
 #include "magicnet/config.h"
 #include "key.h"
@@ -37,7 +38,12 @@ enum
     MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP,
     MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER,
     MAGICNET_PACKET_TYPE_TRANSACTION_SEND,
+    // Signifies a new connection should be made between the peer who received the packet and the peer who sent it.
+    MAGICNET_PACKET_TYPE_NEW_CONNECTION,
     MAGICNET_PACKET_TYPE_REQUEST_BLOCK,
+    MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE,
+    // A group of up to 100 blocks sent back. When we request a block the sender can send the next 100 we asked for.
+    MAGICNET_PACKET_TYPE_GROUP_OF_BLOCKS,
     MAGICNET_PACKET_TYPE_BLOCK_SEND,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
@@ -64,7 +70,10 @@ enum
     MAGICNET_ERROR_ALREADY_EXISTANT = -1003,
     MAGICNET_ERROR_UNKNOWN = -1004,
     MAGICNET_ERROR_SECURITY_RISK = -1005,
-    MAGICNET_ERROR_TOO_LARGE = 1006,
+    MAGICNET_ERROR_TOO_LARGE = -1006,
+    // Sent when data was believed to be available but during a running algorithm the data became non-existant or incorrect.
+    MAGICNET_ERROR_DATA_NO_LONGER_AVAILABLE = -1007,
+    
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
     MAGICNET_ERROR_CRITICAL_ERROR = -1,
@@ -179,6 +188,13 @@ struct magicnet_packet
                     struct block_transaction* transaction;
                 } transaction_send;
 
+
+                struct magicnet_new_connection
+                {
+                    // The entry ID for the connection. Sent by connector so we know how to route the controller of the new client.
+                    int entry_id;
+                } new_connection;
+
                 struct magicnet_block_send
                 {
                     // a vector of struct block* that holds the blocks we are sending.
@@ -187,11 +203,29 @@ struct magicnet_packet
                     // The group of transactions associated with all blocks in the vector above.
                     struct block_transaction_group *transaction_group;
                 } block_send;
-
+                
                 struct magicnet_request_block
                 {
                     char request_hash[SHA256_STRING_LENGTH];
+                    int signal_id;
                 } request_block;
+
+                /**
+                 * Response for the request block. Once received block group send can be initiated.
+                 * Receving this means we can connect on another thread and download the blocks until satisfied.
+                */
+                struct magicnet_request_block_response
+                {
+                    char request_hash[SHA256_STRING_LENGTH];
+                    int signal_id;
+                } request_block_response;
+
+                struct magicnet_block_group_send
+                {
+                    char begin_hash[SHA256_STRING_LENGTH];
+                    // Vector of struct block* 
+                    struct vector* blocks;
+                } block_group_send;
             };
         } payload;
     } signed_data;
@@ -481,9 +515,11 @@ struct magicnet_chain_downloader
     // Vector of  magicnet_chain_downloader_hash_to_download* . Must free the pointers when done.
     struct vector* hashes_to_download;
 
+
     // The current total blocks downloaded
     size_t total_blocks_downloaded;
 
+    // Also used as an identifier for the chain downloader iD.
     pthread_t thread_id;
 
     // The server 
@@ -641,6 +677,7 @@ void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader* downlo
 int magicnet_chain_downloader_start(struct magicnet_chain_downloader* downloader);
 void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server);
 bool magicnet_default_downloader_is_hash_queued(const char* hash);
+int magicnet_chain_downloader_post_client_with_block(pthread_t thread_id, struct magicnet_client *client);
 void magicnet_chain_downloaders_shutdown();
 void magicnet_chain_downloaders_cleanup();
 

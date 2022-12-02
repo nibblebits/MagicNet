@@ -3,6 +3,7 @@
 #include "magicnet/database.h"
 #include "magicnet/init.h"
 #include "magicnet/log.h"
+#include "magicnet/signaling.h"
 #include <memory.h>
 #include <time.h>
 #include <stdio.h>
@@ -25,6 +26,7 @@ void sig_int_handler(int sig_num)
     }
     sig_int_was_sent = true;
     magicnet_important("Shutting down please wait!\n");
+    magicnet_signals_release_all();
     magicnet_chain_downloaders_shutdown();
     if (server)
     {
@@ -36,6 +38,8 @@ void sig_int_handler(int sig_num)
     // hence why we shutdown the downloaders and server instances before we do a memory cleanup.
     magicnet_chain_downloaders_cleanup();
     magicnet_database_close();
+    magicnet_signals_free();
+
     exit(1);
 }
 
@@ -72,15 +76,26 @@ void *sig_int_listener_thread(void *ptr)
         sleep(1);
     }
 }
+
+
 int main(int argc, char **argv)
 {
     int res = 0;
     printf("Starting MagicNet server\n");
+
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
     pthread_sigmask(SIG_BLOCK, &set, NULL);
-   signal(SIGINT, sig_int_handler);
+    signal(SIGINT, sig_int_handler);
+
+    res = magicnet_signals_init();
+    if (res < 0)
+    {
+        printf("Failed to initialize signals\n");
+        return res;
+    }
+
     res = magicnet_server_init();
     if (res < 0)
     {
