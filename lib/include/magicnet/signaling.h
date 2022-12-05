@@ -13,7 +13,6 @@ struct magicnet_signal
     // Signal type is requried for security precautions. In case someone in the network asks us to invoke a signal
     // of a different type that was expected. We need to keep track of this so we always know the type of data and signal we are dealing with.
     char signal_type[MAGICNET_MAX_SIGNAL_TYPE_NAME];
-    void *data;
     // Vector of void* multiple pushes can fill this data_vec while others are waiting.
     struct vector* data_vec;
     pthread_rwlock_t signal_lock;

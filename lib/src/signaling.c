@@ -16,6 +16,7 @@ int magicnet_signals_init()
     for (int i = 0; i < MAGICNET_MAX_SIGNALING_SIGNALS; i++)
     {
         memset(&signals[i], 0, sizeof(signals[i]));
+        signals[i].data_vec = vector_create(sizeof(void *));
         if (pthread_rwlock_init(&signals[i].signal_lock, NULL) != 0)
         {
             magicnet_error("%s failed to initialize signal lock\n", __FUNCTION__);
@@ -48,6 +49,12 @@ void magicnet_signal_free(struct magicnet_signal *signal)
 {
     sem_destroy(&signal->sem);
     pthread_rwlock_destroy(&signal->signal_lock);
+    for (int i = 0; i < vector_count(signal->data_vec); i++)
+    {
+        free(&signal->data_vec[i]);
+    }
+
+    vector_free(signal->data_vec);
 }
 
 void magicnet_signals_release_all()
@@ -84,7 +91,7 @@ struct magicnet_signal *magicnet_signal_find_free(const char *signal_type)
     return NULL;
 }
 
-int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void** data_out)
+int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void **data_out)
 {
     int res = -1;
     char signal_type[MAGICNET_MAX_SIGNAL_TYPE_NAME];
@@ -123,7 +130,6 @@ int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void
         res = 0;
         goto out;
     }
-
 
 out:
     return res;
