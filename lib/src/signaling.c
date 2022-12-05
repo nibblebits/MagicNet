@@ -119,10 +119,17 @@ int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void
     if (signal_id != signal->id || strncmp(signal_type, signal->signal_type, sizeof(signal_type)) != 0)
     {
         res = -1;
+        magicnet_log("%s signal id or type does not match something must have changed while we was waiting on the semaphore\n", __FUNCTION__);
         pthread_rwlock_unlock(&signal->signal_lock);
         goto out;
     }
     *data_out = vector_back_ptr_or_null(signal->data_vec);
+    if (!(*data_out))
+    {
+        res = -1;
+        pthread_rwlock_unlock(&signal->signal_lock);
+        goto out;
+    }
     pthread_rwlock_unlock(&signal->signal_lock);
 
     if (s != -1)
@@ -189,7 +196,7 @@ int magicnet_signal_post_for_signal(int signal_id, const char *signal_type, void
     // It is possible with the miliseconds that have passed the signal was reused...
     // Due to this being the case we will ensure it is the same signal type.. If it is then it is expecting the same data
     // therefore it is still valid
-    if (strncmp(signal->signal_type, signal_type, sizeof(signal->sem)) != 0)
+    if (strncmp(signal->signal_type, signal_type, sizeof(signal->signal_type)) != 0)
     {
         res = MAGICNET_ERROR_DATA_NO_LONGER_AVAILABLE;
         pthread_rwlock_unlock(&signal->signal_lock);
