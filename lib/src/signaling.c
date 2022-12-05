@@ -122,7 +122,7 @@ int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void
         pthread_rwlock_unlock(&signal->signal_lock);
         goto out;
     }
-    *data_out = vector_back_ptr(signal->data_vec);
+    *data_out = vector_back_ptr_or_null(signal->data_vec);
     pthread_rwlock_unlock(&signal->signal_lock);
 
     if (s != -1)
