@@ -348,6 +348,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         goto out;
     }
 
+    magicnet_log("%s asking network for key\n", __FUNCTION__);
     magicnet_signed_data(req_packet)->type = MAGICNET_PACKET_TYPE_REQUEST_BLOCK;
     magicnet_signed_data(req_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     strncpy(magicnet_signed_data(req_packet)->payload.request_block.request_hash, hash_to_find.hash, sizeof(magicnet_signed_data(req_packet)->payload.request_block.request_hash));
@@ -356,9 +357,14 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     res = magicnet_server_add_packet_to_relay(downloader->server, req_packet);
     magicnet_server_unlock(downloader->server);
 
-    struct key* pub_key_who_has_hash = magicnet_signal_wait_timed(signal, 30);
-    magicnet_log("%s key received by signal %s\n", __FUNCTION__, pub_key_who_has_hash->key);
-    free(pub_key_who_has_hash);
+    struct key* key = NULL;
+    res =  magicnet_signal_wait_timed(signal, 30, (void**)&key);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to get response\n", __FUNCTION__);
+        goto out;
+    }
+
 out:
     magicnet_free_packet(req_packet);
     return 0;

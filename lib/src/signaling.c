@@ -34,8 +34,9 @@ int magicnet_signals_init()
         }
         else
         {
-            signals[i].id = rand() % (i * 1000) + (i * 1000) + 999; 
+            signals[i].id = rand() % (i * 1000) + (i * 1000) + 999;
         }
+        signals[i].index = i;
         signals[i].free = true;
     }
 
@@ -43,7 +44,7 @@ out:
     return res;
 }
 
-void magicnet_signal_free(struct magicnet_signal* signal)
+void magicnet_signal_free(struct magicnet_signal *signal)
 {
     sem_destroy(&signal->sem);
     pthread_rwlock_destroy(&signal->signal_lock);
@@ -65,8 +66,7 @@ void magicnet_signals_free()
     }
 }
 
-
-struct magicnet_signal *magicnet_signal_find_free(const char* signal_type)
+struct magicnet_signal *magicnet_signal_find_free(const char *signal_type)
 {
     for (int i = 0; i < MAGICNET_MAX_SIGNALING_SIGNALS; i++)
     {
@@ -84,9 +84,18 @@ struct magicnet_signal *magicnet_signal_find_free(const char* signal_type)
     return NULL;
 }
 
-void *magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds)
+int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void** data_out)
 {
-    void *data = NULL;
+    int res = -1;
+    char signal_type[MAGICNET_MAX_SIGNAL_TYPE_NAME];
+    int signal_id = -1;
+
+    // There is a possibility the signal would be recycled even though we are waiting, for this reason
+    // we will store the current signal type and ID. If they differ when returning from the semaphore we know
+    // that theirs been a problem
+    strncpy(signal_type, signal->signal_type, sizeof(signal_type));
+    signal_id = signal->id;
+
     struct timespec ts;
     if (clock_gettime(CLOCK_REALTIME, &ts) == -1)
     {
@@ -99,24 +108,34 @@ void *magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds)
     while ((s = sem_timedwait(&signal->sem, &ts)) == -1 && errno == EINTR)
         continue;
 
+    pthread_rwlock_rdlock(&signal->signal_lock);
+    if (signal_id != signal->id || strncmp(signal_type, signal->signal_type, sizeof(signal_type)) != 0)
+    {
+        res = -1;
+        pthread_rwlock_unlock(&signal->signal_lock);
+        goto out;
+    }
+    *data_out = vector_back_ptr(signal->data_vec);
+    pthread_rwlock_unlock(&signal->signal_lock);
+
     if (s != -1)
     {
-        pthread_rwlock_wrlock(&signal->signal_lock);
-        data = signal->data;
-        pthread_rwlock_unlock(&signal->signal_lock);
+        res = 0;
+        goto out;
     }
 
+
 out:
-    return data;
+    return res;
 }
 
-struct magicnet_signal* magicnet_signal_get_by_id_and_type(const char* signal_type, int id)
+struct magicnet_signal *magicnet_signal_get_by_id_and_type(const char *signal_type, int id)
 {
-    struct magicnet_signal* signal = NULL;
+    struct magicnet_signal *signal = NULL;
     for (int i = 0; i < MAGICNET_MAX_SIGNALING_SIGNALS; i++)
     {
         pthread_rwlock_rdlock(&signals[i].signal_lock);
-        if (!signals[i].free && signals[i].id == id && 
+        if (!signals[i].free && signals[i].id == id &&
             strncmp(signals[i].signal_type, signal_type, sizeof(signals[i].signal_type)) == 0)
         {
             // Match found.
@@ -128,10 +147,12 @@ struct magicnet_signal* magicnet_signal_get_by_id_and_type(const char* signal_ty
     return signal;
 }
 
-int magicnet_signal_post(struct magicnet_signal *signal, void *data)
+int magicnet_signal_post(struct magicnet_signal *signal, void *data, size_t size)
 {
+    void *data_clone = malloc(size);
+    memcpy(data_clone, data, size);
     pthread_rwlock_wrlock(&signal->signal_lock);
-    signal->data = data;
+    vector_push(signal->data_vec, &data_clone);
 
     if (sem_post(&signal->sem) == -1)
     {
@@ -144,16 +165,19 @@ int magicnet_signal_post(struct magicnet_signal *signal, void *data)
     return 0;
 }
 
-int magicnet_signal_post_for_signal(int signal_id, const char* signal_type, void* data)
+int magicnet_signal_post_for_signal(int signal_id, const char *signal_type, void *data, size_t size)
 {
     int res = 0;
-    
-    struct magicnet_signal* signal = magicnet_signal_get_by_id_and_type(signal_type, signal_id);
+
+    struct magicnet_signal *signal = magicnet_signal_get_by_id_and_type(signal_type, signal_id);
     if (!signal)
     {
         res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
+
+    void *data_clone = malloc(size);
+    memcpy(data_clone, data, size);
 
     pthread_rwlock_wrlock(&signal->signal_lock);
     // It is possible with the miliseconds that have passed the signal was reused...
@@ -165,14 +189,14 @@ int magicnet_signal_post_for_signal(int signal_id, const char* signal_type, void
         pthread_rwlock_unlock(&signal->signal_lock);
         goto out;
     }
-    signal->data = data;
+    vector_push(signal->data_vec, &data_clone);
 
     if (sem_post(&signal->sem) == -1)
     {
         magicnet_error("%s post problem\n", __FUNCTION__);
         pthread_rwlock_unlock(&signal->signal_lock);
         res = -1;
-        goto out;   
+        goto out;
     }
 
     pthread_rwlock_unlock(&signal->signal_lock);
@@ -180,12 +204,27 @@ int magicnet_signal_post_for_signal(int signal_id, const char* signal_type, void
 out:
     return res;
 }
+
 void magicnet_signal_release(struct magicnet_signal *signal)
 {
     pthread_rwlock_wrlock(&signal->signal_lock);
     signal->free = true;
-    signal->data = NULL;
+    for (int i = 0; i < vector_count(signal->data_vec); i++)
+    {
+        free(&signal->data_vec[i]);
+    }
 
+    vector_free(signal->data_vec);
+    signal->data_vec = vector_create(sizeof(void *));
+    memset(signal->signal_type, 0, sizeof(signal->signal_type));
+    if (signal->index == 0)
+    {
+        signal->id = rand() % 999;
+    }
+    else
+    {
+        signal->id = (rand() % (signal->index * 1000) + (signal->index * 1000)) + 999;
+    }
     int sem_value = 0;
     sem_getvalue(&signal->sem, &sem_value);
     for (int i = 0; i < sem_value; i++)

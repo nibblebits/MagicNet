@@ -2649,11 +2649,7 @@ int magicnet_client_process_request_block_response_packet(struct magicnet_client
         goto out;
     }
 
-    // Clone the public key of the client who sent the response packet.
-    // Then post it to the signal. Signal waiter will be responsible to free the memory.
-    struct key* key = calloc(1, sizeof(struct key));
-    memcpy(key, &packet->pub_key, sizeof(struct key));
-    magicnet_signal_post(signal, key);
+    magicnet_signal_post_for_signal(magicnet_signed_data(packet)->payload.request_block_response.signal_id, "downloader-req-block-signal", &packet->pub_key, sizeof(struct key));
 
 out:
     return res;
