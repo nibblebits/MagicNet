@@ -49,11 +49,13 @@ void magicnet_signal_free(struct magicnet_signal *signal)
 {
     sem_destroy(&signal->sem);
     pthread_rwlock_destroy(&signal->signal_lock);
-    for (int i = 0; i < vector_count(signal->data_vec); i++)
+    vector_set_peek_pointer(signal->data_vec, 0);
+    void* data_ptr = vector_peek_ptr(signal->data_vec);
+    while(data_ptr)
     {
-        free(&signal->data_vec[i]);
+        free(data_ptr);
+        data_ptr = vector_peek_ptr(signal->data_vec);
     }
-
     vector_free(signal->data_vec);
 }
 
@@ -222,9 +224,12 @@ void magicnet_signal_release(struct magicnet_signal *signal)
 {
     pthread_rwlock_wrlock(&signal->signal_lock);
     signal->free = true;
-    for (int i = 0; i < vector_count(signal->data_vec); i++)
+    vector_set_peek_pointer(signal->data_vec, 0);
+    void* data_ptr = vector_peek_ptr(signal->data_vec);
+    while(data_ptr)
     {
-        free(&signal->data_vec[i]);
+        free(data_ptr);
+        data_ptr = vector_peek_ptr(signal->data_vec);
     }
 
     vector_free(signal->data_vec);

@@ -366,6 +366,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     }
 
     magicnet_log("%s key=%s\n", __FUNCTION__, key->key);
+    magicnet_signal_release(signal);
 
 out:
     magicnet_free_packet(req_packet);
