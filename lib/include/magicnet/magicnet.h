@@ -45,6 +45,8 @@ enum
     // A group of up to 100 blocks sent back. When we request a block the sender can send the next 100 we asked for.
     MAGICNET_PACKET_TYPE_GROUP_OF_BLOCKS,
     MAGICNET_PACKET_TYPE_BLOCK_SEND,
+    // When sent to a client a new connection will be made to the person who sent it. This packet must not be relayed
+    MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
@@ -73,7 +75,8 @@ enum
     MAGICNET_ERROR_TOO_LARGE = -1006,
     // Sent when data was believed to be available but during a running algorithm the data became non-existant or incorrect.
     MAGICNET_ERROR_DATA_NO_LONGER_AVAILABLE = -1007,
-    
+    MAGICNET_ERROR_INCOMPATIBLE = -1008,
+
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
     MAGICNET_ERROR_CRITICAL_ERROR = -1,
@@ -193,6 +196,7 @@ struct magicnet_packet
                 {
                     // The entry ID for the connection. Sent by connector so we know how to route the controller of the new client.
                     int entry_id;
+                    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
                 } new_connection;
 
                 struct magicnet_block_send
@@ -245,6 +249,7 @@ struct magicnet_peer_information
     char email[MAGICNET_MAX_EMAIL_SIZE];
     int found_out;
 };
+
 
 struct magicnet_client
 {
@@ -500,8 +505,8 @@ struct block
     int blockchain_id;
 };
 
-struct magicnet_chain_downloader;
 
+struct magicnet_chain_downloader;
 struct magicnet_chain_downloader_hash_to_download
 {
     char hash[SHA256_STRING_LENGTH];
@@ -555,7 +560,16 @@ enum
     MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
     // True if this connection is from an IP address on our local machine.
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
+    // True if this client is an outgoing connection made with connect()
+    MAGICNET_CLIENT_FLAG_IS_OUTGOING_CONNECTION = 0b00001000,
+};
 
+enum
+{
+    // An outgoing connection type means that we connected to a server
+    MAGICNET_CONNECTION_TYPE_OUTGOING,
+    // An incoming connection type means that a server connected to us.
+    MAGICNET_CONNECTION_TYPE_INCOMING,
 };
 
 int magicnet_chain_downloader_queue_for_block_download(const char *block_hash);
@@ -570,6 +584,9 @@ void magicnet_client_free(struct magicnet_client* client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 void magicnet_close_and_free(struct magicnet_client* client);
+int magicnet_client_connection_type(struct magicnet_client* client);
+struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char* program_name);
+
 
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet);
 

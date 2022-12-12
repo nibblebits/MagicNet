@@ -50,8 +50,8 @@ void magicnet_signal_free(struct magicnet_signal *signal)
     sem_destroy(&signal->sem);
     pthread_rwlock_destroy(&signal->signal_lock);
     vector_set_peek_pointer(signal->data_vec, 0);
-    void* data_ptr = vector_peek_ptr(signal->data_vec);
-    while(data_ptr)
+    void *data_ptr = vector_peek_ptr(signal->data_vec);
+    while (data_ptr)
     {
         free(data_ptr);
         data_ptr = vector_peek_ptr(signal->data_vec);
@@ -125,12 +125,9 @@ int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void
         pthread_rwlock_unlock(&signal->signal_lock);
         goto out;
     }
-    *data_out = vector_back_ptr_or_null(signal->data_vec);
-    if (!(*data_out))
+    if (data_out)
     {
-        res = -1;
-        pthread_rwlock_unlock(&signal->signal_lock);
-        goto out;
+        *data_out = vector_back_ptr_or_null(signal->data_vec);
     }
     pthread_rwlock_unlock(&signal->signal_lock);
 
@@ -164,11 +161,19 @@ struct magicnet_signal *magicnet_signal_get_by_id_and_type(const char *signal_ty
 
 int magicnet_signal_post(struct magicnet_signal *signal, void *data, size_t size)
 {
-    void *data_clone = malloc(size);
-    memcpy(data_clone, data, size);
-    pthread_rwlock_wrlock(&signal->signal_lock);
-    vector_push(signal->data_vec, &data_clone);
+    void *data_clone = NULL;
 
+    if (data)
+    {
+        data_clone = malloc(size);
+        memcpy(data_clone, data, size);
+    }
+    pthread_rwlock_wrlock(&signal->signal_lock);
+    if (data)
+    {
+        vector_push(signal->data_vec, &data_clone);
+    }
+    
     if (sem_post(&signal->sem) == -1)
     {
         magicnet_error("%s post problem\n", __FUNCTION__);
@@ -183,7 +188,7 @@ int magicnet_signal_post(struct magicnet_signal *signal, void *data, size_t size
 int magicnet_signal_post_for_signal(int signal_id, const char *signal_type, void *data, size_t size)
 {
     int res = 0;
-
+    void *data_clone = NULL;
     struct magicnet_signal *signal = magicnet_signal_get_by_id_and_type(signal_type, signal_id);
     if (!signal)
     {
@@ -191,9 +196,11 @@ int magicnet_signal_post_for_signal(int signal_id, const char *signal_type, void
         goto out;
     }
 
-    void *data_clone = malloc(size);
-    memcpy(data_clone, data, size);
-
+    if (data)
+    {
+        data_clone = malloc(size);
+        memcpy(data_clone, data, size);
+    }
     pthread_rwlock_wrlock(&signal->signal_lock);
     // It is possible with the miliseconds that have passed the signal was reused...
     // Due to this being the case we will ensure it is the same signal type.. If it is then it is expecting the same data
@@ -204,7 +211,11 @@ int magicnet_signal_post_for_signal(int signal_id, const char *signal_type, void
         pthread_rwlock_unlock(&signal->signal_lock);
         goto out;
     }
-    vector_push(signal->data_vec, &data_clone);
+
+    if (data)
+    {
+        vector_push(signal->data_vec, &data_clone);
+    }
 
     if (sem_post(&signal->sem) == -1)
     {
@@ -225,8 +236,8 @@ void magicnet_signal_release(struct magicnet_signal *signal)
     pthread_rwlock_wrlock(&signal->signal_lock);
     signal->free = true;
     vector_set_peek_pointer(signal->data_vec, 0);
-    void* data_ptr = vector_peek_ptr(signal->data_vec);
-    while(data_ptr)
+    void *data_ptr = vector_peek_ptr(signal->data_vec);
+    while (data_ptr)
     {
         free(data_ptr);
         data_ptr = vector_peek_ptr(signal->data_vec);

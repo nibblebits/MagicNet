@@ -318,6 +318,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     int res = 0;
     struct magicnet_chain_downloader_hash_to_download hash_to_find;
     struct magicnet_chain_downloader_hash_to_download *hash = NULL;
+    struct magicnet_signal* signal = NULL;
     struct magicnet_packet *req_packet = magicnet_packet_new();
     pthread_mutex_lock(&downloads.lock);
     vector_set_peek_pointer(downloader->hashes_to_download, 0);
@@ -341,7 +342,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         goto out;
     }
 
-    struct magicnet_signal* signal = magicnet_signal_find_free("downloader-req-block-signal");
+    signal = magicnet_signal_find_free("downloader-req-block-signal");
     if (!signal)
     {
         magicnet_log("%s we are out of signals for now\n", __FUNCTION__);
@@ -359,16 +360,19 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
 
     struct key* key = NULL;
     res =  magicnet_signal_wait_timed(signal, 30, (void**)&key);
-    if (res < 0)
+    if (res < 0 || !key)
     {
         magicnet_log("%s failed to get response\n", __FUNCTION__);
         goto out;
     }
 
     magicnet_log("%s key=%s\n", __FUNCTION__, key->key);
-    magicnet_signal_release(signal);
-
+ 
 out:
+    if (signal)
+    {
+        magicnet_signal_release(signal);
+    }
     magicnet_free_packet(req_packet);
     return 0;
 }

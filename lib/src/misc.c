@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+
 
 bool file_exists(const char *filename)
 {
