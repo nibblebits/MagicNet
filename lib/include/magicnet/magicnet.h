@@ -585,8 +585,9 @@ bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 void magicnet_close_and_free(struct magicnet_client* client);
 int magicnet_client_connection_type(struct magicnet_client* client);
-struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char* program_name);
-
+struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
+struct magicnet_client *magicnet_connect_for_key(struct magicnet_server* server, struct key *key, const char *program_name);
+#
 
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet);
 

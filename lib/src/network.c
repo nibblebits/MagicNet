@@ -2299,9 +2299,13 @@ struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, c
     {
         cloned_client = magicnet_connect_again_outgoing(client, program_name);
     }
+    else if(conn_type == MAGICNET_CONNECTION_TYPE_INCOMING)
+    {
+       cloned_client = magicnet_connect_again_incoming(client, program_name);
+    }
     else
     {
-        magicnet_log("%s TODO implement incoming connections\n", __FUNCTION__);
+        magicnet_log("%s unsure how to connect to the client", __FUNCTION__);
     }
 
     return cloned_client;

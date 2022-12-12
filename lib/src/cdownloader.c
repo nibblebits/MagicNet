@@ -367,7 +367,16 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     }
 
     magicnet_log("%s key=%s\n", __FUNCTION__, key->key);
- 
+
+    magicnet_log("%s attempting to connect to key\n", __FUNCTION__);
+    struct magicnet_client* new_client = magicnet_connect_for_key(downloader->server, key, "chain-downloader");
+    if (!new_client)
+    {
+        magicnet_log("%s FAILED\n", __FUNCTION__);
+        goto out;
+    }
+
+    magicnet_log("%s connected to key\n", __FUNCTION__);
 out:
     if (signal)
     {
