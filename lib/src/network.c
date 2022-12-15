@@ -197,7 +197,6 @@ const char *magicnet_ip_count_get_dominant(struct vector *ip_count_vec)
     return NULL;
 }
 
-
 void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 {
     struct vector *ip_vec = vector_create(sizeof(struct magicnet_ip_count *));
@@ -686,7 +685,10 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
     }
 }
 
-struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name)
+/**
+ * Connects to an IP address and returns a client.
+ */
+struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id)
 {
     int sockfd;
     struct sockaddr_in servaddr, cli;
@@ -753,7 +755,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
     }
 
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0);
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, signal_id);
     if (res < 0)
     {
         magicnet_server_lock(server);
@@ -1375,7 +1377,6 @@ out:
     return res;
 }
 
-
 int magicnet_client_read_tansaction_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1855,7 +1856,6 @@ out:
     return res;
 }
 
-
 int magicnet_client_write_packet_make_new_connection(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -2146,7 +2146,7 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     {
         mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
     }
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, communication_flags);
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, communication_flags, 0);
     if (res < 0)
     {
         magicnet_close(mclient);
@@ -2226,7 +2226,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     {
         mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
     }
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0);
+    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, 0);
     if (res < 0)
     {
         magicnet_close(mclient);
@@ -2240,27 +2240,26 @@ struct magicnet_client *magicnet_connect_again_outgoing(struct magicnet_client *
     const char *client_ip = inet_ntoa(client->client_info.sin_addr);
     char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
     strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
-    return magicnet_tcp_network_connect_for_ip_for_server(client->server, client_ip_buf, MAGICNET_SERVER_PORT, program_name);
+    return magicnet_tcp_network_connect_for_ip_for_server(client->server, client_ip_buf, MAGICNET_SERVER_PORT, program_name, 0);
 }
 
 // copilot write a function that sums to numbers
 
-
-struct magicnet_client* magicnet_connect_again_incoming(struct magicnet_client* client, const char* program_name)
+struct magicnet_client *magicnet_connect_again_incoming(struct magicnet_client *client, const char *program_name)
 {
     // Connecting again to this client will be complicated in this respect because they are connected to us
     // their firewall likely wont allow us to connect to them since we accepted their initial connection
     // therefore we must send them a command to connect to us again then intercept the connection
     int res = 0;
-    struct magicnet_client* client_out = NULL;
-    struct magicnet_signal* signal = magicnet_signal_find_free("connect-again-signal");
+    struct magicnet_client *client_out = NULL;
+    struct magicnet_signal *signal = magicnet_signal_find_free("connect-again-signal");
     if (!signal)
     {
         return NULL;
     }
 
     // let's relay a packet to the client asking them to connect to us
-    struct magicnet_packet* packet = magicnet_packet_new();
+    struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->payload.new_connection.entry_id = signal->id;
@@ -2270,9 +2269,9 @@ struct magicnet_client* magicnet_connect_again_incoming(struct magicnet_client* 
     {
         goto out;
     }
-    
+
     // Let us now wait for the incoming signal.
-    res = magicnet_signal_wait_timed(signal, 30, (void**) &client_out);
+    res = magicnet_signal_wait_timed(signal, 30, (void **)&client_out);
     if (res < 0)
     {
         magicnet_log("%s nobody connected to us\n", __FUNCTION__);
@@ -2302,9 +2301,9 @@ struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, c
     {
         cloned_client = magicnet_connect_again_outgoing(client, program_name);
     }
-    else if(conn_type == MAGICNET_CONNECTION_TYPE_INCOMING)
+    else if (conn_type == MAGICNET_CONNECTION_TYPE_INCOMING)
     {
-       cloned_client = magicnet_connect_again_incoming(client, program_name);
+        cloned_client = magicnet_connect_again_incoming(client, program_name);
     }
     else
     {
@@ -2314,7 +2313,7 @@ struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, c
     return cloned_client;
 }
 
-struct magicnet_client *magicnet_connect_for_key(struct magicnet_server* server, struct key *key, const char *program_name)
+struct magicnet_client *magicnet_connect_for_key(struct magicnet_server *server, struct key *key, const char *program_name)
 {
     // Let's see if we can find someone whose already connected with us with that client key.
     struct magicnet_client *key_client = magicnet_server_get_client_with_key(server, key);
@@ -3075,6 +3074,15 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
         goto out;
     }
 
+    // Read the signal id
+    int signal_id = magicnet_read_int(client, NULL);
+    if (signal_id < 0)
+    {
+        // Show error message then goto out
+        magicnet_log("%s failed to read signal id\n", __FUNCTION__);
+        goto out;
+    }
+
     int communication_flags = magicnet_read_int(client, NULL);
     if (communication_flags < 0)
     {
@@ -3149,6 +3157,7 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
     }
 
     client->communication_flags = communication_flags;
+    client->signal_id = signal_id;
 out:
     return res;
 }
@@ -3238,10 +3247,17 @@ out:
     }
     return res;
 }
-int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags)
+int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id)
 {
     int res = 0;
     res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE, NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // 0 = no signal
+    res = magicent_write_int(client, signal_id);
     if (res < 0)
     {
         goto out;
@@ -3522,6 +3538,27 @@ int magicnet_server_process_make_new_connection_packet(struct magicnet_client *c
 {
     int res = 0;
     magicnet_log("%s request for us to make new connection\n", __FUNCTION__);
+
+    // Create a variable that points to the program name of this connection packet
+    char *program_name = magicnet_signed_data(packet)->payload.new_connection.program_name;
+
+    // Extract the ip address from the packet client information and convert it to a string
+    char *ip = inet_ntoa(client->client_info.sin_addr);
+
+    // Connect to the client with a new connection
+    struct magicnet_client *new_client = magicnet_tcp_network_connect_for_ip_for_server(client->server, ip, MAGICNET_SERVER_PORT, program_name, magicnet_signed_data(packet)->payload.new_connection.entry_id);
+    if (client)
+    {
+        pthread_t threadId;
+        if (pthread_create(&threadId, NULL, &magicnet_server_client_thread, new_client))
+        {
+            // Error thread not created.
+            return -1;
+        }
+    }
+
+    magicnet_log("%s new server thread is running that will handle this new connection\n", __FUNCTION__);
+
     return res;
 }
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
@@ -3682,6 +3719,15 @@ void *magicnet_client_thread(void *_client)
         goto out;
     }
 
+    // This code will release the thread waiting on the semaphore for the signal.
+    if (client->signal_id)
+    {
+        magicnet_signal_post_for_signal(client->signal_id, "connect-again-signal", NULL, 0);
+        // Now the waiting thread is in charge of the client we will leave this thread and let the waiting thread take over being sure not
+        // to free the memory of the client
+        goto out;
+    }
+
     if (client->server)
     {
         magicnet_server_lock(client->server);
@@ -3707,13 +3753,21 @@ out:
     if (client->server)
     {
         magicnet_server_lock(client->server);
-        magicnet_close(client);
+        // Only when theirs no signal who has taken over this client will we free the client
+        if (!client->signal_id)
+        {
+            magicnet_close(client);
+        }
         magicnet_server_remove_thread(client->server, pthread_self());
         magicnet_server_unlock(client->server);
     }
     else
     {
-        magicnet_close(client);
+        // Only when theirs no signal who has taken over this client will we free the client
+        if (!client->signal_id)
+        {
+            magicnet_close(client);
+        }
     }
     return NULL;
 }

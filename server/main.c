@@ -77,7 +77,6 @@ void *sig_int_listener_thread(void *ptr)
     }
 }
 
-
 int main(int argc, char **argv)
 {
     int res = 0;

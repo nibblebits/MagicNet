@@ -295,6 +295,12 @@ struct magicnet_client
 
     time_t reset_max_bytes_to_recv_at;
 
+
+    // signal id variable If this is non zero then upon a connection being accepted we will post the semaphore
+    // giving control to the signal. We will not process this client on its own thread and any existing thread will be killed
+    // when it is found that the signal is present
+    int signal_id;
+    
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
 
     /**
@@ -657,7 +663,7 @@ struct magicnet_program *magicnet_program(const char *name);
 
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
-struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name);
+struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id);
 
 void magicnet_server_free(struct magicnet_server* server);
 /**
