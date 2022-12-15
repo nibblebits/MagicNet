@@ -47,6 +47,11 @@ enum
     MAGICNET_PACKET_TYPE_BLOCK_SEND,
     // When sent to a client a new connection will be made to the person who sent it. This packet must not be relayed
     MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION,
+    // Super downloads allow a client to download a large amount of blocks from the peer without the natural delay
+    // caused by other packets. The download is done 20 blocks at a time in a single packet.
+    MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST,
+    // Sent when theirs no more blocks to send. Also sent if the inital start block couldnt be found.
+    MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_DONE,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
@@ -232,6 +237,13 @@ struct magicnet_packet
                     // Vector of struct block* 
                     struct vector* blocks;
                 } block_group_send;
+
+                struct magicnet_block_super_download
+                {
+                    char begin_hash[SHA256_STRING_LENGTH];
+                    size_t total_blocks_to_request;
+                } block_super_download;
+
             };
         } payload;
     } signed_data;
@@ -618,6 +630,7 @@ struct magicnet_client *magicnet_connect_for_key(struct magicnet_server* server,
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet);
 
 struct signed_data *magicnet_signed_data(struct magicnet_packet *packet);
+
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);

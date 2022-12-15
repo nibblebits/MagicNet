@@ -1377,6 +1377,32 @@ out:
     return res;
 }
 
+/**
+ * Function that reads the magicnet_block_super_download packet from the client
+ * @param client the client to read from
+ * @param packet_out the packet to fill
+ * @return 0 on success, negative on error
+ *
+ * Reads the request hash and then the total blocks requested
+ */
+int magicnet_client_read_block_super_download_request_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = 0;
+    res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.block_super_download.begin_hash, sizeof(magicnet_signed_data(packet_out)->payload.block_super_download.begin_hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    magicnet_signed_data(packet_out)->payload.block_super_download.total_blocks_to_request = res;
+out:
+    return res;
+}
+
 int magicnet_client_read_tansaction_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1526,6 +1552,11 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
         res = magicnet_client_read_make_new_connection_packet(client, packet_out);
         break;
+
+    case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
+        res = magicnet_client_read_block_super_download_request_packet(client, packet_out);
+        break;
+
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
         res = magicnet_client_read_not_found_packet(client, packet_out);
         if (res < 0)
@@ -1875,6 +1906,24 @@ out:
     return res;
 }
 
+int magicnet_client_write_packet_block_super_download_request(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.block_super_download.begin_hash, sizeof(magicnet_signed_data(packet)->payload.block_super_download.begin_hash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.block_super_download.total_blocks_to_request, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
+    return res;
+}
+
 int magicnet_client_write_packet_transaction_send(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -1987,6 +2036,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
         res = magicnet_client_write_packet_make_new_connection(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
+        res = magicnet_client_write_packet_block_super_download_request(client, packet);
         break;
     }
 
@@ -2278,7 +2331,7 @@ struct magicnet_client *magicnet_connect_again_incoming(struct magicnet_client *
         goto out;
     }
 
-    magicnet_log("%s new incoming connection initiated", __FUNCTION__);
+    magicnet_log("%s new incoming connection initiated\n", __FUNCTION__);
 out:
     return client_out;
 }
@@ -2307,7 +2360,7 @@ struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, c
     }
     else
     {
-        magicnet_log("%s unsure how to connect to the client", __FUNCTION__);
+        magicnet_log("%s unsure how to connect to the client\n", __FUNCTION__);
     }
 
     return cloned_client;
@@ -3563,6 +3616,90 @@ int magicnet_server_process_make_new_connection_packet(struct magicnet_client *c
 
     return res;
 }
+
+// Helper function to send a single block
+int magicnet_client_send_single_block(struct magicnet_client *client, struct block *block)
+{
+    int res = 0;
+    magicnet_log("%s sending block %s\n", __FUNCTION__, block->hash);
+    struct block_transaction_group *transaction_group = block_transaction_group_new();
+    struct magicnet_packet *packet = magicnet_packet_new();
+    // The block vector holds the blocks to send
+    struct vector *block_vector = vector_create(sizeof(struct block *));
+
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(packet)->payload.block_send.blocks = block_vector;
+    magicnet_signed_data(packet)->payload.block_send.transaction_group = block->transaction_group;
+    vector_push(block_vector, &block);
+    res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to send block %s\n", __FUNCTION__, block->hash);
+        goto out;
+    }
+
+    magicnet_free_packet(packet);
+
+out:
+    return res;
+}
+
+int magicnet_client_process_block_super_download_request_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    const char *starting_hash = magicnet_signed_data(packet)->payload.block_super_download.begin_hash;
+    size_t total_blocks_to_load = magicnet_signed_data(packet)->payload.block_super_download.total_blocks_to_request;
+    char current_hash[SHA256_STRING_LENGTH];
+
+    // Initialize the hash
+    strncpy(current_hash, starting_hash, sizeof(current_hash));
+
+    // Loop through all of the blocks to load
+    while (total_blocks_to_load > 0)
+    {
+        // Load the block
+        struct block *block = block_load(current_hash);
+        if (!block)
+        {
+            magicnet_log("%s Failed to load block %s\n", __FUNCTION__, current_hash);
+            res = -1;
+            goto out;
+        }
+
+        // Send the block
+        res = magicnet_client_send_single_block(client, block);
+        if (res < 0)
+        {
+            goto out;
+        }
+
+        // Move to the next block
+        strncpy(current_hash, block->prev_hash, sizeof(current_hash));
+        block_free(block);
+        total_blocks_to_load--;
+    }
+
+    // Now we must send a done packet
+    struct magicnet_packet *done_packet = magicnet_packet_new();
+    magicnet_signed_data(done_packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_DONE;
+    magicnet_signed_data(done_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    res = magicnet_client_write_packet(client, done_packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to send block super download done packet\n", __FUNCTION__);
+        // free the done packet
+        magicnet_free_packet(done_packet);
+        goto out;
+    }
+
+    // free the done packet
+    magicnet_free_packet(done_packet);
+
+out:
+    return res;
+}
+
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -3606,6 +3743,10 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
         res = magicnet_server_process_make_new_connection_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
+        res = magicnet_client_process_block_super_download_request_packet(client, packet);
         break;
     };
 
@@ -3721,10 +3862,9 @@ void *magicnet_client_thread(void *_client)
         goto out;
     }
 
-    // This code will release the thread waiting on the semaphore for the signal.
     if (client->signal_id)
     {
-        magicnet_signal_post_for_signal(client->signal_id, "connect-again-signal", NULL, 0);
+        magicnet_signal_post_for_signal(client->signal_id, "connect-again-signal", client, sizeof(client));
         // Now the waiting thread is in charge of the client we will leave this thread and let the waiting thread take over being sure not
         // to free the memory of the client
         goto out;

@@ -318,7 +318,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     int res = 0;
     struct magicnet_chain_downloader_hash_to_download hash_to_find;
     struct magicnet_chain_downloader_hash_to_download *hash = NULL;
-    struct magicnet_signal* signal = NULL;
+    struct magicnet_signal *signal = NULL;
     struct magicnet_packet *req_packet = magicnet_packet_new();
     pthread_mutex_lock(&downloads.lock);
     vector_set_peek_pointer(downloader->hashes_to_download, 0);
@@ -349,7 +349,6 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         goto out;
     }
 
-    
     magicnet_log("%s asking network for key\n", __FUNCTION__);
     magicnet_signed_data(req_packet)->type = MAGICNET_PACKET_TYPE_REQUEST_BLOCK;
     magicnet_signed_data(req_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
@@ -359,8 +358,8 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     res = magicnet_server_add_packet_to_relay(downloader->server, req_packet);
     magicnet_server_unlock(downloader->server);
 
-    struct key* key = NULL;
-    res =  magicnet_signal_wait_timed(signal, 30, (void**)&key);
+    struct key *key = NULL;
+    res = magicnet_signal_wait_timed(signal, 30, (void **)&key);
     if (res < 0 || !key)
     {
         magicnet_log("%s failed to get response\n", __FUNCTION__);
@@ -370,7 +369,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     magicnet_log("%s key=%s\n", __FUNCTION__, key->key);
 
     magicnet_log("%s attempting to connect to key\n", __FUNCTION__);
-    struct magicnet_client* new_client = magicnet_connect_for_key(downloader->server, key, "chain-downloader");
+    struct magicnet_client *new_client = magicnet_connect_for_key(downloader->server, key, "chain-downloader");
     if (!new_client)
     {
         magicnet_log("%s FAILED\n", __FUNCTION__);
@@ -378,6 +377,69 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     }
 
     magicnet_log("%s connected to key\n", __FUNCTION__);
+
+    // We have a client now, lets download as many blocks as we can
+    struct magicnet_packet *super_download_packet = magicnet_packet_new();
+    magicnet_signed_data(super_download_packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST;
+    magicnet_signed_data(super_download_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    strncpy(magicnet_signed_data(super_download_packet)->payload.block_super_download.begin_hash, hash_to_find.hash, sizeof(magicnet_signed_data(super_download_packet)->payload.block_super_download.begin_hash));
+    magicnet_signed_data(super_download_packet)->payload.block_super_download.total_blocks_to_request = MAGICNET_MAX_BLOCK_SUPER_DOWNLOAD_REQUEST_BLOCK_COUNT;
+    res = magicnet_client_write_packet(new_client, super_download_packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to write super download request\n", __FUNCTION__);
+        goto out;
+    }
+
+
+    // Now we expect right away a response with the blocks
+    // Loop through all the blocks sent to us and download them
+    char last_prev_hash[SHA256_STRING_LENGTH] = {0};
+    for (int i = 0; i < MAGICNET_MAX_BLOCK_SUPER_DOWNLOAD_REQUEST_BLOCK_COUNT; i++)
+    {
+        struct magicnet_packet *super_download_response = magicnet_packet_new();
+
+        // Read the response packet from the client
+        res = magicnet_client_read_packet(new_client, super_download_response);
+        if (res < 0)
+        {
+            magicnet_log("%s failed to read super download response\n", __FUNCTION__);
+            goto out;
+        }
+
+        // Check if we are done  and for incorrect packets being sent to us.
+        if (magicnet_signed_data(super_download_response)->type == MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_DONE)
+        {
+            magicnet_log("%s super download done\n", __FUNCTION__);
+            goto out;
+        }
+        else if (magicnet_signed_data(super_download_response)->type != MAGICNET_PACKET_TYPE_BLOCK_SEND)
+        {
+            magicnet_log("%s super download response was not a block send packet or a done packet\n", __FUNCTION__);
+            goto out;
+        }
+
+        struct block *block = vector_back_ptr(magicnet_signed_data(super_download_response)->payload.block_send.blocks);
+        if (block)
+        {
+            magicnet_log("%s saving block %s\n", __FUNCTION__, block->hash);
+            block_save(block);
+            // Remove the block from the downloader hashes
+            magicnet_chain_downloaders_remove_hash(block);
+
+            strncpy(last_prev_hash, block->prev_hash, sizeof(last_prev_hash));
+        }
+        
+        magicnet_free_packet(super_download_response);
+    }
+
+    if (!sha256_empty(last_prev_hash))
+    {
+       // Add the previous hash back to the download queue so we can download the next block later
+       magicnet_log("%s still more to go adding prev hash %s to download queue", __FUNCTION__, last_prev_hash);
+       magicnet_chain_downloader_hash_add(downloader, last_prev_hash);
+    }
+
 out:
     if (signal)
     {
@@ -404,7 +466,6 @@ void magicnet_chain_downloader_check_blocks_received(struct magicnet_chain_downl
         hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
     }
 }
-
 
 struct magicnet_chain_downloader *magicnet_chain_downloader_get_with_thread_id_no_locks(pthread_t thread_id)
 {

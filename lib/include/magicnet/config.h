@@ -16,6 +16,8 @@
 #define MAGICNET_MAX_SIGNALING_SIGNALS 1024
 #define MAGICNET_MAX_SIGNAL_TYPE_NAME 32
 
+#define MAGICNET_MAX_BLOCK_SUPER_DOWNLOAD_REQUEST_BLOCK_COUNT 100
+
 // At least 10 seconds must pass for the server to attempt to connect to other peers
 #define MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS 10
 
