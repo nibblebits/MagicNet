@@ -3257,7 +3257,7 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     }
 
     // 0 = no signal
-    res = magicent_write_int(client, signal_id);
+    res = magicnet_write_int(client, signal_id, NULL);
     if (res < 0)
     {
         goto out;
@@ -3533,6 +3533,8 @@ out:
     magicnet_server_unlock(client->server);
     return res;
 }
+
+void *magicnet_server_client_thread(void *_client);
 
 int magicnet_server_process_make_new_connection_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -3917,7 +3919,7 @@ void magicnet_server_attempt_new_connections(struct magicnet_server *server)
         return;
     }
 
-    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip_for_server(server, ip, MAGICNET_SERVER_PORT, MAGICNET_LISTEN_ALL_PROGRAM);
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip_for_server(server, ip, MAGICNET_SERVER_PORT, MAGICNET_LISTEN_ALL_PROGRAM, 0);
     if (client)
     {
         pthread_t threadId;

@@ -300,7 +300,7 @@ struct magicnet_client
     // giving control to the signal. We will not process this client on its own thread and any existing thread will be killed
     // when it is found that the signal is present
     int signal_id;
-    
+
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
 
     /**
@@ -622,7 +622,7 @@ int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 struct magicnet_client *magicnet_accept(struct magicnet_server *server);
 int magicnet_client_thread_start(struct magicnet_client *client);
-int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags);
+int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
