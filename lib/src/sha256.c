@@ -4,6 +4,8 @@
 #include <memory.h>
 #include "config.h"
 #include "magicnet.h"
+
+
 bool sha256_empty(const char* hash)
 {
     char blank_hash[SHA256_STRING_LENGTH];

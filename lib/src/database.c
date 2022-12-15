@@ -59,6 +59,17 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 \"found_at\"	INTEGER, \
                                 PRIMARY KEY(\"id\" AUTOINCREMENT) \
                             );",
+
+                            // This query creates a table of banned peers
+                            // that will be used to prevent the server from
+                            // connecting to them.
+                            "CREATE TABLE \"banned_peers\" ( \
+                                \"id\"	INTEGER,        \
+                                \"ip_address\"	TEXT,   \
+                                \"key\"	BLOB,           \
+                                \"added_at\"	INTEGER, \
+                                \"banned_until\"	INTEGER, \
+                                PRIMARY KEY(\"id\" AUTOINCREMENT)",
                                NULL};
 
 const char *magicnet_database_path()
@@ -221,6 +232,61 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     }
 out:
     sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+
+/**
+ * THis function checks the banned peers table for the given ip address it then sets the output record if it exists which includes all columns and returns 0
+ * if it doesnt exist it returns not found
+ */
+int magicnet_database_banned_peer_load_by_ip(const char *ip_address, struct magicnet_banned_peer_information *peer_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    const char *get_random_ip_sql = "SELECT id, key, ip_address, banned_at, banned_until FROM banned_peers WHERE ip_address=?;";
+    res = sqlite3_prepare_v2(db, get_random_ip_sql, strlen(get_random_ip_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    res = sqlite3_bind_text(stmt, 1, ip_address, strlen(ip_address), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    if (peer_out)
+    {
+        peer_out->id = sqlite3_column_int(stmt, 0);
+        if (sqlite3_column_blob(stmt, 1))
+        {
+            memcpy(&peer_out->key.key, sqlite3_column_blob(stmt, 1), sizeof(peer_out->key.key));
+        }
+        if (sqlite3_column_text(stmt, 2))
+        {
+            strncpy(peer_out->ip_address, sqlite3_column_text(stmt, 2), sizeof(peer_out->ip_address));
+        }
+        peer_out->banned_at = sqlite3_column_int(stmt, 3);
+        peer_out->banned_until = sqlite3_column_int(stmt, 4);
+    }
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
     pthread_mutex_unlock(&db_lock);
     return res;
 }

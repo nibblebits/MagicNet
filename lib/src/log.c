@@ -57,3 +57,23 @@ int magicnet_log(const char* message, ...)
     return -1;
     #endif
 }
+
+
+/*
+  This is a log function for only the most serious of problems
+*/
+int magicnet_critical(const char* message, ...)
+{
+    #ifdef MAGICNET_SHOW_CRITICAL_LOGS
+    pthread_mutex_lock(&log_lock);
+    va_list args;
+    va_start(args, message);
+    vfprintf(stdout, message, args);
+    va_end(args);
+    fflush(stdout);
+    pthread_mutex_unlock(&log_lock);
+    return 0;
+    #else
+    return -1;
+    #endif
+}

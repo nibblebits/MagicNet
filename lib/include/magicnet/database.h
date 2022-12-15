@@ -31,6 +31,8 @@ int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet
 int magicnet_database_keys_create(struct key* pub_key, struct key* pri_key);
 int magicnet_database_keys_set_default(struct key* pub_key);
 int magicnet_database_keys_get_active(struct key* key_pub_out, struct key* key_pri_out);
+int magicnet_database_banned_peer_load_by_ip(const char *ip_address, struct magicnet_banned_peer_information *peer_out);
+
 /**
  * Creates a new blockchain 
  */

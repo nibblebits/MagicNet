@@ -96,6 +96,8 @@ enum
 };
 
 
+
+
 struct block;
 struct blockchain;
 
@@ -461,6 +463,24 @@ struct block_transaction
 };
 
 
+/**
+ * This is a structure representing banned peer information it represents the table in database.c
+ */
+struct magicnet_banned_peer_information
+{
+    int id;
+
+    // The ip address of the banned peer
+    char ip_address[MAGICNET_MAX_IP_STRING_SIZE];
+
+    struct key key;
+
+    // The time the peer was banned
+    time_t banned_at;
+    // The time the peer will be unbanned
+    time_t banned_until;
+};
+
 enum
 {
     // MAGICNET_BLOCKCHAIN_TYPE_UNIQUE_CHAIN - specifies that this chain has no shared history with any other chain, it is unique.
@@ -698,5 +718,9 @@ bool magicnet_default_downloader_is_hash_queued(const char* hash);
 int magicnet_chain_downloader_post_client_with_block(pthread_t thread_id, struct magicnet_client *client);
 void magicnet_chain_downloaders_shutdown();
 void magicnet_chain_downloaders_cleanup();
+
+// Banned peer functionality
+bool magicnet_peer_ip_is_banned(const char *ip_address);
+
 
 #endif

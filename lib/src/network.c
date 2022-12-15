@@ -197,21 +197,6 @@ const char *magicnet_ip_count_get_dominant(struct vector *ip_count_vec)
     return NULL;
 }
 
-void magicnet_server_test_port_forwarded(struct magicnet_server *server)
-{
-    server->port_forwarded = false;
-    // struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(server->our_ip, MAGICNET_SERVER_PORT, 0, "test-program");
-    // if (client)
-    // {
-    //     magicnet_log("%s we have detected we are port forwarded and can receive incoming connections\n", __FUNCTION__);
-    //     server->port_forwarded = true;
-    //     magicnet_close(client);
-    // }
-    // else
-    // {
-    //     magicnet_log("%s we have detected we have not port forwarded. We recommend port forwarding for better preformance on the network\n", __FUNCTION__);
-    // }
-}
 
 void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 {
@@ -244,7 +229,6 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
         if (different_ip)
         {
             magicnet_log("%s our ip address has been detected as %s\n", __FUNCTION__, dominant_ip);
-            magicnet_server_test_port_forwarded(server);
         }
     }
 
@@ -1032,6 +1016,16 @@ short magicnet_read_short(struct magicnet_client *client, struct buffer *store_i
 
     // prefor bit manipualtion for big endians on short.
     return result;
+}
+
+int magicnet_write_short(struct magicnet_client *client, short value, struct buffer *store_in_buffer)
+{
+    // Preform bit manipulation for big-endianness todo later...
+    if (magicnet_write_bytes(client, &value, sizeof(value), store_in_buffer) < 0)
+    {
+        return -1;
+    }
+    return 0;
 }
 
 int magicnet_client_read_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
@@ -2249,6 +2243,8 @@ struct magicnet_client *magicnet_connect_again_outgoing(struct magicnet_client *
     return magicnet_tcp_network_connect_for_ip_for_server(client->server, client_ip_buf, MAGICNET_SERVER_PORT, program_name);
 }
 
+// copilot write a function that sums to numbers
+
 
 struct magicnet_client* magicnet_connect_again_incoming(struct magicnet_client* client, const char* program_name)
 {
@@ -2266,6 +2262,7 @@ struct magicnet_client* magicnet_connect_again_incoming(struct magicnet_client* 
     // let's relay a packet to the client asking them to connect to us
     struct magicnet_packet* packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->payload.new_connection.entry_id = signal->id;
     strncpy(magicnet_signed_data(packet)->payload.new_connection.program_name, program_name, sizeof(magicnet_signed_data(packet)->payload.new_connection.program_name));
     res = magicnet_relay_packet_to_client(client, packet);
@@ -2286,6 +2283,12 @@ struct magicnet_client* magicnet_connect_again_incoming(struct magicnet_client* 
 out:
     return client_out;
 }
+
+/*
+ * This function will attempt to connect to the client again.
+ * If the client is an incoming connection then we will send a packet to the client asking them to connect to us again
+ * If the client is an outgoing connection then we will attempt to connect to the client again
+ */
 struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name)
 {
     if (!client->server)
@@ -3033,7 +3036,6 @@ int magicnet_write_peer_info(struct magicnet_client *client)
     {
         goto out;
     }
-
     char hash_of_data[SHA256_STRING_LENGTH] = {0};
     sha256_data(buffer_ptr(send_buf), hash_of_data, buffer_len(send_buf));
 
