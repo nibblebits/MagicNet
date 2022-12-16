@@ -2848,6 +2848,10 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
             res = magicnet_client_process_server_sync_packet(client, packet);
             break;
 
+        case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
+            res = magicnet_client_process_block_super_download_request_packet(client, packet);
+            break;
+
         case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
             // empty..
             res = 0;
@@ -2874,6 +2878,7 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         case MAGICNET_PACKET_TYPE_SERVER_SYNC:
             res = magicnet_client_process_server_sync_packet(client, packet);
             break;
+
 
         case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
             res = magicnet_client_process_transaction_send_packet(client, packet);
@@ -3743,10 +3748,6 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
         res = magicnet_server_process_make_new_connection_packet(client, packet);
-        break;
-
-    case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
-        res = magicnet_client_process_block_super_download_request_packet(client, packet);
         break;
     };
 
