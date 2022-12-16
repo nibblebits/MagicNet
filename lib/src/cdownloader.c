@@ -395,6 +395,9 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     // Now we expect right away a response with the blocks
     // Loop through all the blocks sent to us and download them
     char last_prev_hash[SHA256_STRING_LENGTH] = {0};
+    char current_hash[SHA256_STRING_LENGTH] = {0};
+    strncpy(current_hash, hash_to_find.hash, sizeof(current_hash));
+
     for (int i = 0; i < MAGICNET_MAX_BLOCK_SUPER_DOWNLOAD_REQUEST_BLOCK_COUNT; i++)
     {
         struct magicnet_packet *super_download_response = magicnet_packet_new();
@@ -422,11 +425,18 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         struct block *block = vector_back_ptr(magicnet_signed_data(super_download_response)->payload.block_send.blocks);
         if (block)
         {
+            if (strncmp(block->hash, current_hash, sizeof(block->hash)))
+            {
+                magicnet_log("%s block hash %s does not match current expected hash %s client sent an illegal block that has nothing to do with our current download position\n", __FUNCTION__, block->hash, current_hash);
+                goto out;
+            }
+
+            // Lets make sure it was the block we was expecting
             magicnet_log("%s saving block %s\n", __FUNCTION__, block->hash);
             block_save(block);
             // Remove the block from the downloader hashes
             magicnet_chain_downloaders_remove_hash(block);
-
+            strncpy(current_hash, block->prev_hash, sizeof(current_hash));
             strncpy(last_prev_hash, block->prev_hash, sizeof(last_prev_hash));
         }
         
@@ -441,10 +451,16 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     }
 
 out:
+    if (new_client)
+    {
+        magicnet_close_and_free(new_client);
+    }
+
     if (signal)
     {
         magicnet_signal_release(signal);
     }
+
     magicnet_free_packet(req_packet);
     return 0;
 }
