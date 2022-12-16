@@ -35,6 +35,8 @@ void magicnet_close(struct magicnet_client *client);
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
 void magicnet_server_reset_block_sequence(struct magicnet_server *server);
+int magicnet_client_process_block_super_download_request_packet(struct magicnet_client *client, struct magicnet_packet *packet);
+
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
     vector_set_peek_pointer(server->thread_ids, 0);
