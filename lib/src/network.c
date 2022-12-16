@@ -3638,7 +3638,10 @@ int magicnet_client_send_single_block(struct magicnet_client *client, struct blo
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->payload.block_send.blocks = block_vector;
     magicnet_signed_data(packet)->payload.block_send.transaction_group = block->transaction_group;
-    vector_push(block_vector, &block);
+
+    // When a packet is freed it deletes the block, therefore a clone is required!
+    struct block* cloned_block = block_clone(block);
+    vector_push(block_vector, &cloned_block);
     res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     if (res < 0)
     {
