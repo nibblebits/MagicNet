@@ -453,7 +453,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
 out:
     if (new_client)
     {
-        magicnet_close_and_free(new_client);
+        magicnet_close(new_client);
     }
 
     if (signal)
