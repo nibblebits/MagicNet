@@ -449,23 +449,7 @@ out:
     return 0;
 }
 
-void magicnet_chain_downloader_check_blocks_received(struct magicnet_chain_downloader *downloader)
-{
-    vector_set_peek_pointer(downloader->hashes_to_download, 0);
-    struct magicnet_chain_downloader_hash_to_download *hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
-    while (hash_to_download)
-    {
-        struct block *block = block_load(hash_to_download->hash);
-        if (block)
-        {
-            // Oh we have the block now thats great... Let us delete the request hash
-            free(hash_to_download);
-            vector_pop_last_peek(downloader->hashes_to_download);
-            block_free(block);
-        }
-        hash_to_download = vector_peek_ptr(downloader->hashes_to_download);
-    }
-}
+
 
 struct magicnet_chain_downloader *magicnet_chain_downloader_get_with_thread_id_no_locks(pthread_t thread_id)
 {
@@ -500,9 +484,7 @@ void *magicnet_chain_downloader_thread_loop(void *_downloader)
         magicnet_chain_downloader_thread_ask_for_blocks(downloader);
         pthread_mutex_lock(&downloads.lock);
 
-        // Let's check if we received the blocks we asked for. This is non-blocking we will come around a couple times most likely
-        // when the block is there the request hash is removed from the downloader.
-        magicnet_chain_downloader_check_blocks_received(downloader);
+
         // No hashes to downloadthen we should just sleep for a bit so we can save some CPU cycles..
         if (vector_empty(downloader->hashes_to_download))
         {

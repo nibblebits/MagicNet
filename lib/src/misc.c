@@ -47,6 +47,20 @@ void bin2hex(char *input, size_t input_size, char *output)
     output[i++] = '\0';
 }
 
+/**
+ * THis is a function that converts hex to binary
+*/
+void hex2bin(char *input, size_t input_size, char *output)
+{
+    int loop = 0;
+    int i = 0;
+    while (loop < input_size)
+    {
+        sscanf(input + loop, "%2hhx", &output[i]);
+        loop += 2;
+        i += 1;
+    }
+}
 int hex_to_int(char c)
 {
     int first = c / 16 - 3;
