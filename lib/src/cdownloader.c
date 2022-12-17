@@ -313,12 +313,17 @@ int magicnet_chain_downloader_queue_for_block_download(const char *block_hash)
     return 0;
 }
 
+/**
+ * FInd the bug
+ * 
+*/
 int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downloader *downloader)
 {
     int res = 0;
     struct magicnet_chain_downloader_hash_to_download hash_to_find;
     struct magicnet_chain_downloader_hash_to_download *hash = NULL;
     struct magicnet_signal *signal = NULL;
+    struct magicnet_client *new_client = NULL;
     struct magicnet_packet *req_packet = magicnet_packet_new();
     pthread_mutex_lock(&downloads.lock);
     vector_set_peek_pointer(downloader->hashes_to_download, 0);
@@ -369,7 +374,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     magicnet_log("%s key=%s\n", __FUNCTION__, key->key);
 
     magicnet_log("%s attempting to connect to key\n", __FUNCTION__);
-    struct magicnet_client *new_client = magicnet_connect_for_key(downloader->server, key, "chain-downloader");
+    new_client = magicnet_connect_for_key(downloader->server, key, "chain-downloader");
     if (!new_client)
     {
         magicnet_log("%s FAILED\n", __FUNCTION__);
@@ -453,6 +458,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
 out:
     if (new_client)
     {
+        magicnet_log("%s closing client\n", __FUNCTION__);
         magicnet_close(new_client);
     }
 
