@@ -51,6 +51,7 @@ struct key *MAGICNET_public_key();
 struct key *MAGICNET_private_key();
 bool key_cmp(struct key *key, struct key *key2);
 bool key_loaded(struct key *key);
+bool MAGICNET_is_genesis_key(struct key *key);
 
 struct key MAGICNET_key_from_string(const char* key);
 

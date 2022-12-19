@@ -233,7 +233,7 @@ int magicnet_database_magicnet_peer_blockchain_info_get_no_locks(struct key *key
     res = sqlite3_step(stmt);
     if (res != SQLITE_ROW)
     {
-        res = -1;
+        res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
 
@@ -318,6 +318,10 @@ int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key,
     }
 
     sqlite3_finalize(stmt);
+    if (res >= 0)
+    {
+        res = MAGICNET_CREATED;
+    }
 out:
     return res;
 }
@@ -415,9 +419,25 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
         goto out;
     }
 
-    sqlite3_bind_text(stmt, 1, peer_info->ip_address, strlen(peer_info->ip_address), NULL);
-    sqlite3_bind_text(stmt, 2, peer_info->name, strlen(peer_info->name), NULL);
-    sqlite3_bind_text(stmt, 3, peer_info->email, strlen(peer_info->email), NULL);
+    // Bind them all to NULL
+    sqlite3_bind_null(stmt, 1);
+    sqlite3_bind_null(stmt, 2);
+    sqlite3_bind_null(stmt, 3);
+    sqlite3_bind_null(stmt, 4);
+
+    if (peer_info->ip_address)
+    {
+        sqlite3_bind_text(stmt, 1, peer_info->ip_address, strlen(peer_info->ip_address), NULL);
+    }
+    if (peer_info->name)
+    {
+        sqlite3_bind_text(stmt, 2, peer_info->name, strlen(peer_info->name), NULL);
+    }
+    if (peer_info->email)
+    {
+        sqlite3_bind_text(stmt, 3, peer_info->email, strlen(peer_info->email), NULL);
+    }
+    
     sqlite3_bind_blob(stmt, 4, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
 
     int step = sqlite3_step(stmt);
@@ -427,6 +447,10 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
         goto out;
     }
 out:
+    if (res >= 0)
+    {
+        res = MAGICNET_UPDATED;
+    }
     sqlite3_finalize(stmt);
     pthread_mutex_unlock(&db_lock);
     return res;
@@ -540,8 +564,7 @@ int magicnet_database_create()
     }
 
     // This is the root host the peer everybody knows about.
-    magicnet_database_peer_add_no_locks("104.248.237.170", NULL, "Root Host", "hello@dragonzap.com");
-
+    magicnet_save_peer_info(&(struct magicnet_peer_information){.ip_address="104.248.237.170",.email="hello@dragonzap.com"});
     return res;
 }
 int magicnet_database_load()

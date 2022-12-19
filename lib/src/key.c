@@ -342,9 +342,16 @@ int generate_key()
     EC_KEY_free(eckey);
 
 
-    // This is really the wrong place I should move it. But lets add ourselves as a peer
-    magicnet_database_peer_add_no_locks(NULL,&public_key, "Anonymous", NULL);
+    magicnet_save_peer_info(&(struct magicnet_peer_information){.email=NULL,.key=&public_key,.name="Anonymous"});
     return res;
+}
+
+/**
+ * Function that checks if the key is the genesis key 
+*/
+bool MAGICNET_is_genesis_key(struct key *key)
+{
+    return memcmp(key, MAGICNET_GENESIS_KEY, sizeof(struct key)) == 0;
 }
 
 bool MAGICNET_nulled_signature(struct signature *signature)

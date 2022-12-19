@@ -2959,12 +2959,6 @@ out:
     return res;
 }
 
-int magicnet_save_peer_info(struct magicnet_peer_information *peer_info)
-{
-    int res = 0;
-    res = magicnet_database_peer_update_or_create(peer_info);
-    return res;
-}
 int magicnet_read_peer_info(struct magicnet_client *client, int *peer_info_state_out)
 {
     int res = 0;

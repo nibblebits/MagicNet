@@ -29,7 +29,7 @@
 #define MAGICNET_LOCAL_SERVER_ADDRESS "127.0.0.1"
 
 // 1 Million starting cash in the network. The value will decrease over time. With deflation.
-#define MAGICNET_STARTING_MONEY 10000000
+#define MAGICNET_GENESIS_STARTING_MONEY 10000000
 
 // 1 coin to bet to make a block
 #define MAGICNET_BET_TO_MAKE_BLOCK 1

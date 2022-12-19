@@ -89,6 +89,8 @@ enum
     // Sometimes returned for certain operations when something is completed.
     MAGICNET_TASK_COMPLETE = 200,
     MAGICNET_BLOCK_SENT_BEFORE = 201,
+    MAGICNET_CREATED = 202,
+    MAGICNET_UPDATED = 203,
 };
 
 // ENTRY PROTOCOL
@@ -760,7 +762,7 @@ void magicnet_chain_downloaders_cleanup();
 
 // Banned peer functionality
 bool magicnet_peer_ip_is_banned(const char *ip_address);
-
+int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
 
 // Additional peer stuff
 /**
