@@ -764,11 +764,5 @@ void magicnet_chain_downloaders_cleanup();
 bool magicnet_peer_ip_is_banned(const char *ip_address);
 int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
 
-// Additional peer stuff
-/**
- * Function that returns the money a peer has
-*/
-int magicnet_peer_get_money(struct magicnet_peer_information* peer);
-int magicnet_peer_get_money_for_chain(struct magicnet_peer_information* peer, int blockchain_id);
 
 #endif

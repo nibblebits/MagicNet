@@ -32,19 +32,6 @@ int magicnet_database_keys_create(struct key* pub_key, struct key* pri_key);
 int magicnet_database_keys_set_default(struct key* pub_key);
 int magicnet_database_keys_get_active(struct key* key_pub_out, struct key* key_pri_out);
 int magicnet_database_banned_peer_load_by_ip(const char *ip_address, struct magicnet_banned_peer_information *peer_out);
-/*
- * Creates a peer for blockchain info uses locks
-*/
-int magicnet_database_magicnet_peer_blockchain_info_add(struct key *key, int blockchain_id, double money);
-
-/**
- * Adds money for a given peer on a blockchain
-*/
-int magicnet_database_magicnet_peer_blockchain_info_add_money_no_locks(struct key *key, int blockchain_id, double money);
-int magicnet_database_magicnet_peer_blockchain_info_add_money(struct key *key, int blockchain_id, double money);
-int magicnet_database_magicnet_peer_blockchain_info_subtract_money_no_locks(struct key *key, int blockchain_id, double money);
-int magicnet_database_magicnet_peer_blockchain_info_subtract_money(struct key *key, int blockchain_id, double money);
-int magicnet_database_magicnet_peer_blockchain_info_get(struct key *key, int blockchain_id, struct magicnet_peer_blockchain_info *magicnet_peer_blockchain_info);
 
 /**
  * Creates a new blockchain 
