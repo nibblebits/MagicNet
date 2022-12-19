@@ -264,6 +264,16 @@ struct magicnet_peer_information
     int found_out;
 };
 
+/**
+ * @brief The magicnet_peer_blockchain_info struct to describe peer information relating to a particular blockchain
+ * // Since blockchains can change the information about a peer this is neccessary for when their are forks.
+*/
+struct magicnet_peer_blockchain_info
+{
+    char key[SHA256_STRING_LENGTH];
+    double money;
+    int blockchain_id;
+};
 
 struct magicnet_client
 {
@@ -451,6 +461,15 @@ struct block_transaction_data
     // will have access to the transaction
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
     time_t time;
+    // This is the bid that the signer has wedged. This is the amount of money they are willing to pay to put a transaction
+    // on the next block. Zero is completley valid, theirs a certain amount of transactions allowed in a block.
+    // If your bid is lower than someone elses and we run out of transactions for the next block, we will begin to remove transactions
+    // whose bid is lower than the  bidder who has no room in the next block. The new bidder will then take their place.
+    // The bid money disappears forever, never being sent to anyone. It deflates the currency.
+    // If a peer bids an amount that he does not have then the transaction is dropped. 
+    // If a peer bids and the receiver of the transaction is not aware of the peer then they cannot prove the balance of the peer therefore
+    // the peer transaction is dropped.
+    double bid;
     char *ptr;
     size_t size;
 };
@@ -625,7 +644,6 @@ void magicnet_close_and_free(struct magicnet_client* client);
 int magicnet_client_connection_type(struct magicnet_client* client);
 struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
 struct magicnet_client *magicnet_connect_for_key(struct magicnet_server* server, struct key *key, const char *program_name);
-#
 
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet);
 
@@ -705,6 +723,8 @@ bool sha256_empty(const char* hash);
 int blockchain_init();
 struct blockchain* blockchain_new();
 void blockchain_free(struct blockchain* blockchain);
+struct blockchain *magicnet_blockchain_get_active();
+int magicnet_blockchain_get_active_id();
 
 
 struct block *block_clone(struct block *block);
@@ -741,5 +761,12 @@ void magicnet_chain_downloaders_cleanup();
 // Banned peer functionality
 bool magicnet_peer_ip_is_banned(const char *ip_address);
 
+
+// Additional peer stuff
+/**
+ * Function that returns the money a peer has
+*/
+int magicnet_peer_get_money(struct magicnet_peer_information* peer);
+int magicnet_peer_get_money_for_chain(struct magicnet_peer_information* peer, int blockchain_id);
 
 #endif

@@ -1,4 +1,4 @@
-OBJECTS= ./build/vector.o ./build/magicnet.o ./build/init.o ./build/block.o ./build/log.o ./build/network.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
+OBJECTS= ./build/vector.o ./build/magicnet.o ./build/init.o ./build/block.o ./build/log.o ./build/network.o ./build/peer.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
 INCLUDES= -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector
 ADDITIONAL_FLAGS= -g -fPIC
 all: ${OBJECTS}
@@ -14,6 +14,10 @@ all: ${OBJECTS}
 ./build/block.o:./src/block.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/block.c -c -o ./build/block.o 
 
+
+# Compile the peer.c
+./build/peer.o:./src/peer.c
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./src/peer.c -c -o ./build/peer.o
 
 ./build/network.o:./src/network.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./src/network.c -c -o ./build/network.o 

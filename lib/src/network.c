@@ -2881,7 +2881,6 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
             res = magicnet_client_process_server_sync_packet(client, packet);
             break;
 
-
         case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
             res = magicnet_client_process_transaction_send_packet(client, packet);
             break;
@@ -3641,7 +3640,7 @@ int magicnet_client_send_single_block(struct magicnet_client *client, struct blo
     magicnet_signed_data(packet)->payload.block_send.transaction_group = block_transaction_group_clone(block->transaction_group);
 
     // When a packet is freed it deletes the block, therefore a clone is required!
-    struct block* cloned_block = block_clone(block);
+    struct block *cloned_block = block_clone(block);
     vector_push(block_vector, &cloned_block);
     res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
     if (res < 0)
@@ -4223,7 +4222,7 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
 {
     int res = 0;
     magicnet_important("%s block creation sequence for this peer. Peer will make block\n", __FUNCTION__);
-
+    struct blockchain *active_chain = NULL;
     struct vector *blockchains = vector_create(sizeof(struct blockchain *));
     struct vector *block_vector = vector_create(sizeof(struct block *));
     struct block_transaction_group *transaction_group = block_transaction_group_new();
@@ -4242,9 +4241,8 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
         transaction = vector_peek_ptr(server->next_block.block_transactions);
     }
 
-    struct blockchain *active_chain = NULL;
-    res = magicnet_database_blockchain_get_active(&active_chain);
-    if (res < 0)
+    active_chain = magicnet_blockchain_get_active();
+    if (!active_chain)
     {
         magicnet_log("%s issue getting active blockchain\n", __FUNCTION__);
     }
@@ -4268,6 +4266,10 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_server_add_packet_to_relay(server, packet);
 
 out:
+    if (active_chain)
+    {
+        blockchain_free(active_chain);
+    }
     magicnet_free_packet(packet);
 }
 

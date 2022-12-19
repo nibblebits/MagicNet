@@ -39,6 +39,29 @@ struct block_transaction_group *block_transaction_group_new()
     return calloc(1, sizeof(struct block_transaction_group));
 }
 
+/**
+ * Create function that gets active blockchain
+*/
+struct blockchain *magicnet_blockchain_get_active()
+{
+    struct blockchain *blockchain = blockchain_new();
+    int ret = magicnet_database_blockchain_get_active(&blockchain);
+    if (ret != 0)
+    {
+        magicnet_log("Failed to get active blockchain\n");
+        blockchain_free(blockchain);
+        return NULL;
+    }
+    return blockchain;
+}
+/**
+ * Returns the current active blockchain id
+*/
+int magicnet_blockchain_get_active_id()
+{
+    return magicnet_database_get_active_blockchain_id();
+}
+
 void block_transaction_group_free(struct block_transaction_group *transaction_group)
 {
     for (int i = 0; i < transaction_group->total_transactions; i++)

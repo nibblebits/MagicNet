@@ -60,6 +60,19 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 PRIMARY KEY(\"id\" AUTOINCREMENT) \
                             );",
 
+                            // Create a table that holds peer information based on a blockchain ID
+                            // This is used to determine which peer data is related to a particular blockchain
+                            // the money field is the total amount of magic coins this peer has for this particular blockchain#
+                            // its calculated by summing all transactions and blocks to work out its final value, its calculated in real time
+                            // as blocks are added to the chain.
+                            "CREATE TABLE \"magicnet_peer_blockchain_info\" ( \
+                                \"id\"	INTEGER,        \
+                                \"key\"	BLOB,           \
+                                \"blockchain_id\"	INTEGER, \
+                                \"money\"	NUMERIC, \
+                                PRIMARY KEY(\"id\" AUTOINCREMENT) \
+                            );",
+
                             // This query creates a table of banned peers
                             // that will be used to prevent the server from
                             // connecting to them.
@@ -77,6 +90,189 @@ const char *magicnet_database_path()
     static char filepath[PATH_MAX];
     sprintf(filepath, "%s/%s%s", getenv(MAGICNET_DATA_BASE_DIRECTORY_ENV), MAGICNET_DATA_BASE, MAGICNET_DATABASE_SQLITE_FILEPATH);
     return filepath;
+}
+
+/**
+ * Creates a peer for blockchain info. Does it without locks
+*/
+int magicnet_database_magicnet_peer_blockchain_info_add_no_locks(struct key *key, int blockchain_id, double money)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_peer_sql = "INSERT INTO  magicnet_peer_blockchain_info (key, blockchain_id, money) VALUES (?,?, ?);";
+    res = sqlite3_prepare_v2(db, insert_peer_sql, strlen(insert_peer_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+   
+    // Bind the key
+    sqlite3_bind_text(stmt, 1, key->key, key->size, SQLITE_STATIC);
+    // Bind the blockchain id
+    sqlite3_bind_int(stmt, 2, blockchain_id);
+    // Bind the money
+    sqlite3_bind_double(stmt, 3, money);
+
+out:
+    return res;
+}
+
+/**
+ * Creates a peer for blockchain info uses locks
+*/
+int magicnet_database_magicnet_peer_blockchain_info_add(struct key *key, int blockchain_id, double money)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_magicnet_peer_blockchain_info_add_no_locks(key, blockchain_id, money);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+/**
+ * Adds money for a given peer on a blockchain
+*/
+int magicnet_database_magicnet_peer_blockchain_info_add_money_no_locks(struct key *key, int blockchain_id, double money)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_peer_sql = "UPDATE magicnet_peer_blockchain_info SET money = money + ? WHERE key = ? AND blockchain_id = ?;";
+    res = sqlite3_prepare_v2(db, insert_peer_sql, strlen(insert_peer_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+   
+    // Bind the money
+    sqlite3_bind_double(stmt, 1, money);
+    // Bind the key
+    sqlite3_bind_text(stmt, 2, key->key, key->size, SQLITE_STATIC);
+    // Bind the blockchain id
+    sqlite3_bind_int(stmt, 3, blockchain_id);
+
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+
+
+out:
+    return res;
+}
+
+/**
+ * Adds money for a given peer on a blockchain but uses locks, thread safe..
+*/
+int magicnet_database_magicnet_peer_blockchain_info_add_money(struct key *key, int blockchain_id, double money)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_magicnet_peer_blockchain_info_add_money_no_locks(key, blockchain_id, money);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+/**
+ * Subtracts money for a given peer on a blockchain does not use locks
+*/
+int magicnet_database_magicnet_peer_blockchain_info_subtract_money_no_locks(struct key *key, int blockchain_id, double money)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_peer_sql = "UPDATE magicnet_peer_blockchain_info SET money = money - ? WHERE key = ? AND blockchain_id = ?;";
+    res = sqlite3_prepare_v2(db, insert_peer_sql, strlen(insert_peer_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+   
+    // Bind the money
+    sqlite3_bind_double(stmt, 1, money);
+    // Bind the key
+    sqlite3_bind_text(stmt, 2, key->key, key->size, SQLITE_STATIC);
+    // Bind the blockchain id
+    sqlite3_bind_int(stmt, 3, blockchain_id);
+
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+
+out:
+
+    return res;
+}
+
+/**
+ * Gets a peer blockchain info based on blockchain ID and key
+*/
+int magicnet_database_magicnet_peer_blockchain_info_get_no_locks(struct key *key, int blockchain_id, struct magicnet_peer_blockchain_info *magicnet_peer_blockchain_info)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_peer_sql = "SELECT * FROM magicnet_peer_blockchain_info WHERE key = ? AND blockchain_id = ?;";
+    res = sqlite3_prepare_v2(db, insert_peer_sql, strlen(insert_peer_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+   
+    // Bind the key
+    sqlite3_bind_text(stmt, 1, key->key, key->size, SQLITE_STATIC);
+    // Bind the blockchain id
+    sqlite3_bind_int(stmt, 2, blockchain_id);
+
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Get the key
+    const char *key_str = (const char *)sqlite3_column_text(stmt, 1);
+    strncpy(magicnet_peer_blockchain_info->key, key_str, sizeof(magicnet_peer_blockchain_info->key));
+
+    // Get the blockchain id
+    magicnet_peer_blockchain_info->blockchain_id = sqlite3_column_int(stmt, 2);
+    // Get the money
+    magicnet_peer_blockchain_info->money = sqlite3_column_double(stmt, 3);
+
+out:
+    return res;
+}
+
+/**
+ * Get peer info for a given key and blockchain with locks
+*/
+int magicnet_database_magicnet_peer_blockchain_info_get(struct key *key, int blockchain_id, struct magicnet_peer_blockchain_info *magicnet_peer_blockchain_info)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_magicnet_peer_blockchain_info_get_no_locks(key, blockchain_id, magicnet_peer_blockchain_info);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+
+/**
+ * Subtracts money for a given peer on a blockchain uses locks
+*/
+int magicnet_database_magicnet_peer_blockchain_info_subtract_money(struct key *key, int blockchain_id, double money)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_magicnet_peer_blockchain_info_subtract_money_no_locks(key, blockchain_id, money);
+    pthread_mutex_unlock(&db_lock);
+    return res;
 }
 
 int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key, const char *name, const char *email)
@@ -454,6 +650,32 @@ int magicnet_database_load_last_block_no_locks(char *hash_out, char *prev_hash_o
         bzero(prev_hash_out, SHA256_STRING_LENGTH);
         strncpy(prev_hash_out, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
     }
+out:
+    return res;
+}
+
+/**
+ * A function that returns the blockchain ID of the active blockchain
+*/
+int magicnet_database_get_active_blockchain_id()
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *load_last_block_sql = "SELECT id from blockchains ORDER BY proven_verified_blocks desc LIMIT 0,1";
+    res = sqlite3_prepare_v2(db, load_last_block_sql, strlen(load_last_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    res = sqlite3_column_int(stmt, 0);
 out:
     return res;
 }
