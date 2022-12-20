@@ -55,7 +55,6 @@ enum
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
-
 enum
 {
     MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE = 0b00000001,
@@ -99,11 +98,18 @@ enum
     MAGICNET_ENTRY_PROTOCOL_NO_IPS = 0,
     MAGICNET_ENTRY_PROTOCOL_HAS_IPS = 1,
     MAGICNET_ENTRY_PROTOCOL_NO_PEER_INFO_PROVIDED = 2,
-    MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED =3,
+    MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED = 3,
 };
 
-
-
+// Reserved transaction types.. Custom types should use type of 1000 and above
+// We have this because their are special types of transactions deep in the abstraction where the data pointer
+// can contain important structured data known to the protocol
+// examples include sending coins.
+enum
+{
+    MAGICNET_TRANSACTION_TYPE_UNKNOWN = 0,
+    MAGICNET_TRANSACTION_TYPE_COIN_SEND = 1,
+};
 
 struct block;
 struct blockchain;
@@ -194,12 +200,10 @@ struct magicnet_packet
                     // Empty... We will use the key that signed this block.
                 } verifier_signup;
 
-
                 struct magicnet_transaction_send
                 {
-                    struct block_transaction* transaction;
+                    struct block_transaction *transaction;
                 } transaction_send;
-
 
                 struct magicnet_new_connection
                 {
@@ -212,11 +216,11 @@ struct magicnet_packet
                 {
                     // a vector of struct block* that holds the blocks we are sending.
                     // A copy of the exact same block is expected for each blockchain known by the peer
-                    struct vector* blocks;
+                    struct vector *blocks;
                     // The group of transactions associated with all blocks in the vector above.
                     struct block_transaction_group *transaction_group;
                 } block_send;
-                
+
                 struct magicnet_request_block
                 {
                     char request_hash[SHA256_STRING_LENGTH];
@@ -226,7 +230,7 @@ struct magicnet_packet
                 /**
                  * Response for the request block. Once received block group send can be initiated.
                  * Receving this means we can connect on another thread and download the blocks until satisfied.
-                */
+                 */
                 struct magicnet_request_block_response
                 {
                     char request_hash[SHA256_STRING_LENGTH];
@@ -236,8 +240,8 @@ struct magicnet_packet
                 struct magicnet_block_group_send
                 {
                     char begin_hash[SHA256_STRING_LENGTH];
-                    // Vector of struct block* 
-                    struct vector* blocks;
+                    // Vector of struct block*
+                    struct vector *blocks;
                 } block_group_send;
 
                 struct magicnet_block_super_download
@@ -245,7 +249,6 @@ struct magicnet_packet
                     char begin_hash[SHA256_STRING_LENGTH];
                     size_t total_blocks_to_request;
                 } block_super_download;
-
             };
         } payload;
     } signed_data;
@@ -269,7 +272,7 @@ struct magicnet_peer_information
 /**
  * @brief The magicnet_peer_blockchain_info struct to describe peer information relating to a particular blockchain
  * // Since blockchains can change the information about a peer this is neccessary for when their are forks.
-*/
+ */
 struct magicnet_peer_blockchain_info
 {
     char key[SHA256_STRING_LENGTH];
@@ -307,7 +310,6 @@ struct magicnet_client
     // Download microsecond delay
     time_t recv_delay;
 
-
     // The total bytes we want to send per second. Rate limiting system..
     size_t max_bytes_send_per_second;
 
@@ -319,7 +321,6 @@ struct magicnet_client
 
     time_t reset_max_bytes_to_recv_at;
 
-
     // signal id variable If this is non zero then upon a connection being accepted we will post the semaphore
     // giving control to the signal. We will not process this client on its own thread and any existing thread will be killed
     // when it is found that the signal is present
@@ -330,12 +331,12 @@ struct magicnet_client
     /**
      * Used for localhost applications. Anything added here is an awaiting packet for the application that is listening to this
      * program name. These awaiting packets will be received directly by the localhost application requesting them.
-    */
+     */
     struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
 
-     /**
-      * These are the packets that are directly for this connected client. When a sync packet is used we will send the
-      * next packet from this array to this client in question.
+    /**
+     * These are the packets that are directly for this connected client. When a sync packet is used we will send the
+     * next packet from this array to this client in question.
      */
     struct packets_for_client
     {
@@ -387,7 +388,7 @@ struct magicnet_server
     int sock;
 
     // vector of pthread_t . Holds all the thread ids for every thread created in this server instance.
-    struct vector* thread_ids;
+    struct vector *thread_ids;
     // Clients our server accepted.
     struct magicnet_client clients[MAGICNET_MAX_INCOMING_CONNECTIONS];
 
@@ -395,7 +396,7 @@ struct magicnet_server
     struct magicnet_client outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
 
     // This is the last client that sent a block to us.
-    struct magicnet_client* last_client_to_send_block;
+    struct magicnet_client *last_client_to_send_block;
 
     // The packets that have been seen already.. If we encounter them again they should be ignored
     struct seen_packets
@@ -427,7 +428,7 @@ struct magicnet_server
         struct vector *signed_up_verifiers;
 
         // The pending transactions that should be added to the next block. struct block_transaction*
-        struct vector* block_transactions;
+        struct vector *block_transactions;
 
         // The step in the block creation sequence we are currently in.
         int step;
@@ -438,7 +439,7 @@ struct magicnet_server
     time_t server_started;
     // THe first time the block cycle begins for this server instance
     time_t first_block_cycle;
-    pthread_rwlock_t  lock;
+    pthread_rwlock_t lock;
 
     // When true the server will refuse new connections and attempt to shutdown.
     bool shutdown;
@@ -454,7 +455,6 @@ struct magicnet_server
     // THis is not something we choose, we either can receive traffic or we cannot. This boolean if it is true
     // means we have successfully tested that we are able to receive incoming connections.
     bool port_forwarded;
-    
 };
 
 struct block_transaction_data
@@ -468,7 +468,7 @@ struct block_transaction_data
     // If your bid is lower than someone elses and we run out of transactions for the next block, we will begin to remove transactions
     // whose bid is lower than the  bidder who has no room in the next block. The new bidder will then take their place.
     // The bid money disappears forever, never being sent to anyone. It deflates the currency.
-    // If a peer bids an amount that he does not have then the transaction is dropped. 
+    // If a peer bids an amount that he does not have then the transaction is dropped.
     // If a peer bids and the receiver of the transaction is not aware of the peer then they cannot prove the balance of the peer therefore
     // the peer transaction is dropped.
     double bid;
@@ -482,26 +482,77 @@ struct block_transaction_group
     char hash[SHA256_STRING_LENGTH];
     size_t total_transactions;
 
-      // Pointer arrayto the loaded transactions data in memory
-    struct block_transaction* transactions[MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK];
+    // Pointer arrayto the loaded transactions data in memory
+    struct block_transaction *transactions[MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK];
 };
 
 struct block_transaction
 {
     char hash[SHA256_STRING_LENGTH];
-    
+
     // The hash of the transaction group  that this transaction belongs to
     char transaction_group_hash[SHA256_STRING_LENGTH];
+
+    // The type of transaction. Can be a custom integer, should be over 1000 for non protocol related transactions
+    // i.e custom applications
+    int type;
 
     // Signed signature of the creator of the transaction.
     struct signature signature;
     // The public key of the creator of the transaction
     struct key key;
+
+    // The public key of the target key of this transaction
+    // Some transactions may have both a signer key and a transaction target...
+    // For example in the case of a money send transaction a target key could be the recipient.
+    // In other examples maybe an admin of a decentralized app is issueing a transaction that bans someone..
+    // In that case the target key could be the key of who is being banned..
+    // This field is useful as it means we dont have to load the data from the database to be able to bring back records about
+    // certain keys.
+    struct key target_key;
+
     // Pointer to raw data of the transacton known only by the application using the network
     struct block_transaction_data data;
 };
 
+/**
+ * Custom block transaction types
+ */
 
+struct block_transaction_money_funding_source_and_amount
+{
+    // Where are we getting the "amount" from? What transaction is funding this transfer.
+    // Basically we reference a transaction that has already been added to the blockchain where we received money.
+    char funding_transaction_hash[SHA256_STRING_LENGTH];
+
+    // The amount of money being sent
+    double amount;
+};
+
+// Block transaction type for money transfer
+struct block_transaction_money_transfer
+{
+    // Since some funding sources might only have a balance of like 10 coins and maybe you want to send 12 coins we need
+    // multiple funding sources to send money.
+    // This way you could have one funding source that uses 10 coins
+    // and another that uses two. completing the transfer.
+    struct block_transaction_money_funding_source_and_amount transfer_funding[MAGICNET_MONEY_TRANSACTION_TOTAL_FUNDING_SOURCES];
+    // The public key of the recipient
+    struct key recipient_key;
+
+
+    // The amount of money being sent. This is the sum of all transfer funding amounts. It is required to ensure
+    // you confirm the amount of money being sent.
+    // If the sum of all funding amounts differs from the amount the transaction will be rejected as it will be assumed it was a bug in the
+    // applciation making the transaction.
+    // However if all the transfer funding is NULL then when a local program sends the packet to the localhost server
+    // The server will calculate the transfer funding array to match the amount provided.
+    // If the server is unable to fill the array with  funding sources that reach the amount provided then the transaction will be rejected.
+    double amount;
+
+    // The sender is the person who signed the transaction.
+
+};
 /**
  * This is a structure representing banned peer information it represents the table in database.c
  */
@@ -559,11 +610,9 @@ struct block
 
     struct block_transaction_group *transaction_group;
 
-
     // LOCAL DATA ONLY The below data is not sent across the network
     int blockchain_id;
 };
-
 
 struct magicnet_chain_downloader;
 struct magicnet_chain_downloader_hash_to_download
@@ -577,8 +626,7 @@ struct magicnet_chain_downloader_hash_to_download
 struct magicnet_chain_downloader
 {
     // Vector of  magicnet_chain_downloader_hash_to_download* . Must free the pointers when done.
-    struct vector* hashes_to_download;
-
+    struct vector *hashes_to_download;
 
     // The current total blocks downloaded
     size_t total_blocks_downloaded;
@@ -586,9 +634,8 @@ struct magicnet_chain_downloader
     // Also used as an identifier for the chain downloader iD.
     pthread_t thread_id;
 
-    // The server 
-    struct magicnet_server* server;
-
+    // The server
+    struct magicnet_server *server;
 
     // When true this thread should terminate its self at the next possible moment
     bool finished;
@@ -599,11 +646,11 @@ struct magicnet_chain_downloader
 
 /**
  * Represents the active chain downloads.
-*/
+ */
 struct magicnet_active_chain_downloads
 {
     // Vector of struct magicnet_chain_downloader*
-    struct vector* chain_downloads;
+    struct vector *chain_downloads;
     pthread_mutex_t lock;
 };
 
@@ -632,20 +679,20 @@ enum
 };
 
 int magicnet_chain_downloader_queue_for_block_download(const char *block_hash);
-int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server* server);
-void magicnet_server_read_lock(struct magicnet_server* server);
+int magicnet_chain_downloaders_setup_and_poll(struct magicnet_server *server);
+void magicnet_server_read_lock(struct magicnet_server *server);
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
-void magicnet_server_shutdown_server_instance(struct magicnet_server* server);
+void magicnet_server_shutdown_server_instance(struct magicnet_server *server);
 struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
-struct magicnet_client* magicnet_client_new();
-void magicnet_client_free(struct magicnet_client* client);
+struct magicnet_client *magicnet_client_new();
+void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
-void magicnet_close_and_free(struct magicnet_client* client);
-int magicnet_client_connection_type(struct magicnet_client* client);
+void magicnet_close_and_free(struct magicnet_client *client);
+int magicnet_client_connection_type(struct magicnet_client *client);
 struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
-struct magicnet_client *magicnet_connect_for_key(struct magicnet_server* server, struct key *key, const char *program_name);
+struct magicnet_client *magicnet_connect_for_key(struct magicnet_server *server, struct key *key, const char *program_name);
 
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet);
 
@@ -666,23 +713,22 @@ int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *c
 struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key);
 int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magicnet_packet *packet);
 
-
 /**
  * Pushes all connected ip addresses to the output vector.
- * 
+ *
  * Output vector should be sizeof(struct sockaddr_in)
-*/
-void magicnet_server_push_outgoing_connected_ips(struct magicnet_server* server, struct vector* vector_out);
+ */
+void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server, struct vector *vector_out);
 
 /**
  * @brief Makes a transaction on the network which will eventually be put into a block.
- * 
- * @param program 
- * @param data 
- * @param size 
- * @return int 
+ *
+ * @param program
+ * @param data
+ * @param size
+ * @return int
  */
-int magicnet_make_transaction(struct magicnet_program* program, void* data, size_t size);
+int magicnet_make_transaction(struct magicnet_program* program, int type, void* data, size_t size);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
@@ -692,13 +738,19 @@ int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
+/**
+ * Makes a money transfer to the recipient
+ * \param to The recipient's public key
+ * \amount The amount to transfer
+*/
+int magicnet_make_money_transfer(struct magicnet_program* program, const char* to, double amount);
 
 
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id);
 
-void magicnet_server_free(struct magicnet_server* server);
+void magicnet_server_free(struct magicnet_server *server);
 /**
  * @brief Creates a new block in memory, no block is added to the chain.
  *
@@ -710,52 +762,49 @@ void magicnet_server_free(struct magicnet_server* server);
  */
 
 struct block *block_create_with_group(const char *hash, const char *prev_hash, struct block_transaction_group *group);
-struct block *block_create(struct block_transaction_group *transaction_group, const char* prev_hash);
+struct block *block_create(struct block_transaction_group *transaction_group, const char *prev_hash);
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out);
-struct block_transaction_group* block_transaction_group_clone(struct block_transaction_group* transaction_group_in);
+struct block_transaction_group *block_transaction_group_clone(struct block_transaction_group *transaction_group_in);
 struct block *block_load(const char *hash);
-int block_load_transactions(struct block* block);
+int block_load_transactions(struct block *block);
 
-int block_save(struct block* block);
+int block_save(struct block *block);
 int block_sign(struct block *block);
 void block_free(struct block *block);
 void block_free_vector(struct vector *block_vec);
-bool sha256_empty(const char* hash);
+bool sha256_empty(const char *hash);
 
 int blockchain_init();
-struct blockchain* blockchain_new();
-void blockchain_free(struct blockchain* blockchain);
+struct blockchain *blockchain_new();
+void blockchain_free(struct blockchain *blockchain);
 struct blockchain *magicnet_blockchain_get_active();
 int magicnet_blockchain_get_active_id();
-
 
 struct block *block_clone(struct block *block);
 struct block_transaction *block_transaction_new();
 
-struct block_transaction_group* block_transaction_group_new();
+struct block_transaction_group *block_transaction_group_new();
 void block_transaction_group_free(struct block_transaction_group *transaction_group);
 
-
-struct block_transaction* block_transaction_new();
-struct block_transaction* block_transaction_clone(struct block_transaction* transaction);
-void block_transaction_free(struct block_transaction* transaction);
-struct block_transaction* block_transaction_build(const char* program_name, char* data, size_t data_len);
+struct block_transaction *block_transaction_new();
+struct block_transaction *block_transaction_clone(struct block_transaction *transaction);
+void block_transaction_free(struct block_transaction *transaction);
+struct block_transaction *block_transaction_build(const char *program_name, char *data, size_t data_len);
 int block_transaction_add(struct block_transaction_group *transaction_group, struct block_transaction *transaction);
-int block_transaction_valid(struct block_transaction* transaction);
+int block_transaction_valid(struct block_transaction *transaction);
 int block_transaction_hash_and_sign(struct block_transaction *transaction);
-int block_verify(struct block* block);
-int block_hash_sign_verify(struct block* block);
+int block_verify(struct block *block);
+int block_hash_sign_verify(struct block *block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
-const char *block_hash_create(struct block *block, char* hash_out);
+const char *block_hash_create(struct block *block, char *hash_out);
 struct block *magicnet_block_load(const char *hash);
-
 
 // Blockchain downloader
 struct magicnet_chain_downloader *magicnet_chain_downloader_download(struct magicnet_server *server);
-void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader* downloader, const char* hash);
-int magicnet_chain_downloader_start(struct magicnet_chain_downloader* downloader);
-void magicnet_chain_downloader_blocks_catchup(struct magicnet_server* server);
-bool magicnet_default_downloader_is_hash_queued(const char* hash);
+void magicnet_chain_downloader_hash_add(struct magicnet_chain_downloader *downloader, const char *hash);
+int magicnet_chain_downloader_start(struct magicnet_chain_downloader *downloader);
+void magicnet_chain_downloader_blocks_catchup(struct magicnet_server *server);
+bool magicnet_default_downloader_is_hash_queued(const char *hash);
 int magicnet_chain_downloader_post_client_with_block(pthread_t thread_id, struct magicnet_client *client);
 void magicnet_chain_downloaders_shutdown();
 void magicnet_chain_downloaders_cleanup();
@@ -763,6 +812,5 @@ void magicnet_chain_downloaders_cleanup();
 // Banned peer functionality
 bool magicnet_peer_ip_is_banned(const char *ip_address);
 int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
-
 
 #endif

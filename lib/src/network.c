@@ -1188,6 +1188,22 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
         goto out;
     }
 
+    // Read the transaction type.
+    res = magicnet_read_int(client, store_in_buffer);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read the transaction type\n", __FUNCTION__);
+        goto out;
+    }
+
+    // Read the target key
+    res = magicnet_read_bytes(client, &transaction_out->target_key, sizeof(transaction_out->target_key), store_in_buffer);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read the target key\n", __FUNCTION__);
+        goto out;
+    }
+
     transaction_out->data.time = magicnet_read_long(client, store_in_buffer);
     if (transaction_out->data.time < 0)
     {
@@ -1202,7 +1218,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
         magicnet_log("%s failed to read program name \n", __FUNCTION__);
         goto out;
     }
-
+    
     transaction_out->data.size = magicnet_read_int(client, store_in_buffer);
     if (transaction_out->data.size < 0)
     {
@@ -1785,6 +1801,20 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
         goto out;
     }
 
+    // Write the  transaction type
+    res = magicnet_write_int(client, transaction->type, store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the transaction target key
+    res = magicnet_write_bytes(client, &transaction->target_key, sizeof(transaction->target_key), store_in_buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
     res = magicnet_write_long(client, transaction->data.time, store_in_buffer);
     if (res < 0)
     {

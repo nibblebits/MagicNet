@@ -37,12 +37,25 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 \"hash\"	TEXT,  \
                                 \"transaction_group_hash\" TEXT, \
                                 \"signature\"	BLOB,  \
+                                \"type\" INTEGER \
                                 \"key\"	BLOB,  \
+                                \"target_key\"	BLOB,  \
                                 \"program_name\"	TEXT,  \
                                 \"time\"	REAL,   \
                                 \"data\"	BLOB,  \
                                 \"data_size\"	INTEGER);",
-                                "CREATE TABLE \"keys\" ( \
+
+                               // Create table on money transactions
+                               "CREATE TABLE \"money_transactions\" ( \
+                                \"transaction_hash\"	TEXT,  \
+                                \"from_key\"	BLOB,  \
+                                \"recipient_key\"	BLOB,  \
+                                \"amount_received\"	DECIMAL,  \
+                                \"amount_spent\"	DECIMAL,  \
+                                PRIMARY KEY(\"transaction_hash\") \
+                                );",
+
+                               "CREATE TABLE \"keys\" ( \
                                                         \"pub_key\"	BLOB, \
                                                         \"pri_key\"	BLOB, \
                                                         \"pub_key_size\" INTEGER,   \
@@ -60,12 +73,10 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 PRIMARY KEY(\"id\" AUTOINCREMENT) \
                             );",
 
-    
-
-                            // This query creates a table of banned peers
-                            // that will be used to prevent the server from
-                            // connecting to them.
-                            "CREATE TABLE \"banned_peers\" ( \
+                               // This query creates a table of banned peers
+                               // that will be used to prevent the server from
+                               // connecting to them.
+                               "CREATE TABLE \"banned_peers\" ( \
                                 \"id\"	INTEGER,        \
                                 \"ip_address\"	TEXT,   \
                                 \"key\"	BLOB,           \
@@ -145,7 +156,7 @@ int magicnet_database_peer_load_by_key_no_locks(struct key *key, struct magicnet
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    
+
     memcpy(&peer_out->key, key, sizeof(peer_out->key));
     const char *get_random_ip_sql = "SELECT ip_address, name, email, found_at FROM peers WHERE key=?;";
     res = sqlite3_prepare_v2(db, get_random_ip_sql, strlen(get_random_ip_sql), &stmt, 0);
@@ -212,8 +223,8 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     int load_res = magicnet_database_peer_load_by_key_no_locks(&peer_info->key, &tmp_info);
     if (load_res == MAGICNET_ERROR_NOT_FOUND)
     {
-       res = magicnet_database_peer_add_no_locks(peer_info->ip_address, &peer_info->key, peer_info->name, peer_info->email);
-       goto out;
+        res = magicnet_database_peer_add_no_locks(peer_info->ip_address, &peer_info->key, peer_info->name, peer_info->email);
+        goto out;
     }
 
     // Already exists then update?
@@ -243,7 +254,7 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     {
         sqlite3_bind_text(stmt, 3, peer_info->email, strlen(peer_info->email), NULL);
     }
-    
+
     sqlite3_bind_blob(stmt, 4, &peer_info->key.key, sizeof(peer_info->key.key), NULL);
 
     int step = sqlite3_step(stmt);
@@ -261,7 +272,6 @@ out:
     pthread_mutex_unlock(&db_lock);
     return res;
 }
-
 
 /**
  * THis function checks the banned peers table for the given ip address it then sets the output record if it exists which includes all columns and returns 0
@@ -370,7 +380,7 @@ int magicnet_database_create()
     }
 
     // This is the root host the peer everybody knows about.
-    magicnet_save_peer_info(&(struct magicnet_peer_information){.ip_address="104.248.237.170",.email="hello@dragonzap.com"});
+    magicnet_save_peer_info(&(struct magicnet_peer_information){.ip_address = "104.248.237.170", .email = "hello@dragonzap.com"});
     return res;
 }
 int magicnet_database_load()
@@ -485,7 +495,7 @@ out:
 
 /**
  * A function that returns the blockchain ID of the active blockchain
-*/
+ */
 int magicnet_database_get_active_blockchain_id()
 {
     int res = 0;
@@ -899,9 +909,7 @@ out:
     return res;
 }
 
-
-
-int magicnet_database_keys_get_active(struct key* key_pub_out, struct key* key_pri_out)
+int magicnet_database_keys_get_active(struct key *key_pub_out, struct key *key_pri_out)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -933,7 +941,7 @@ out:
     return res;
 }
 
-int magicnet_database_keys_create(struct key* pub_key, struct key* pri_key)
+int magicnet_database_keys_create(struct key *pub_key, struct key *pri_key)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -966,7 +974,7 @@ out:
     return res;
 }
 
-int magicnet_database_keys_set_default(struct key* pub_key)
+int magicnet_database_keys_set_default(struct key *pub_key)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -1011,7 +1019,6 @@ out:
     pthread_mutex_unlock(&db_lock);
     return res;
 }
-
 
 int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
 {
@@ -1085,7 +1092,7 @@ int magicnet_database_load_block_transactions_no_locks(struct block *block)
         return MAGICNET_ERROR_ALREADY_EXISTANT;
     }
     sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT hash, signature, key, program_name, time, data_size, data FROM transactions WHERE transaction_group_hash = ?";
+    const char *load_block_sql = "SELECT hash, signature, type, key, target_key, program_name, time, data_size, data FROM transactions WHERE transaction_group_hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1106,12 +1113,15 @@ int magicnet_database_load_block_transactions_no_locks(struct block *block)
         struct block_transaction *transaction = block_transaction_new();
         memcpy(transaction->hash, sqlite3_column_text(stmt, 0), strlen(sqlite3_column_text(stmt, 0)));
         memcpy(&transaction->signature, sqlite3_column_text(stmt, 1), sizeof(transaction->signature));
-        memcpy(&transaction->key, sqlite3_column_text(stmt, 2), sizeof(transaction->key));
-        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 3), strlen(sqlite3_column_text(stmt, 3)));
-        transaction->data.time = sqlite3_column_int(stmt, 4);
-        transaction->data.size = sqlite3_column_int(stmt, 5);
+        transaction->type = sqlite3_column_int(stmt, 2);
+        memcpy(&transaction->key, sqlite3_column_text(stmt, 3), sizeof(transaction->key));
+        memcpy(&transaction->target_key, sqlite3_column_text(stmt, 4), sizeof(transaction->target_key));
+
+        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 5), strlen(sqlite3_column_text(stmt, 5)));
+        transaction->data.time = sqlite3_column_int(stmt, 6);
+        transaction->data.size = sqlite3_column_int(stmt, 7);
         transaction->data.ptr = calloc(1, transaction->data.size);
-        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 6), transaction->data.size);
+        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 8), transaction->data.size);
         block_transaction_add(block->transaction_group, transaction);
 
         step = sqlite3_step(stmt);
@@ -1239,7 +1249,7 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
 
     for (int i = 0; i < transaction_group->total_transactions; i++)
     {
-        const char *insert_transaction_groups_sql = "INSERT INTO  transactions (hash, signature, key, program_name, time, data, data_size, transaction_group_hash) VALUES (?,?,?,?,?,?,?, ?);";
+        const char *insert_transaction_groups_sql = "INSERT INTO  transactions (hash, signature, type, key, target_key, program_name, time, data, data_size, transaction_group_hash) VALUES (?,?,?,?,?,?,?, ?);";
         res = sqlite3_prepare_v2(db, insert_transaction_groups_sql, strlen(insert_transaction_groups_sql), &stmt, 0);
         if (res != SQLITE_OK)
         {
@@ -1250,12 +1260,14 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
         struct block_transaction *transaction = transaction_group->transactions[i];
         sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
         sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
-        sqlite3_bind_blob(stmt, 3, &transaction->key, sizeof(transaction->key), NULL);
-        sqlite3_bind_text(stmt, 4, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
-        sqlite3_bind_int64(stmt, 5, transaction->data.time);
-        sqlite3_bind_blob(stmt, 6, transaction->data.ptr, transaction->data.size, NULL);
-        sqlite3_bind_int(stmt, 7, transaction->data.size);
-        sqlite3_bind_text(stmt, 8, transaction_group->hash, strlen(transaction_group->hash), NULL);
+        sqlite3_bind_int(stmt, 3, transaction->type);
+        sqlite3_bind_blob(stmt, 4, &transaction->key, sizeof(transaction->key), NULL);
+        sqlite3_bind_blob(stmt, 5, &transaction->target_key, sizeof(transaction->target_key), NULL);
+        sqlite3_bind_text(stmt, 6, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
+        sqlite3_bind_int64(stmt, 7, transaction->data.time);
+        sqlite3_bind_blob(stmt, 8, transaction->data.ptr, transaction->data.size, NULL);
+        sqlite3_bind_int(stmt, 9, transaction->data.size);
+        sqlite3_bind_text(stmt, 10, transaction_group->hash, strlen(transaction_group->hash), NULL);
         int step = sqlite3_step(stmt);
         if (step != SQLITE_DONE)
         {

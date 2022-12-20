@@ -16,7 +16,7 @@ int main()
         return -1;
     }
     
-    int res = magicnet_make_transaction(decentralized_program, 
+    int res = magicnet_make_transaction(decentralized_program, 0,
             "Beer from UK", 
             strlen("Beer from UK"));
 

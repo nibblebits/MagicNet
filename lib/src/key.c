@@ -43,6 +43,18 @@ struct key *MAGICNET_private_key()
     return &private_key;
 }
 
+/**
+ * Gets a key from string
+*/
+struct key MAGICNET_key_from_string(const char* key)
+{
+    struct key k;
+    bzero(&k, sizeof(k));
+    strncpy(k.key, key, sizeof(k.key));
+    k.size = strlen(key);
+    return k;
+}
+
 bool key_loaded(struct key *key)
 {
     struct key blank_key;
@@ -342,7 +354,7 @@ int generate_key()
     EC_KEY_free(eckey);
 
 
-    magicnet_save_peer_info(&(struct magicnet_peer_information){.email=NULL,.key=&public_key,.name="Anonymous"});
+    magicnet_save_peer_info(&(struct magicnet_peer_information){.key=public_key,.name="Anonymous"});
     return res;
 }
 

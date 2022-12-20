@@ -82,8 +82,8 @@ void magicnet_block_send_packet_free(struct magicnet_packet* packet)
     // Here we go we free transaction group here.
     block_transaction_group_free(block_send_packet->transaction_group);
     vector_free(block_send_packet->blocks);
-    
 }
+
 void magicnet_free_packet_pointers(struct magicnet_packet* packet)
 {   
     if (!packet)
@@ -205,12 +205,13 @@ out:
     return res;
 }
 
-int _magicnet_make_transaction(struct magicnet_program* program, void* data, size_t size, bool reconnect_if_required)
+
+int _magicnet_make_transaction(struct magicnet_program* program, int type, void* data, size_t size, bool reconnect_if_required)
 {
     int res = 0;
     struct magicnet_packet* packet = magicnet_packet_new();
     struct block_transaction* transaction = block_transaction_build(program->name, data, size);
-
+    transaction->type = type;
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_TRANSACTION_SEND;
     magicnet_signed_data(packet)->payload.transaction_send.transaction = transaction;
     res = magicnet_client_write_packet(program->client, packet, 0);
@@ -224,16 +225,30 @@ out:
     {
         if (reconnect_if_required)
         {
-            res = _magicnet_make_transaction(program, data, size, false);
+            res = _magicnet_make_transaction(program, type, data, size, false);
         }
     }
     magicnet_free_packet(packet);
     return res;
 }
 
-int magicnet_make_transaction(struct magicnet_program* program, void* data, size_t size)
+int magicnet_make_transaction(struct magicnet_program* program, int type, void* data, size_t size)
 {
-    return _magicnet_make_transaction(program, data, size, true);
+    return _magicnet_make_transaction(program, type, data, size, true);
+}
+
+
+/**
+ * This function creates a money transfer transaction and sends money
+*/
+int magicnet_make_money_transfer(struct magicnet_program* program, const char* to, double amount)
+{
+    struct block_transaction_money_transfer money_transfer = {};
+    money_transfer.recipient_key = MAGICNET_key_from_string(to);
+    // With a null transfer funding the server will figure out how to send that amount.
+    bzero(money_transfer.transfer_funding, sizeof(money_transfer.transfer_funding));
+    money_transfer.amount = amount;
+    return magicnet_make_transaction(program, MAGICNET_TRANSACTION_TYPE_COIN_SEND,  &money_transfer, sizeof(money_transfer) );
 }
 
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet)

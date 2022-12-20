@@ -28,6 +28,10 @@
 
 #define MAGICNET_LOCAL_SERVER_ADDRESS "127.0.0.1"
 
+
+// You may reference up to 10 funding sources to send money.
+#define MAGICNET_MONEY_TRANSACTION_TOTAL_FUNDING_SOURCES 10
+
 // 1 Million starting cash in the network. The value will decrease over time. With deflation.
 #define MAGICNET_GENESIS_STARTING_MONEY 10000000
 
