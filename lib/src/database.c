@@ -1217,6 +1217,56 @@ out:
     return res;
 }
 
+
+/**
+ * Saves a money transaction into the magicnet database without locks
+ * For table with columns
+ *   \"transaction_hash\"	TEXT,  \
+                                \"from_key\"	BLOB,  \
+                                \"recipient_key\"	BLOB,  \
+                                \"amount_received\"	DECIMAL,  \
+                                \"amount_spent\"	DECIMAL,  \
+ * 
+*/
+int magicnet_database_save_money_transaction_no_locks(struct block_transaction *transaction)
+{
+    int res = 0;
+    // Check that this transaction is a coin transfer type, if its not leave
+    if (transaction->type != MAGICNET_TRANSACTION_TYPE_COIN_SEND)
+    {
+        return MAGICNET_ERROR_INCOMPATIBLE;
+    }
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_money_transaction_sql = "INSERT INTO money_transactions (transaction_hash, from_key, recipient_key, amount_received, amount_spent) VALUES (?,?,?,?,?);";
+    res = sqlite3_prepare_v2(db, insert_money_transaction_sql, strlen(insert_money_transaction_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Cast block transaction into money transaction
+    struct block_transaction_money_transfer *money_transaction = (struct block_transaction_money_transfer*) transaction->data.ptr;
+
+    sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
+    sqlite3_bind_blob(stmt, 2, &transaction->key, sizeof(transaction->key), NULL);
+    sqlite3_bind_blob(stmt, 3, &money_transaction->recipient_key, sizeof(money_transaction->recipient_key), NULL);
+    sqlite3_bind_double(stmt, 4, money_transaction->amount);
+    sqlite3_bind_double(stmt, 5, 0);
+
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+
+    res = 0;
+
+out:
+    return res;
+}
+
 int magincet_database_save_transaction_group(struct block_transaction_group *transaction_group)
 {
     int res = 0;
@@ -1277,6 +1327,17 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
 
         sqlite3_finalize(stmt);
         stmt = NULL;
+
+        // We must also save it as a money transaction IF it is a money transaction type
+        if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
+        {
+            res = magicnet_database_save_money_transaction_no_locks(transaction);
+            if (res != 0)
+            {
+                goto out;
+            }
+        }
+        
     }
 
 out:

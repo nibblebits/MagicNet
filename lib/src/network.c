@@ -403,6 +403,15 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
         goto out;
     }
 
+    // Security precaution we need to make sure any transaction added is valid..
+    // I.e we cant allow transactions where someone is sending someone millions that they dont have..
+    if (!block_transaction_valid(transaction))
+    {
+        res = MAGICNET_ERROR_SECURITY_RISK;
+        magicnet_log("%s the transaction is invalid so wont be added \n",__FUNCTION__);
+        goto out;
+    }
+
     if (magicnet_server_awaiting_transaction_exists(server, transaction))
     {
         res = MAGICNET_ERROR_ALREADY_EXISTANT;
@@ -2781,11 +2790,80 @@ out:
     return res;
 }
 
+
+
+/**
+ * This function rebuilds coin send transactions
+*/
+int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction* transaction)
+{
+    int res = 0;
+    // Check that the data is big enough to hold the money transfer transaction
+    if (transaction->data.size < sizeof(struct block_transaction_money_transfer))
+    {
+        res = -1;
+        goto out;
+    }
+    // Cast the transaction data to a coin send transaction
+    struct block_transaction_money_transfer* money_transfer_transaction = (struct block_transaction_money_transfer*) transaction->data.ptr;
+    struct block_transaction_money_funding_source_and_amount empty_transfer_funding[MAGICNET_MONEY_TRANSACTION_TOTAL_FUNDING_SOURCES] = {0};
+    if (memcmp(empty_transfer_funding, money_transfer_transaction->transfer_funding, sizeof(empty_transfer_funding)) == 0)
+    {
+        // We have a NULL funding source. We need to rebuild it. And find transaction that meet the entire balance we are trying to send.
+        // Genesis key does not need a funding source to send money but the key can only send up to 1 million coins.
+        // For best design in that case its best to send 1 million to yourself and then send the rest to the other person.
+        // This will ensure you know how much money you have at any moment in time.
+
+        // TODO Later
+
+    }
+
+
+    // The target key of the transaction will be the recipient key of the money transfer transaction.
+    memcpy(&transaction->target_key, &money_transfer_transaction->recipient_key, sizeof(transaction->target_key));
+
+out:
+    return res;
+}
+
+/**
+ * This function rebuilds the transaction packet making changes where needed. It only rebuilds it
+ * for built in transaction types built into the protocol such as money transfers.
+*/
+int magicnet_transaction_rebuild(struct block_transaction* transaction)
+{
+    int res = 0;
+    if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
+    {
+        res = magicnet_transaction_packet_coin_send_rebuild(transaction);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+out:
+    return res;
+}
+/**
+ * This function is only used for localhost clients who send transactions to their local server.
+ * Hence why it is signed and sent to other peers. Since local programs arent aware of our private keys.
+*/
 int magicnet_client_process_transaction_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
 
     magicnet_server_lock(client->server);
+
+    // Theres a good chance we need to modify the transaction packet send to us by localhost
+    // Rebuild the transaction packet
+    res = magicnet_transaction_rebuild(magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    if (res < 0)
+    {
+        magicnet_log("%s rebuilding of packet failed\n", __FUNCTION__);
+        goto out;
+    }
+
     // We must sign the transaction in the packet
     res = block_transaction_hash_and_sign(magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
@@ -2793,6 +2871,7 @@ int magicnet_client_process_transaction_send_packet(struct magicnet_client *clie
         goto out;
     }
 
+    
     res = magicnet_packet_resign_on_send(packet);
     if (res < 0)
     {
