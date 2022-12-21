@@ -405,7 +405,7 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
 
     // Security precaution we need to make sure any transaction added is valid..
     // I.e we cant allow transactions where someone is sending someone millions that they dont have..
-    if (!block_transaction_valid(transaction))
+    if (block_transaction_valid(transaction) < 0)
     {
         res = MAGICNET_ERROR_SECURITY_RISK;
         magicnet_log("%s the transaction is invalid so wont be added \n",__FUNCTION__);
@@ -3041,7 +3041,7 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
     int res = 0;
     // Lets read all the IPS until we get a NULL.
     size_t total_peers = magicnet_read_int(client, NULL);
-    if (total_peers < 0)
+    if (total_peers <= 0)
     {
         res = total_peers;
         goto out;
@@ -3484,7 +3484,7 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
         goto out;
     }
 
-    if (peer_info_state == MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED)
+    if (peer_info_state == MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED && client->server)
     {
         res = magicnet_save_peer_info(&client->peer_info);
         if (res < 0)
