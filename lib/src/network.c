@@ -3679,6 +3679,7 @@ int magicnet_server_process_transaction_send_packet(struct magicnet_client *clie
     res = magicnet_server_awaiting_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
     {
+        magicnet_log("%s failed to add transaction to server queue\n", __FUNCTION__);
         goto out;
     }
 
@@ -3688,6 +3689,7 @@ int magicnet_server_process_transaction_send_packet(struct magicnet_client *clie
     res = magicnet_server_add_packet_to_relay(client->server, packet);
     if (res < 0)
     {
+        magicnet_log("%s failed to relay transaction\n", __FUNCTION__);
         goto out;
     }
 
