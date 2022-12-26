@@ -455,7 +455,8 @@ int block_hash_sign_verify(struct block *block)
     block->key = *MAGICNET_public_key();
 
     block_hash_create(block, block->hash);
-
+    block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
+    
     res = block_sign(block);
     if (res < 0)
     {
