@@ -1299,7 +1299,7 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
 
     for (int i = 0; i < transaction_group->total_transactions; i++)
     {
-        const char *insert_transaction_groups_sql = "INSERT INTO  transactions (hash, signature, type, target_key, program_name, time, data, data_size, transaction_group_hash) VALUES (?,?,?,?,?,?,?);";
+        const char *insert_transaction_groups_sql = "INSERT INTO  transactions (hash, signature, type, target_key, program_name, time, data, data_size, transaction_group_hash) VALUES (?,?,?,?,?,?,?, ?, ?);";
         res = sqlite3_prepare_v2(db, insert_transaction_groups_sql, strlen(insert_transaction_groups_sql), &stmt, 0);
         if (res != SQLITE_OK)
         {
