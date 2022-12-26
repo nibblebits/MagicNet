@@ -1299,10 +1299,12 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
 
     for (int i = 0; i < transaction_group->total_transactions; i++)
     {
-        const char *insert_transaction_groups_sql = "INSERT INTO  transactions (hash, signature, type, key, target_key, program_name, time, data, data_size, transaction_group_hash) VALUES (?,?,?,?,?,?,?, ?);";
+        const char *insert_transaction_groups_sql = "INSERT INTO  transactions (hash, signature, type, target_key, program_name, time, data, data_size, transaction_group_hash) VALUES (?,?,?,?,?,?,?, ?);";
         res = sqlite3_prepare_v2(db, insert_transaction_groups_sql, strlen(insert_transaction_groups_sql), &stmt, 0);
         if (res != SQLITE_OK)
         {
+            // Print a error message
+            magicnet_log("%s %d: %s", __FILE__, __LINE__, sqlite3_errmsg(db));
             res = -1;
             goto out;
         }
@@ -1311,7 +1313,6 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
         sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
         sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
         sqlite3_bind_int(stmt, 3, transaction->type);
-        sqlite3_bind_blob(stmt, 4, &transaction->key, sizeof(transaction->key), NULL);
         sqlite3_bind_blob(stmt, 5, &transaction->target_key, sizeof(transaction->target_key), NULL);
         sqlite3_bind_text(stmt, 6, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
         sqlite3_bind_int64(stmt, 7, transaction->data.time);
@@ -1321,6 +1322,8 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
         int step = sqlite3_step(stmt);
         if (step != SQLITE_DONE)
         {
+            // Print a error message
+            magicnet_log("%s %d: %s", __FILE__, __LINE__, sqlite3_errmsg(db));
             res = -1;
             goto out;
         }
