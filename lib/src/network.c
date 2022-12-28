@@ -2881,12 +2881,12 @@ int magicnet_client_process_transaction_send_packet(struct magicnet_client *clie
     }
 
     // Lets now check the transaction is valid before wasting our time
-    res = block_transaction_is_valid(magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    res = block_transaction_valid(magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
     {
         goto out;
     }
-    
+
     // Now we signed the transaction we must resign the packet.
     // All we do with a packet like this is add it to the relay so the server can relay to all other peers.
     res = magicnet_server_add_packet_to_relay(client->server, packet);
