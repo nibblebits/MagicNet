@@ -54,6 +54,7 @@ bool key_loaded(struct key *key);
 bool MAGICNET_is_genesis_key(struct key *key);
 
 struct key MAGICNET_key_from_string(const char* key);
+bool MAGICNET_key_valid(struct key *key);
 
 
 #endif

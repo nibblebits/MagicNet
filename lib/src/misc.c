@@ -33,6 +33,28 @@ size_t filesize(const char* filename)
     return size;
 }
 
+/**
+ * This function checks if the input string is completley hexadecimal
+*/
+bool is_hex(const char *str, size_t max_size)
+{
+    size_t i = 0;
+    while (i < max_size)
+    {
+        if (str[i] == '\0')
+            return true;
+        if (str[i] >= '0' && str[i] <= '9')
+            i++;
+        else if (str[i] >= 'a' && str[i] <= 'f')
+            i++;
+        else if (str[i] >= 'A' && str[i] <= 'F')
+            i++;
+        else
+            return false;
+    }
+    return false;
+}
+
 void bin2hex(char *input, size_t input_size, char *output)
 {
     int loop = 0;

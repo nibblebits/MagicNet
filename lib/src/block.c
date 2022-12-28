@@ -179,13 +179,83 @@ out:
     return res;
 }
 
+int block_transaction_coin_transfer_valid(struct block_transaction* transaction)
+{
+    int res = 0;
+    if (transaction->data.size != sizeof(struct block_transaction_money_transfer))
+    {
+        // Show error message
+        magicnet_log("%s the transaction data is not the correct size for a money transfer.\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    struct block_transaction_money_transfer *money_transfer = (struct block_transaction_money_transfer*)transaction->data.ptr;
+    if (money_transfer->amount <= 0)
+    {
+        // Show error message
+        magicnet_log("%s the amount is not valid\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Check that the recipient key is valid
+    if (MAGICNET_key_valid(&money_transfer->recipient_key) < 0)
+    {
+        magicnet_log("%s the recipient key is invalid\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Check that the recipient key is equal to the target key on the main transaction
+    if (memcmp(&money_transfer->recipient_key, &transaction->target_key, sizeof(money_transfer->recipient_key)) != 0)
+    {
+        magicnet_log("%s the recipient key is not equal to the target key\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // TODO check the funding sources to ensure that the sender has enough funds
+    // TODO check the funding sources to ensure that the sender has not already spent the funds
+    
+out:
+    return res;
+}
+
+
 int block_transaction_valid(struct block_transaction *transaction)
 {
     if (transaction->data.size > MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA)
     {
+        // Show error message
+        magicnet_log("%s the transaction data is too large\n", __FUNCTION__);
         return -1;
     }
 
+    // Let's see if the key is valid
+    if (MAGICNET_key_valid(&transaction->key) < 0)
+    {
+        magicnet_log("%s the public key is invalid\n", __FUNCTION__);
+        return -1;
+    }
+
+    // Lets check to see if the target key is valid
+    if (key_loaded(&transaction->target_key) && MAGICNET_key_valid(&transaction->target_key) < 0)
+    {
+        magicnet_log("%s the target key is invalid\n", __FUNCTION__);
+        return -1;
+    }
+
+    if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
+    {
+        int res = block_transaction_coin_transfer_valid(transaction);
+        if (res < 0)
+        {
+            return res;
+        }
+    }
+
+    
     char transaction_hash[SHA256_STRING_LENGTH];
     struct buffer *buffer = buffer_create();
     block_buffer_write_transaction_data(&transaction->data, buffer);

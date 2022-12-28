@@ -70,6 +70,26 @@ bool key_cmp(struct key *key, struct key *key2)
     return strncmp(key->key, key2->key, sizeof(key->key)) == 0;
 }
 
+/**
+ * This function checks that the key is valid
+*/
+bool MAGICNET_key_valid(struct key *key)
+{
+    if (!key)
+        return false;
+
+    if (key->size == 0)
+        return false;
+
+    if (key->size > sizeof(key->key))
+        return false;
+
+    if (!is_hex(key->key, sizeof(key->key)))
+        return false;
+
+    return true;
+}
+
 int public_verify(struct key *public_key, const char *data, size_t size, struct signature *sig_in)
 {
     pthread_mutex_lock(&key_lock);
