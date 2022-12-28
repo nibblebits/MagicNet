@@ -1313,12 +1313,12 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
         sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
         sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
         sqlite3_bind_int(stmt, 3, transaction->type);
-        sqlite3_bind_blob(stmt, 5, &transaction->target_key, sizeof(transaction->target_key), NULL);
-        sqlite3_bind_text(stmt, 6, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
-        sqlite3_bind_int64(stmt, 7, transaction->data.time);
-        sqlite3_bind_blob(stmt, 8, transaction->data.ptr, transaction->data.size, NULL);
-        sqlite3_bind_int(stmt, 9, transaction->data.size);
-        sqlite3_bind_text(stmt, 10, transaction_group->hash, strlen(transaction_group->hash), NULL);
+        sqlite3_bind_blob(stmt, 4, &transaction->target_key, sizeof(transaction->target_key), NULL);
+        sqlite3_bind_text(stmt, 5, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
+        sqlite3_bind_int64(stmt, 6, transaction->data.time);
+        sqlite3_bind_blob(stmt, 7, transaction->data.ptr, transaction->data.size, NULL);
+        sqlite3_bind_int(stmt, 8, transaction->data.size);
+        sqlite3_bind_text(stmt, 9, transaction_group->hash, strlen(transaction_group->hash), NULL);
         int step = sqlite3_step(stmt);
         if (step != SQLITE_DONE)
         {
