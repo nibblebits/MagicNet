@@ -1249,8 +1249,8 @@ int magicnet_database_save_money_transaction_no_locks(struct block_transaction *
     struct block_transaction_money_transfer *money_transaction = (struct block_transaction_money_transfer*) transaction->data.ptr;
 
     sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
-    sqlite3_bind_blob(stmt, 2, &transaction->key, sizeof(transaction->key), NULL);
-    sqlite3_bind_blob(stmt, 3, &money_transaction->recipient_key, sizeof(money_transaction->recipient_key), NULL);
+    sqlite3_bind_blob(stmt, 2, &transaction->key.key, sizeof(transaction->key.key), NULL);
+    sqlite3_bind_blob(stmt, 3, &money_transaction->recipient_key.key, sizeof(money_transaction->recipient_key.key), NULL);
     sqlite3_bind_double(stmt, 4, money_transaction->amount);
     sqlite3_bind_double(stmt, 5, 0);
 
@@ -1313,7 +1313,7 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
         sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
         sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
         sqlite3_bind_int(stmt, 3, transaction->type);
-        sqlite3_bind_blob(stmt, 4, &transaction->target_key, sizeof(transaction->target_key), NULL);
+        sqlite3_bind_blob(stmt, 4, &transaction->target_key.key, sizeof(transaction->target_key.key), NULL);
         sqlite3_bind_text(stmt, 5, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
         sqlite3_bind_int64(stmt, 6, transaction->data.time);
         sqlite3_bind_blob(stmt, 7, transaction->data.ptr, transaction->data.size, NULL);

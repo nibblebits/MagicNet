@@ -1205,6 +1205,8 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
         goto out;
     }
 
+    transaction_out->type = res;
+    
     // Read the target key
     res = magicnet_read_bytes(client, &transaction_out->target_key, sizeof(transaction_out->target_key), store_in_buffer);
     if (res < 0)
