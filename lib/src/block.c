@@ -200,7 +200,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction* transaction)
     }
 
     // Check that the recipient key is valid
-    if (MAGICNET_key_valid(&money_transfer->recipient_key) < 0)
+    if (!MAGICNET_key_valid(&money_transfer->recipient_key))
     {
         magicnet_log("%s the recipient key is invalid\n", __FUNCTION__);
         res = -1;
@@ -217,7 +217,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction* transaction)
 
     // TODO check the funding sources to ensure that the sender has enough funds
     // TODO check the funding sources to ensure that the sender has not already spent the funds
-    
+
 out:
     return res;
 }
@@ -233,14 +233,14 @@ int block_transaction_valid(struct block_transaction *transaction)
     }
 
     // Let's see if the key is valid
-    if (MAGICNET_key_valid(&transaction->key) < 0)
+    if (!MAGICNET_key_valid(&transaction->key))
     {
         magicnet_log("%s the public key is invalid\n", __FUNCTION__);
         return -1;
     }
 
     // Lets check to see if the target key is valid
-    if (key_loaded(&transaction->target_key) && MAGICNET_key_valid(&transaction->target_key) < 0)
+    if (key_loaded(&transaction->target_key) && !MAGICNET_key_valid(&transaction->target_key))
     {
         magicnet_log("%s the target key is invalid\n", __FUNCTION__);
         return -1;
