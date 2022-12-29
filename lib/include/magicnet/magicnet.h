@@ -434,6 +434,9 @@ struct magicnet_server
         // The step in the block creation sequence we are currently in.
         int step;
 
+        // Pointer to the created block.
+        struct block* created_block;
+
     } next_block;
 
 
@@ -527,6 +530,8 @@ enum
 {
     // The transaction must be signed, hash generated and then sent to the network
     BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND,
+    // The transaction was signed and sent awaiting delivery now..
+    BLOCK_TRANSACTION_STATE_SIGNED_AND_SENT,
     // The transaction was sent and is now on the blockchain that is shared around the network.
     BLOCK_TRANSACTION_STATE_COMPLETED_AND_ON_CHAIN,
     // The transaction we added has failed either due to the transaction data being valid or six block cycles have passed
