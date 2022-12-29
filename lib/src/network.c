@@ -36,6 +36,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet);
 void magicnet_server_reset_block_sequence(struct magicnet_server *server);
 int magicnet_client_process_block_super_download_request_packet(struct magicnet_client *client, struct magicnet_packet *packet);
+int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, struct block_transaction *transaction);
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
@@ -132,6 +133,7 @@ void magicnet_server_free(struct magicnet_server *server)
     }
     magicnet_server_reset_block_sequence(server);
     vector_free(server->next_block.block_transactions);
+    // TODO free the waiting transactions
     vector_free(server->next_block.signed_up_verifiers);
     vector_free(server->next_block.verifier_votes.vote_counts);
     vector_free(server->next_block.verifier_votes.votes);
@@ -304,6 +306,7 @@ struct magicnet_server *magicnet_server_start(int port)
     server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count *));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
     server->next_block.block_transactions = vector_create(sizeof(struct block_transaction *));
+    server->our_waiting_transactions = vector_create(sizeof(struct self_block_transaction*));
     server->server_started = time(NULL);
     server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
     server->thread_ids = vector_create(sizeof(pthread_t));
@@ -378,7 +381,56 @@ void magicnet_server_unlock(struct magicnet_server *server)
     pthread_rwlock_unlock(&server->lock);
 }
 
+/**
+ * This function checks if the block transaction is already added to the awaiting transactions
+*/
 bool magicnet_server_awaiting_transaction_exists(struct magicnet_server *server, struct block_transaction *transaction)
+{
+    vector_set_peek_pointer(server->our_waiting_transactions, 0);
+    struct self_block_transaction *current = vector_peek_ptr(server->our_waiting_transactions);
+    while (current)
+    {
+        if (strncmp(current->transaction->hash, transaction->hash, sizeof(current->transaction->hash)) == 0)
+        {
+            return true;
+        }
+        current = vector_peek_ptr(server->our_waiting_transactions);
+    }
+
+    return false;
+}
+
+
+/**
+ * This function adds an awaiting transaction to the server
+*/
+int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, struct block_transaction *transaction)
+{
+    int res = 0;
+    // Check if the transaction already exists
+    if (magicnet_server_awaiting_transaction_exists(server, transaction))
+    {
+        return 0;
+    }
+
+
+    // Make sure the transaction is not signed already
+    if (block_transaction_is_signed(transaction))
+    {
+        magicnet_log("%s Transaction is already signed, cannot add to awaiting transactions. This queue is only for transactions that should be signed and sent to the network\n", __FUNCTION__);
+        return MAGICNET_ERROR_SECURITY_RISK;
+    }
+
+    // Create a self transaction
+    struct self_block_transaction* transaction = block_self_transaction_new(transaction);
+    vector_push(server->our_waiting_transactions, &transaction);
+
+    // Write to log that its been added
+    magicnet_log("%s Added transaction to awaiting transactions: %s  (The transaction will be processed then eventually signed and relayed to the network)\n", __FUNCTION__, transaction->hash);
+    return res;   
+}
+
+bool magicnet_server_next_block_transaction_exists(struct magicnet_server *server, struct block_transaction *transaction)
 {
     vector_set_peek_pointer(server->next_block.block_transactions, 0);
     struct block_transaction *current_trans = vector_peek_ptr(server->next_block.block_transactions);
@@ -394,10 +446,10 @@ bool magicnet_server_awaiting_transaction_exists(struct magicnet_server *server,
     return false;
 }
 
-int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, struct block_transaction *transaction)
+int magicnet_server_next_block_transaction_add(struct magicnet_server *server, struct block_transaction *transaction)
 {
     int res = 0;
-    if (vector_count(server->next_block.block_transactions) > 0)
+    if (vector_count(server->next_block.block_transactions) > MAGICNET_MAX_TOTAL_TRANSACTIONS_IN_BLOCK)
     {
         res = MAGICNET_ERROR_QUEUE_FULL;
         goto out;
@@ -412,7 +464,7 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
         goto out;
     }
 
-    if (magicnet_server_awaiting_transaction_exists(server, transaction))
+    if (magicnet_server_next_block_transaction_exists(server, transaction))
     {
         res = MAGICNET_ERROR_ALREADY_EXISTANT;
         goto out;
@@ -2858,50 +2910,60 @@ int magicnet_client_process_transaction_send_packet(struct magicnet_client *clie
     magicnet_server_lock(client->server);
 
     // Theres a good chance we need to modify the transaction packet send to us by localhost
-    // Rebuild the transaction packet
-    res = magicnet_transaction_rebuild(magicnet_signed_data(packet)->payload.transaction_send.transaction);
-    if (res < 0)
-    {
-        magicnet_log("%s rebuilding of packet failed\n", __FUNCTION__);
-        goto out;
-    }
+    // // Rebuild the transaction packet
+    // res = magicnet_transaction_rebuild(magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    // if (res < 0)
+    // {
+    //     magicnet_log("%s rebuilding of packet failed\n", __FUNCTION__);
+    //     goto out;
+    // }
 
-    // We must sign the transaction in the packet
-    res = block_transaction_hash_and_sign(magicnet_signed_data(packet)->payload.transaction_send.transaction);
-    if (res < 0)
-    {
-        goto out;
-    }
+    // // We must sign the transaction in the packet
+    // res = block_transaction_hash_and_sign(magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    // if (res < 0)
+    // {
+    //     goto out;
+    // }
 
     
-    res = magicnet_packet_resign_on_send(packet);
-    if (res < 0)
-    {
-        goto out;
-    }
+    // res = magicnet_packet_resign_on_send(packet);
+    // if (res < 0)
+    // {
+    //     goto out;
+    // }
 
-    // Lets now check the transaction is valid before wasting our time
-    res = block_transaction_valid(magicnet_signed_data(packet)->payload.transaction_send.transaction);
-    if (res < 0)
-    {
-        goto out;
-    }
+    // // Lets now check the transaction is valid before wasting our time
+    // res = block_transaction_valid(magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    // if (res < 0)
+    // {
+    //     goto out;
+    // }
 
-    // Now we signed the transaction we must resign the packet.
-    // All we do with a packet like this is add it to the relay so the server can relay to all other peers.
-    res = magicnet_server_add_packet_to_relay(client->server, packet);
-    if (res < 0)
-    {
-        goto out;
-    }
-    // Oh and we add the transaction to our own queue as well.
+    // // Now we signed the transaction we must resign the packet.
+    // // All we do with a packet like this is add it to the relay so the server can relay to all other peers.
+    // res = magicnet_server_add_packet_to_relay(client->server, packet);
+    // if (res < 0)
+    // {
+    //     goto out;
+    // }
+    // // Oh and we add the transaction to our own queue as well.
+    // res = magicnet_server_next_block_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    // if (res < 0)
+    // {
+    //     goto out;
+    // }
+
+    // magicnet_log("%s Processed our self-signed transaction packet. RELAYING\n", __FUNCTION__);
+
+    // Add the transaction to the awaiting transactions vector
     res = magicnet_server_awaiting_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
     {
+        // show error message
+        magicnet_log("%s failed to add transaction to awaiting transactions vector\n", __FUNCTION__);
         goto out;
     }
 
-    magicnet_log("%s Processed our self-signed transaction packet. RELAYING\n", __FUNCTION__);
 
 out:
     magicnet_server_unlock(client->server);
@@ -3685,7 +3747,7 @@ int magicnet_server_process_transaction_send_packet(struct magicnet_client *clie
     int res = 0;
     magicnet_server_lock(client->server);
     // Oh and we add the transaction to our own queue as well.
-    res = magicnet_server_awaiting_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
+    res = magicnet_server_next_block_transaction_add(client->server, magicnet_signed_data(packet)->payload.transaction_send.transaction);
     if (res < 0)
     {
         magicnet_log("%s failed to add transaction to server queue\n", __FUNCTION__);

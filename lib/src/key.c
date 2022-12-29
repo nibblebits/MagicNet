@@ -78,7 +78,8 @@ bool MAGICNET_key_valid(struct key *key)
     if (!key)
         return false;
 
-    if (key->size == 0)
+    // MINIMIUM size is much higher but ill check later..
+    if (key->size < 60)
         return false;
 
     if (key->size > sizeof(key->key))

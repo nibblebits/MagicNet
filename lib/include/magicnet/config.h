@@ -83,4 +83,6 @@
 // We will download a chain from a maximum of 1 peers.
 #define MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS 1
 
+#define MAGICNET_MAX_SMALL_STRING_SIZE 64
+
 #endif

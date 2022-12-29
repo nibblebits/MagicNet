@@ -40,6 +40,27 @@ struct block_transaction_group *block_transaction_group_new()
 }
 
 /**
+ * This function creates a new struct self_block_transaction. It is not saved into the database at this time
+*/
+struct self_block_transaction* block_self_transaction_new(struct block_transaction* transaction)
+{
+    struct self_block_transaction* self_block_transaction = calloc(1, sizeof(struct self_block_transaction));
+    self_block_transaction->state = BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND;
+    strncpy(self_block_transaction->status_message, "Pending", sizeof(self_block_transaction->status_message));
+    self_block_transaction->transaction = block_transaction_clone(transaction);
+    return self_block_transaction;
+}
+
+/**
+ * This function checks if the block transaction has been signed yet
+*/
+bool block_transaction_is_signed(struct block_transaction *transaction)
+{
+    struct signature blank_sig = {0};
+    return memcmp(&transaction->signature, &blank_sig, sizeof(transaction->signature)) != 0;
+}
+
+/**
  * Create function that gets active blockchain
 */
 struct blockchain *magicnet_blockchain_get_active()

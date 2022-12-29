@@ -7,6 +7,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdbool.h>
 #include "magicnet/vector.h"
 #include "magicnet/config.h"
 #include "key.h"
@@ -435,6 +436,11 @@ struct magicnet_server
 
     } next_block;
 
+
+    // Vector of struct self_block_transaction* all transactions in here are unsigned. These are transactions waiting to be sent
+    // but havent been sent yet to the network.
+    struct vector* our_waiting_transactions;
+    
     // The timestamp the server started
     time_t server_started;
     // THe first time the block cycle begins for this server instance
@@ -513,6 +519,38 @@ struct block_transaction
 
     // Pointer to raw data of the transacton known only by the application using the network
     struct block_transaction_data data;
+};
+
+
+// Transaction states
+enum
+{
+    // The transaction must be signed, hash generated and then sent to the network
+    BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND,
+    // The transaction was sent and is now on the blockchain that is shared around the network.
+    BLOCK_TRANSACTION_STATE_COMPLETED_AND_ON_CHAIN,
+    // The transaction we added has failed either due to the transaction data being valid or six block cycles have passed
+    // that have not included our transaction. After 6 tries we abort.
+    BLOCK_TRANSACTION_STATE_FAILED,
+    // The transaction is no longer on the blockchain, possibly due to a chain fork and the new chain becoming the popular one
+    // and not containing our transaction.
+    BLOCK_TRANSACTION_STATE_TRANSACTION_VOIDED,
+    // The transaction was cancelled by the sender. May only be cancelled when it is not sent to the network yet.
+    // after the network has seen the transaction cancellation is no longer possible.
+    // If we receive a block with a transaction that we cancelled we will change its state to BLOCK_TRANSACTION_STATE_COMPLETED_AND_ON_CHAIN
+    BLOCK_TRANSACTION_STATE_CANCELLED,
+};
+
+/**
+ * Represents a transaction that was created on our local machine, that may or may not have been sent to the network yet
+*/
+struct self_block_transaction
+{
+    struct block_transaction* transaction;
+    // The state of our transaction
+    int state;
+    // A message declaring the state of the message (If any)
+    char status_message[MAGICNET_MAX_SMALL_STRING_SIZE];
 };
 
 /**
@@ -772,6 +810,8 @@ int block_save(struct block *block);
 int block_sign(struct block *block);
 void block_free(struct block *block);
 void block_free_vector(struct vector *block_vec);
+bool block_transaction_is_signed(struct block_transaction *transaction);
+
 bool sha256_empty(const char *hash);
 
 int blockchain_init();
@@ -782,6 +822,7 @@ int magicnet_blockchain_get_active_id();
 
 struct block *block_clone(struct block *block);
 struct block_transaction *block_transaction_new();
+struct self_block_transaction* block_self_transaction_new(struct block_transaction* transaction);
 
 struct block_transaction_group *block_transaction_group_new();
 void block_transaction_group_free(struct block_transaction_group *transaction_group);
@@ -793,6 +834,8 @@ struct block_transaction *block_transaction_build(const char *program_name, char
 int block_transaction_add(struct block_transaction_group *transaction_group, struct block_transaction *transaction);
 int block_transaction_valid(struct block_transaction *transaction);
 int block_transaction_hash_and_sign(struct block_transaction *transaction);
+bool block_transaction_is_signed(struct block_transaction *transaction);
+
 int block_verify(struct block *block);
 int block_hash_sign_verify(struct block *block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
