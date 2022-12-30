@@ -498,6 +498,7 @@ struct block *block_clone(struct block *block)
     struct block *block_cloned = block_create_with_group(block->hash, block->prev_hash, block_transaction_group_clone(block->transaction_group));
     block_cloned->key = block->key;
     block_cloned->signature = block->signature;
+    block_cloned->blockchain_id = block->blockchain_id;
     return block_cloned;
 }
 
