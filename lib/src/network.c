@@ -4590,7 +4590,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         }
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
     }
-    else if (current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end)
+    else if (current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end && step == BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE)
     {
         // Clone the created block as reset will free it.
         struct block* created_block = server->next_block.created_block ? block_clone(server->next_block.created_block) : NULL;
