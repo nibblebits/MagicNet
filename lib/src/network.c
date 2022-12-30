@@ -37,7 +37,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 void magicnet_server_reset_block_sequence(struct magicnet_server *server);
 int magicnet_client_process_block_super_download_request_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, struct block_transaction *transaction);
-void magicnet_server_set_created_block(struct magicnet_server* server, struct block* block);
+void magicnet_server_set_created_block(struct magicnet_server *server, struct block *block);
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
@@ -307,7 +307,7 @@ struct magicnet_server *magicnet_server_start(int port)
     server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count *));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
     server->next_block.block_transactions = vector_create(sizeof(struct block_transaction *));
-    server->our_waiting_transactions = vector_create(sizeof(struct self_block_transaction*));
+    server->our_waiting_transactions = vector_create(sizeof(struct self_block_transaction *));
     server->server_started = time(NULL);
     server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
     server->thread_ids = vector_create(sizeof(pthread_t));
@@ -384,7 +384,7 @@ void magicnet_server_unlock(struct magicnet_server *server)
 
 /**
  * This function checks if the block transaction is already added to the awaiting transactions
-*/
+ */
 bool magicnet_server_awaiting_transaction_exists(struct magicnet_server *server, struct block_transaction *transaction)
 {
     vector_set_peek_pointer(server->our_waiting_transactions, 0);
@@ -401,10 +401,9 @@ bool magicnet_server_awaiting_transaction_exists(struct magicnet_server *server,
     return false;
 }
 
-
 /**
  * This function adds an awaiting transaction to the server
-*/
+ */
 int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, struct block_transaction *transaction)
 {
     int res = 0;
@@ -414,7 +413,6 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
         return 0;
     }
 
-
     // Make sure the transaction is not signed already
     if (block_transaction_is_signed(transaction))
     {
@@ -423,12 +421,12 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
     }
 
     // Create a self transaction
-    struct self_block_transaction* self_transaction = block_self_transaction_new(transaction);
+    struct self_block_transaction *self_transaction = block_self_transaction_new(transaction);
     vector_push(server->our_waiting_transactions, &self_transaction);
 
     // Write to log that its been added
     magicnet_log("%s Added transaction to awaiting transactions: %s  (The transaction will be processed then eventually signed and relayed to the network)\n", __FUNCTION__, transaction->hash);
-    return res;   
+    return res;
 }
 
 bool magicnet_server_next_block_transaction_exists(struct magicnet_server *server, struct block_transaction *transaction)
@@ -461,11 +459,11 @@ int magicnet_server_next_block_transaction_add(struct magicnet_server *server, s
     if (block_transaction_valid(transaction) < 0)
     {
         res = MAGICNET_ERROR_SECURITY_RISK;
-        magicnet_log("%s the transaction is invalid so wont be added \n",__FUNCTION__);
+        magicnet_log("%s the transaction is invalid so wont be added \n", __FUNCTION__);
         goto out;
     }
 
-    struct blockchain* active_chain = magicnet_blockchain_get_active();
+    struct blockchain *active_chain = magicnet_blockchain_get_active();
     if (!active_chain)
     {
         magicnet_log("%s issue getting active blockchain, we will not be able to add transactions in this case. We may have a working chain later on..\n", __FUNCTION__);
@@ -1269,7 +1267,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     }
 
     transaction_out->type = res;
-    
+
     // Read the target key
     res = magicnet_read_bytes(client, &transaction_out->target_key, sizeof(transaction_out->target_key), store_in_buffer);
     if (res < 0)
@@ -1292,7 +1290,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
         magicnet_log("%s failed to read program name \n", __FUNCTION__);
         goto out;
     }
-    
+
     transaction_out->data.size = magicnet_read_int(client, store_in_buffer);
     if (transaction_out->data.size < 0)
     {
@@ -1888,7 +1886,7 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
     {
         goto out;
     }
-    
+
     res = magicnet_write_long(client, transaction->data.time, store_in_buffer);
     if (res < 0)
     {
@@ -2855,12 +2853,10 @@ out:
     return res;
 }
 
-
-
 /**
  * This function rebuilds coin send transactions
-*/
-int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction* transaction)
+ */
+int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction *transaction)
 {
     int res = 0;
     // Check that the data is big enough to hold the money transfer transaction
@@ -2870,7 +2866,7 @@ int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction* tran
         goto out;
     }
     // Cast the transaction data to a coin send transaction
-    struct block_transaction_money_transfer* money_transfer_transaction = (struct block_transaction_money_transfer*) transaction->data.ptr;
+    struct block_transaction_money_transfer *money_transfer_transaction = (struct block_transaction_money_transfer *)transaction->data.ptr;
     struct block_transaction_money_funding_source_and_amount empty_transfer_funding[MAGICNET_MONEY_TRANSACTION_TOTAL_FUNDING_SOURCES] = {0};
     if (memcmp(empty_transfer_funding, money_transfer_transaction->transfer_funding, sizeof(empty_transfer_funding)) == 0)
     {
@@ -2880,9 +2876,7 @@ int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction* tran
         // This will ensure you know how much money you have at any moment in time.
 
         // TODO Later
-
     }
-
 
     // The target key of the transaction will be the recipient key of the money transfer transaction.
     memcpy(&transaction->target_key, &money_transfer_transaction->recipient_key, sizeof(transaction->target_key));
@@ -2894,8 +2888,8 @@ out:
 /**
  * This function rebuilds the transaction packet making changes where needed. It only rebuilds it
  * for built in transaction types built into the protocol such as money transfers.
-*/
-int magicnet_transaction_rebuild(struct block_transaction* transaction)
+ */
+int magicnet_transaction_rebuild(struct block_transaction *transaction)
 {
     int res = 0;
     if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
@@ -2913,7 +2907,7 @@ out:
 /**
  * This function is only used for localhost clients who send transactions to their local server.
  * Hence why it is signed and sent to other peers. Since local programs arent aware of our private keys.
-*/
+ */
 int magicnet_client_process_transaction_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -2928,7 +2922,6 @@ int magicnet_client_process_transaction_send_packet(struct magicnet_client *clie
         magicnet_log("%s failed to add transaction to awaiting transactions vector\n", __FUNCTION__);
         goto out;
     }
-
 
 out:
     magicnet_server_unlock(client->server);
@@ -3667,7 +3660,7 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
     return res;
 }
 
-void magicnet_server_set_created_block(struct magicnet_server* server, struct block* block)
+void magicnet_server_set_created_block(struct magicnet_server *server, struct block *block)
 {
     if (!block->blockchain_id)
     {
@@ -3710,7 +3703,6 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
             magicnet_chain_downloader_queue_for_block_download(block->prev_hash);
         }
         block_free(previous_block);
-
 
         // Is this a new block from a verifeir? Then lets set the created block so we have proof of this
         // created block.
@@ -4447,13 +4439,12 @@ out:
     magicnet_free_packet(packet);
 }
 
-
-bool magicnet_server_should_sign_and_send_self_transaction(struct self_block_transaction* self_transaction)
+bool magicnet_server_should_sign_and_send_self_transaction(struct self_block_transaction *self_transaction)
 {
     return self_transaction->state == BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND;
 }
 
-void magicnet_server_sign_and_send_self_transaction(struct magicnet_server* server, struct self_block_transaction* self_transaction, const char* last_block_hash)
+void magicnet_server_sign_and_send_self_transaction(struct magicnet_server *server, struct self_block_transaction *self_transaction, const char *last_block_hash)
 {
     int res = 0;
     // Many times we should not even bother signing the transaction, such as if its already been done.
@@ -4463,9 +4454,12 @@ void magicnet_server_sign_and_send_self_transaction(struct magicnet_server* serv
         return;
     }
 
-    struct magicnet_packet* transaction_packet = magicnet_packet_new();
+    struct magicnet_packet *transaction_packet = magicnet_packet_new();
     char status_message[MAGICNET_MAX_SMALL_STRING_SIZE];
     strncpy(status_message, "Transaction sent to the network", sizeof(status_message));
+
+    // We need to update the block transaction data to have a previous block hash set to the one provided
+    memcpy(self_transaction->transaction->data.prev_block_hash, last_block_hash, sizeof(self_transaction->transaction->data.prev_block_hash));
 
     // Theres a good chance we need to modify the transaction packet send to us by localhost
     // // Rebuild the transaction packet
@@ -4484,7 +4478,6 @@ void magicnet_server_sign_and_send_self_transaction(struct magicnet_server* serv
         strncpy(status_message, "Hashing and signing has failed", sizeof(status_message));
         goto out;
     }
-
 
     // Lets now check the transaction is valid before wasting our time
     res = block_transaction_valid(self_transaction->transaction);
@@ -4525,9 +4518,8 @@ out:
     }
 
     strncpy(self_transaction->status_message, status_message, sizeof(self_transaction->status_message));
-    
 }
-void magicnet_server_sign_and_send_self_transactions(struct magicnet_server* server, struct block* block)
+void magicnet_server_sign_and_send_self_transactions(struct magicnet_server *server, struct block *block)
 {
     magicnet_log("%s we will now sign and send %i transactions of ours to the network\n", __FUNCTION__, vector_count(server->our_waiting_transactions));
     int active_blockchain_id = magicnet_blockchain_get_active_id();
@@ -4537,7 +4529,7 @@ void magicnet_server_sign_and_send_self_transactions(struct magicnet_server* ser
         return;
     }
 
-    struct block* prev_block = block_load(block->prev_hash);
+    struct block *prev_block = block_load(block->prev_hash);
     if (!prev_block)
     {
         magicnet_log("%s We don't know the previous block for the block that we should sign with. Therefore we dont really know the blockchain. We will avoid sending the transactions this time round\n", __FUNCTION__);
@@ -4548,8 +4540,8 @@ void magicnet_server_sign_and_send_self_transactions(struct magicnet_server* ser
     block_free(prev_block);
 
     vector_set_peek_pointer(server->our_waiting_transactions, 0);
-    struct self_block_transaction* self_transaction = vector_peek_ptr(server->our_waiting_transactions);
-    while(self_transaction)
+    struct self_block_transaction *self_transaction = vector_peek_ptr(server->our_waiting_transactions);
+    while (self_transaction)
     {
         magicnet_server_sign_and_send_self_transaction(server, self_transaction, block->hash);
         self_transaction = vector_peek_ptr(server->our_waiting_transactions);
@@ -4626,7 +4618,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     else if (current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end && step == BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE)
     {
         // Clone the created block as reset will free it.
-        struct block* created_block = server->next_block.created_block ? block_clone(server->next_block.created_block) : NULL;
+        struct block *created_block = server->next_block.created_block ? block_clone(server->next_block.created_block) : NULL;
 
         // We dont check for the step in this IF statement, just in case a peer doesnt keep up
         // we dont want them stuck forever out of being able to make block sequences, therefore we allow this one to always run
@@ -4634,9 +4626,8 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         // sending verifier packets when they shouldnt be since they will be discarded.
         magicnet_server_reset_block_sequence(server);
 
-
         // After we reset the block sequence let us sign and send any pending self transactions.
-        // Must be after we reset otherwise any work we do will be erased in the reset. 
+        // Must be after we reset otherwise any work we do will be erased in the reset.
         // Reset also frees the created block so a clone is neccessary
         if (created_block)
         {
