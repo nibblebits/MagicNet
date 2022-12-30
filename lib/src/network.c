@@ -465,6 +465,16 @@ int magicnet_server_next_block_transaction_add(struct magicnet_server *server, s
         goto out;
     }
 
+    struct blockchain* active_chain = magicnet_blockchain_get_active();
+    if (!active_chain)
+    {
+        magicnet_log("%s issue getting active blockchain, we will not be able to add transactions in this case. We may have a working chain later on..\n", __FUNCTION__);
+        res = MAGICNET_ERROR_INCOMPATIBLE;
+        goto out;
+    }
+
+    // Let's just check the transactions previous hash is equal to the last block hash on the active chain
+    // Since we only want to add transactions that are on the active blockchain.
     if (magicnet_server_next_block_transaction_exists(server, transaction))
     {
         res = MAGICNET_ERROR_ALREADY_EXISTANT;
@@ -3659,6 +3669,12 @@ int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *cli
 
 void magicnet_server_set_created_block(struct magicnet_server* server, struct block* block)
 {
+    if (!block->blockchain_id)
+    {
+        // Only blocks with valid blockchain id are accepted. Show message
+        magicnet_log("%s block has no blockchain id, ignoring\n", __FUNCTION__);
+        return;
+    }
     if (server->next_block.created_block)
     {
         magicnet_log("%s we already have a created block set, freeing and resetting\n", __FUNCTION__);
@@ -4437,7 +4453,7 @@ bool magicnet_server_should_sign_and_send_self_transaction(struct self_block_tra
     return self_transaction->state == BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND;
 }
 
-void magicnet_server_sign_and_send_self_transaction(struct magicnet_server* server, struct self_block_transaction* self_transaction)
+void magicnet_server_sign_and_send_self_transaction(struct magicnet_server* server, struct self_block_transaction* self_transaction, const char* last_block_hash)
 {
     int res = 0;
     // Many times we should not even bother signing the transaction, such as if its already been done.
@@ -4514,11 +4530,28 @@ out:
 void magicnet_server_sign_and_send_self_transactions(struct magicnet_server* server, struct block* block)
 {
     magicnet_log("%s we will now sign and send %i transactions of ours to the network\n", __FUNCTION__, vector_count(server->our_waiting_transactions));
+    int active_blockchain_id = magicnet_blockchain_get_active_id();
+    if (active_blockchain_id != block->blockchain_id)
+    {
+        magicnet_log("%s We are not on the active blockchain. We will avoid sending the transactions this time round\n", __FUNCTION__);
+        return;
+    }
+
+    struct block* prev_block = block_load(block->prev_hash);
+    if (!prev_block)
+    {
+        magicnet_log("%s We don't know the previous block for the block that we should sign with. Therefore we dont really know the blockchain. We will avoid sending the transactions this time round\n", __FUNCTION__);
+        return;
+    }
+
+    // Free the previous block that was loaded.
+    block_free(prev_block);
+
     vector_set_peek_pointer(server->our_waiting_transactions, 0);
     struct self_block_transaction* self_transaction = vector_peek_ptr(server->our_waiting_transactions);
     while(self_transaction)
     {
-        magicnet_server_sign_and_send_self_transaction(server, self_transaction);
+        magicnet_server_sign_and_send_self_transaction(server, self_transaction, block->hash);
         self_transaction = vector_peek_ptr(server->our_waiting_transactions);
     }
 }

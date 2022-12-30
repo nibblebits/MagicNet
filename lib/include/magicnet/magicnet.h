@@ -468,6 +468,9 @@ struct magicnet_server
 
 struct block_transaction_data
 {
+    // The last known active blockchain block hash at the time of creating the transaction
+    char prev_block_hash[SHA256_STRING_LENGTH];
+
     // The program name who this transaction is intended for.. All listening to this program
     // will have access to the transaction
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];

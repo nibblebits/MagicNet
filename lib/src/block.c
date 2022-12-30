@@ -141,6 +141,10 @@ struct block_transaction *block_transaction_build(const char *program_name, char
 
 void block_buffer_write_transaction_data(struct block_transaction_data *data, struct buffer *buffer)
 {
+    // Write the previous block hash, by doing this we BIND this transaction to only one blockchain
+    // Preventing it from being added to other chains. And ensuring a UNIQUE hash for a transaction that guarantees
+    // it is only valid on the chain it was signed on.
+    buffer_write_bytes(buffer, data->prev_block_hash, sizeof(data->prev_block_hash));
     buffer_write_bytes(buffer, data->program_name, sizeof(data->program_name));
     buffer_write_long(buffer, data->size);
     buffer_write_long(buffer, data->time);
@@ -170,6 +174,7 @@ int block_transaction_hash_and_sign(struct block_transaction *transaction)
     struct buffer *buffer = buffer_create();
     block_buffer_write_transaction_data(&transaction->data, buffer);
     sha256_data(buffer_ptr(buffer), transaction_hash, buffer_len(buffer));
+
     buffer_free(buffer);
 
     int res = 0;
@@ -454,7 +459,7 @@ int block_save(struct block *block)
         goto out;
     }
 
-    res = magicnet_database_load_block(block->hash, NULL, NULL, NULL, NULL, NULL);
+    res = magicnet_database_load_block(block->hash, NULL, &block->blockchain_id, NULL, NULL, NULL);
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
@@ -617,6 +622,15 @@ int block_verify(struct block *block)
             res = block_transaction_valid(transaction);
             if (res < 0)
             {
+                goto out;
+            }
+
+            // Though the transaction may be valid its also essential that all the transactions have a prev block hash
+            // that point to our previous hash
+            if (memcmp(transaction->data.prev_block_hash, block->prev_hash, sizeof(block->prev_hash)) != 0)
+            {
+                magicnet_log("%s A transaction within this block was not made for this block\n", __FUNCTION__);
+                res = -1;
                 goto out;
             }
         }

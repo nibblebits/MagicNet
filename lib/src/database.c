@@ -40,6 +40,7 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 \"type\" INTEGER \
                                 \"key\"	BLOB,  \
                                 \"target_key\"	BLOB,  \
+                                \"prev_block_hash\"	TEXT,  \
                                 \"program_name\"	TEXT,  \
                                 \"time\"	REAL,   \
                                 \"data\"	BLOB,  \
@@ -1092,7 +1093,7 @@ int magicnet_database_load_block_transactions_no_locks(struct block *block)
         return MAGICNET_ERROR_ALREADY_EXISTANT;
     }
     sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT hash, signature, type, key, target_key, program_name, time, data_size, data FROM transactions WHERE transaction_group_hash = ?";
+    const char *load_block_sql = "SELECT hash, signature, type, key, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE transaction_group_hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1116,12 +1117,13 @@ int magicnet_database_load_block_transactions_no_locks(struct block *block)
         transaction->type = sqlite3_column_int(stmt, 2);
         memcpy(&transaction->key, sqlite3_column_text(stmt, 3), sizeof(transaction->key));
         memcpy(&transaction->target_key, sqlite3_column_text(stmt, 4), sizeof(transaction->target_key));
+        memcpy(&transaction->data.prev_block_hash, sqlite3_column_text(stmt, 5), sizeof(transaction->data.prev_block_hash));
 
-        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 5), strlen(sqlite3_column_text(stmt, 5)));
-        transaction->data.time = sqlite3_column_int(stmt, 6);
-        transaction->data.size = sqlite3_column_int(stmt, 7);
+        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 6), strlen(sqlite3_column_text(stmt, 6)));
+        transaction->data.time = sqlite3_column_int(stmt, 7);
+        transaction->data.size = sqlite3_column_int(stmt, 8);
         transaction->data.ptr = calloc(1, transaction->data.size);
-        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 8), transaction->data.size);
+        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 9), transaction->data.size);
         block_transaction_add(block->transaction_group, transaction);
 
         step = sqlite3_step(stmt);
