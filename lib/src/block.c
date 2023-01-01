@@ -722,10 +722,27 @@ int block_load_transactions(struct block* block)
         goto out;
     }
 
+    if (block->transaction_group->total_transactions > 0)
+    {
+        magicnet_log("%s cannot load block transactions when a transaction group already has transactions. Likely already loaded or modified. Must load transactions FIRST!\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
     res = magicnet_database_load_block_transactions(block);
 out:
     return res;
 }
+
+
+int block_load_fully(struct block* block)
+{
+    int res = 0;
+
+    res = block_load_transactions(block);
+    return res;
+}
+
 struct block *block_load(const char *hash)
 {
     int res = 0;

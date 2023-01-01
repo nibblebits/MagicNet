@@ -1913,7 +1913,7 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
     {        
         goto out;
     }
-    
+
     res = magicnet_write_int(client, transaction->data.size, store_in_buffer);
     if (res < 0)
     {
@@ -2951,6 +2951,13 @@ int magicnet_client_process_request_block_packet(struct magicnet_client *client,
 
     struct block *block = block_load(magicnet_signed_data(packet)->payload.request_block.request_hash);
     if (!block)
+    {
+        goto out;
+    }
+
+    // Let's load whatever is missing as the block is only lazily loaded
+    res = block_load_fully(block);
+    if (res < 0)
     {
         goto out;
     }
