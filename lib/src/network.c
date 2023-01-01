@@ -1291,6 +1291,14 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
         goto out;
     }
 
+    // Read the previous block hash
+    res = magicnet_read_bytes(client, transaction_out->data.prev_block_hash, sizeof(transaction_out->data.prev_block_hash), store_in_buffer);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read previous block hash \n", __FUNCTION__);
+        goto out;
+    }
+
     transaction_out->data.size = magicnet_read_int(client, store_in_buffer);
     if (transaction_out->data.size < 0)
     {
@@ -1899,6 +1907,13 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
         goto out;
     }
 
+    // Write the previous block hash
+    res = magicnet_write_bytes(client, transaction->data.prev_block_hash, sizeof(transaction->data.prev_block_hash), store_in_buffer);
+    if (res < 0)
+    {        
+        goto out;
+    }
+    
     res = magicnet_write_int(client, transaction->data.size, store_in_buffer);
     if (res < 0)
     {
@@ -1910,6 +1925,7 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
     {
         goto out;
     }
+
 
     res = magicnet_write_bytes(client, &transaction->signature, sizeof(transaction->signature), store_in_buffer);
     if (res < 0)
@@ -4521,6 +4537,11 @@ out:
 }
 void magicnet_server_sign_and_send_self_transactions(struct magicnet_server *server, struct block *block)
 {
+    if (vector_count(server->our_waiting_transactions) == 0)
+    {
+        // Nothing for us to send of ours.. Nothing waiting
+        return; 
+    }
     magicnet_log("%s we will now sign and send %i transactions of ours to the network\n", __FUNCTION__, vector_count(server->our_waiting_transactions));
     int active_blockchain_id = magicnet_blockchain_get_active_id();
     if (active_blockchain_id != block->blockchain_id)
