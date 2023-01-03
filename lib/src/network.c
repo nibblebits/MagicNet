@@ -3859,6 +3859,15 @@ int magicnet_client_process_block_super_download_request_packet(struct magicnet_
             goto out;
         }
 
+        // Load the block fully
+        res = block_load_fully(block);
+        if (res < 0)
+        {
+            magicnet_log("%s Failed to load block %s fully\n", __FUNCTION__, current_hash);
+            goto out;
+        }
+
+
         // Send the block
         res = magicnet_client_send_single_block(client, block);
         if (res < 0)
