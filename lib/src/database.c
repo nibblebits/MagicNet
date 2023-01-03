@@ -1093,7 +1093,7 @@ int magicnet_database_load_block_transactions_no_locks(struct block *block)
         return MAGICNET_ERROR_ALREADY_EXISTANT;
     }
     sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT hash, signature, type, key, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE transaction_group_hash = ?";
+    const char *load_block_sql = "SELECT hash, signature, type, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE transaction_group_hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {

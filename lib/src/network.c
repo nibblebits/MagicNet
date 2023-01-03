@@ -2959,6 +2959,8 @@ int magicnet_client_process_request_block_packet(struct magicnet_client *client,
     res = block_load_fully(block);
     if (res < 0)
     {
+        // Show error
+        magicnet_log("%s failed to load block fully\n", __FUNCTION__);
         goto out;
     }
 
