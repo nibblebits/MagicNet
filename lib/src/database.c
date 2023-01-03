@@ -1101,7 +1101,7 @@ int magicnet_database_load_block_transactions_no_locks(struct block *block)
         goto out;
     }
 
-    sqlite3_bind_text(stmt, 1, block->transaction_group->hash, sizeof(block->transaction_group->hash), NULL);
+    sqlite3_bind_text(stmt, 1, block->transaction_group->hash, strlen(block->transaction_group->hash), NULL);
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {

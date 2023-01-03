@@ -740,6 +740,12 @@ int block_load_fully(struct block* block)
     int res = 0;
 
     res = block_load_transactions(block);
+    if (res == MAGICNET_ERROR_NOT_FOUND)
+    {
+        // This isnt a critical error.. Res is okay. This block just has no transactions
+        res = 0;
+    }
+
     return res;
 }
 

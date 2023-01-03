@@ -324,6 +324,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     struct magicnet_chain_downloader_hash_to_download *hash = NULL;
     struct magicnet_signal *signal = NULL;
     struct magicnet_client *new_client = NULL;
+    struct magicnet_packet *super_download_response  = NULL;
     struct magicnet_packet *req_packet = magicnet_packet_new();
     pthread_mutex_lock(&downloads.lock);
     vector_set_peek_pointer(downloader->hashes_to_download, 0);
@@ -405,7 +406,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
 
     for (int i = 0; i < MAGICNET_MAX_BLOCK_SUPER_DOWNLOAD_REQUEST_BLOCK_COUNT; i++)
     {
-        struct magicnet_packet *super_download_response = magicnet_packet_new();
+        super_download_response = magicnet_packet_new();
 
         // Read the response packet from the client
         res = magicnet_client_read_packet(new_client, super_download_response);
@@ -446,6 +447,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         }
         
         magicnet_free_packet(super_download_response);
+        super_download_response = NULL;
     }
 
     if (!sha256_empty(last_prev_hash))
@@ -467,6 +469,10 @@ out:
         magicnet_signal_release(signal);
     }
 
+    if (super_download_response)
+    {
+        magicnet_free_packet(super_download_response);
+    }
     magicnet_free_packet(req_packet);
     return 0;
 }
