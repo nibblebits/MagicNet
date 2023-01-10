@@ -3795,7 +3795,7 @@ int magicnet_server_process_make_new_connection_packet(struct magicnet_client *c
     if (client)
     {
         pthread_t threadId;
-        if (pthread_create(&threadId, NULL, &magicnet_server_client_thread, new_client))
+        if (pthread_create(&threadId, NULL, &magicnet_client_thread, new_client))
         {
             // Error thread not created.
             return -1;
