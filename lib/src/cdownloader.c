@@ -424,7 +424,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         }
         else if (magicnet_signed_data(super_download_response)->type != MAGICNET_PACKET_TYPE_BLOCK_SEND)
         {
-            magicnet_log("%s super download response was not a block send packet or a done packet\n", __FUNCTION__);
+            magicnet_log("%s super download response was not a block send packet or a done packet. packet type=%i\n", __FUNCTION__, magicnet_signed_data(super_download_response)->type);
             goto out;
         }
 
