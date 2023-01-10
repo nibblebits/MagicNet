@@ -2993,7 +2993,7 @@ int magicnet_client_process_request_block_response_packet(struct magicnet_client
         goto out;
     }
 
-    magicnet_signal_post_for_signal(magicnet_signed_data(packet)->payload.request_block_response.signal_id, "downloader-req-block-signal", &packet->pub_key, sizeof(struct key));
+    magicnet_signal_post_for_signal(magicnet_signed_data(packet)->payload.request_block_response.signal_id, "downloader-req-block-signal", &packet->pub_key, sizeof(struct key), MAGICNET_SIGNAL_FLAG_CLONE_DATA_ON_POST);
 
 out:
     return res;
@@ -4063,7 +4063,7 @@ void *magicnet_client_thread(void *_client)
 
     if (client->signal_id)
     {
-        magicnet_signal_post_for_signal(client->signal_id, "connect-again-signal", client, sizeof(client));
+        magicnet_signal_post_for_signal(client->signal_id, "connect-again-signal", client, sizeof(struct magicnet_client), 0);
         // Now the waiting thread is in charge of the client we will leave this thread and let the waiting thread take over being sure not
         // to free the memory of the client
         goto out;
