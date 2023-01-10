@@ -38,6 +38,7 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server);
 int magicnet_client_process_block_super_download_request_packet(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, struct block_transaction *transaction);
 void magicnet_server_set_created_block(struct magicnet_server *server, struct block *block);
+void *magicnet_client_thread(void *_client);
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
