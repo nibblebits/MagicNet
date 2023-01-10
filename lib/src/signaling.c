@@ -135,8 +135,12 @@ int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void
     }
     if (data_out)
     {
+        *data_out = NULL;
         struct magicnet_posted_data* data = vector_back_ptr_or_null(signal->data_vec);
-        *data_out = data->data;
+        if (data)
+        {
+            *data_out = data->data;
+        }
     }
     pthread_rwlock_unlock(&signal->signal_lock);
 
