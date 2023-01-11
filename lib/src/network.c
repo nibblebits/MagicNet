@@ -3562,6 +3562,8 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         goto out;
     }
+
+    client->flags |= MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED;
 out:
     return res;
 }
@@ -3797,13 +3799,8 @@ int magicnet_server_process_make_new_connection_packet(struct magicnet_client *c
     struct magicnet_client *new_client = magicnet_tcp_network_connect_for_ip_for_server(client->server, ip, MAGICNET_SERVER_PORT, program_name, magicnet_signed_data(packet)->payload.new_connection.entry_id);
     if (new_client)
     {
-
-        pthread_t threadId;
-        if (pthread_create(&threadId, NULL, &magicnet_client_thread, new_client))
-        {
-            // Error thread not created.
-            return -1;
-        }
+       // Start the new client thread
+       magicnet_client_thread_start(new_client);
     }
 
     magicnet_log("%s new server thread is running that will handle this new connection\n", __FUNCTION__);
