@@ -3375,6 +3375,8 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
     client->communication_flags = communication_flags;
     client->signal_id = signal_id;
     client->flags |= MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED;
+    // Entry protocol read completed
+    magicnet_log("%s entry protocol read completed\n", __FUNCTION__);
 out:
     return res;
 }
