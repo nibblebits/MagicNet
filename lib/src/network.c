@@ -4055,7 +4055,7 @@ void *magicnet_client_thread(void *_client)
         magicnet_server_unlock(client->server);
     }
 
-    if (!(client->flags & MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED))
+   // if (!(client->flags & MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED))
     {
         res = magicnet_client_preform_entry_protocol_read(client);
         if (res < 0)
