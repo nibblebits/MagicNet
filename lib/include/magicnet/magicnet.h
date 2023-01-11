@@ -257,8 +257,8 @@ struct magicnet_packet
 
 enum
 {
-    // When set the server will not send relayed packets to this client.
-    MAGICNET_COMMUNICATION_FLAG_NO_RELAYED_PACKETS = 0b00000001
+    // tHIS FLAG IS SET WHEN THE PEER has completed entry protocol
+    MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00000001,
 };
 
 struct magicnet_peer_information

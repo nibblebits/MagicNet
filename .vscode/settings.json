@@ -15,5 +15,6 @@
         "pthread.h": "c",
         "semaphore.h": "c",
         "errno.h": "c"
-    }
+    },
+    "cmake.sourceDirectory": "${workspaceFolder}/qt-chain-admin/ChainAdmin"
 }

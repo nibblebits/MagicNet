@@ -1911,7 +1911,7 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
     // Write the previous block hash
     res = magicnet_write_bytes(client, transaction->data.prev_block_hash, sizeof(transaction->data.prev_block_hash), store_in_buffer);
     if (res < 0)
-    {        
+    {
         goto out;
     }
 
@@ -1926,7 +1926,6 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
     {
         goto out;
     }
-
 
     res = magicnet_write_bytes(client, &transaction->signature, sizeof(transaction->signature), store_in_buffer);
     if (res < 0)
@@ -3375,6 +3374,7 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
 
     client->communication_flags = communication_flags;
     client->signal_id = signal_id;
+    client->flags |= MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED;
 out:
     return res;
 }
@@ -3793,8 +3793,9 @@ int magicnet_server_process_make_new_connection_packet(struct magicnet_client *c
 
     // Connect to the client with a new connection
     struct magicnet_client *new_client = magicnet_tcp_network_connect_for_ip_for_server(client->server, ip, MAGICNET_SERVER_PORT, program_name, magicnet_signed_data(packet)->payload.new_connection.entry_id);
-    if (client)
+    if (new_client)
     {
+
         pthread_t threadId;
         if (pthread_create(&threadId, NULL, &magicnet_client_thread, new_client))
         {
@@ -3869,7 +3870,6 @@ int magicnet_client_process_block_super_download_request_packet(struct magicnet_
             magicnet_log("%s Failed to load block %s fully\n", __FUNCTION__, current_hash);
             goto out;
         }
-
 
         // Send the block
         res = magicnet_client_send_single_block(client, block);
@@ -4055,11 +4055,14 @@ void *magicnet_client_thread(void *_client)
         magicnet_server_unlock(client->server);
     }
 
-    res = magicnet_client_preform_entry_protocol_read(client);
-    if (res < 0)
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED))
     {
-        // entry protocol failed.. illegal client!
-        goto out;
+        res = magicnet_client_preform_entry_protocol_read(client);
+        if (res < 0)
+        {
+            // entry protocol failed.. illegal client!
+            goto out;
+        }
     }
 
     if (client->signal_id)
@@ -4559,7 +4562,7 @@ void magicnet_server_sign_and_send_self_transactions(struct magicnet_server *ser
     if (vector_count(server->our_waiting_transactions) == 0)
     {
         // Nothing for us to send of ours.. Nothing waiting
-        return; 
+        return;
     }
     magicnet_log("%s we will now sign and send %i transactions of ours to the network\n", __FUNCTION__, vector_count(server->our_waiting_transactions));
     int active_blockchain_id = magicnet_blockchain_get_active_id();
