@@ -255,12 +255,6 @@ struct magicnet_packet
     } signed_data;
 };
 
-enum
-{
-    // tHIS FLAG IS SET WHEN THE PEER has completed entry protocol
-    MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00000001,
-};
-
 struct magicnet_peer_information
 {
     char ip_address[MAGICNET_MAX_IP_STRING_SIZE];
@@ -714,6 +708,9 @@ enum
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
     // True if this client is an outgoing connection made with connect()
     MAGICNET_CLIENT_FLAG_IS_OUTGOING_CONNECTION = 0b00001000,
+    // True if this client has completed the protocol exchange.
+    MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED  = 0b00010000,
+
 };
 
 enum
