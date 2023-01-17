@@ -6,14 +6,13 @@
 #include "magicnet/magicnet.h"
 #include "magicnet/key.h"
 
-#define S_EQ(a, b) (strcmp(a, b) == 0)
 
 int main(int argc, char** argv)
 {
 
-    if (argc < 2)
+    if (argc < 3)
     {
-        printf("USAGE: <key>\n");
+        printf("USAGE: <public key> <amount_to_send>\n");
         return -1;
     }
 

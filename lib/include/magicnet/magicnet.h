@@ -53,6 +53,8 @@ enum
     MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST,
     // Sent when theirs no more blocks to send. Also sent if the inital start block couldnt be found.
     MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_DONE,
+    MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST,
+    MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE,
     MAGICNET_PACKET_TYPE_NOT_FOUND,
 };
 
@@ -110,10 +112,38 @@ enum
 {
     MAGICNET_TRANSACTION_TYPE_UNKNOWN = 0,
     MAGICNET_TRANSACTION_TYPE_COIN_SEND = 1,
+    MAGICNET_TRANSACTION_TYPE_TRANSACTION_LIST = 2
 };
 
 struct block;
 struct blockchain;
+
+struct magicnet_transactions
+{
+    size_t amount;
+    // An array of block transactions
+    struct block_transaction **transactions;
+};
+
+enum
+{
+    MAGICNET_TRANSACTIONS_REQUEST_FLAG_INITIALIZED = 0b00000001,
+};
+
+struct magicnet_transactions_request
+{
+    int flags;
+    // Null key if we do not care who made the transaction
+    struct key key;
+    // nulL key if we do not care what the target key is
+    // target key
+    struct key target_key;
+
+    // -1 iF WE WISH to bring back all transactions
+    int type;
+    int total_per_page;
+    int page;
+};
 
 struct magicnet_packet
 {
@@ -250,6 +280,35 @@ struct magicnet_packet
                     char begin_hash[SHA256_STRING_LENGTH];
                     size_t total_blocks_to_request;
                 } block_super_download;
+
+                struct magicnet_transaction_list_request
+                {
+                    // Null key if we do not care who made the transaction
+                    struct key key;
+                    // nulL key if we do not care what the target key is
+                    // target key
+                    struct key target_key;
+
+                    // -1 iF WE WISH to bring back all transactions
+                    int type;
+                    int total_per_page;
+                    int page;
+                } transaction_list_request;
+
+                struct magicnet_transaction_list_response
+                {
+                    // The key that the transactions were created by. NULL if not applicable
+                    struct key key;
+                    // The target key the transactions were targetted too, NULL if not aplicable
+                    struct key target_key;
+                    // -1 if all types have been brought back.
+                    int type;
+                    int total_per_page;
+                    int page;
+                    int total_transactions;
+                    // Vector of struct block_transaction*
+                    struct vector *transactions;
+                } transaction_list_response;
             };
         } payload;
     } signed_data;
@@ -429,15 +488,14 @@ struct magicnet_server
         int step;
 
         // Pointer to the created block.
-        struct block* created_block;
+        struct block *created_block;
 
     } next_block;
 
-
     // Vector of struct self_block_transaction* all transactions in here are unsigned. These are transactions waiting to be sent
     // but havent been sent yet to the network.
-    struct vector* our_waiting_transactions;
-    
+    struct vector *our_waiting_transactions;
+
     // The timestamp the server started
     time_t server_started;
     // THe first time the block cycle begins for this server instance
@@ -521,7 +579,6 @@ struct block_transaction
     struct block_transaction_data data;
 };
 
-
 // Transaction states
 enum
 {
@@ -545,10 +602,10 @@ enum
 
 /**
  * Represents a transaction that was created on our local machine, that may or may not have been sent to the network yet
-*/
+ */
 struct self_block_transaction
 {
-    struct block_transaction* transaction;
+    struct block_transaction *transaction;
     // The state of our transaction
     int state;
     // A message declaring the state of the message (If any)
@@ -580,7 +637,6 @@ struct block_transaction_money_transfer
     // The public key of the recipient
     struct key recipient_key;
 
-
     // The amount of money being sent. This is the sum of all transfer funding amounts. It is required to ensure
     // you confirm the amount of money being sent.
     // If the sum of all funding amounts differs from the amount the transaction will be rejected as it will be assumed it was a bug in the
@@ -591,8 +647,8 @@ struct block_transaction_money_transfer
     double amount;
 
     // The sender is the person who signed the transaction.
-
 };
+
 /**
  * This is a structure representing banned peer information it represents the table in database.c
  */
@@ -709,7 +765,7 @@ enum
     // True if this client is an outgoing connection made with connect()
     MAGICNET_CLIENT_FLAG_IS_OUTGOING_CONNECTION = 0b00001000,
     // True if this client has completed the protocol exchange.
-    MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED  = 0b00010000,
+    MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00010000,
 
 };
 
@@ -771,7 +827,7 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
  * @param size
  * @return int
  */
-int magicnet_make_transaction(struct magicnet_program* program, int type, void* data, size_t size);
+int magicnet_make_transaction(struct magicnet_program *program, int type, void *data, size_t size);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
@@ -785,9 +841,8 @@ struct magicnet_program *magicnet_program(const char *name);
  * Makes a money transfer to the recipient
  * \param to The recipient's public key
  * \amount The amount to transfer
-*/
-int magicnet_make_money_transfer(struct magicnet_program* program, const char* to, double amount);
-
+ */
+int magicnet_make_money_transfer(struct magicnet_program *program, const char *to, double amount);
 
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
@@ -811,19 +866,19 @@ struct block_transaction_group *block_transaction_group_clone(struct block_trans
 
 /**
  * Lazily loads a block from storage. Does not load transactions.
-*/
+ */
 struct block *block_load(const char *hash);
 /**
  * Loads the transactions of a lazily loaded block.
-*/
+ */
 int block_load_transactions(struct block *block);
 
 /**
  * Fully loads what is not loaded with the provided lazily loaded block.
  * 1. Loads transactions
  * 2. ... Future
-*/
-int block_load_fully(struct block* block);
+ */
+int block_load_fully(struct block *block);
 
 int block_save(struct block *block);
 int block_sign(struct block *block);
@@ -841,7 +896,7 @@ int magicnet_blockchain_get_active_id();
 
 struct block *block_clone(struct block *block);
 struct block_transaction *block_transaction_new();
-struct self_block_transaction* block_self_transaction_new(struct block_transaction* transaction);
+struct self_block_transaction *block_self_transaction_new(struct block_transaction *transaction);
 
 struct block_transaction_group *block_transaction_group_new();
 void block_transaction_group_free(struct block_transaction_group *transaction_group);

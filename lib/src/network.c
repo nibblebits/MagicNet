@@ -1550,6 +1550,140 @@ out:
     return res;
 }
 
+int magicnet_client_read_transaction_list_request_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = 0;
+    struct key key = {0};
+    struct key target_key = {0};
+    int total_per_page = -1;
+    int page = -1;
+
+    // Read the key
+    res = magicnet_read_bytes(client, &key, sizeof(key), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Read the target key
+    res = magicnet_read_bytes(client, &target_key, sizeof(target_key), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    total_per_page = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_per_page < 0)
+    {
+        res = total_per_page;
+        goto out;
+    }
+
+    page = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (page < 0)
+    {
+        res = page;
+        goto out;
+    }
+
+    // Set the packet
+    magicnet_signed_data(packet_out)->payload.transaction_list_request.key = key;
+    magicnet_signed_data(packet_out)->payload.transaction_list_request.target_key = target_key;
+    magicnet_signed_data(packet_out)->payload.transaction_list_request.total_per_page = total_per_page;
+    magicnet_signed_data(packet_out)->payload.transaction_list_request.page = page;
+
+out:
+    return res;   
+}
+
+
+int magicnet_client_read_transaction_list_response_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = 0;
+    struct key key = {0};
+    struct key target_key = {0};
+    int total_per_page = -1;
+    int page = -1;
+    int type = -1;
+    int total_transactions = -1;
+
+    struct vector* transactions = vector_create(sizeof(struct block_transaction*));
+    // Read the key
+    res = magicnet_read_bytes(client, &key, sizeof(key), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Read the target key
+    res = magicnet_read_bytes(client, &target_key, sizeof(target_key), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    //Read the type
+    type = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (type < 0)
+    {
+        res = type;
+        goto out;
+    }
+
+
+    // Read the total per page
+    total_per_page = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_per_page < 0)
+    {
+        res = total_per_page;
+        goto out;
+    }
+
+    // Read the page
+    page = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (page < 0)
+    {
+        res = page;
+        goto out;
+    }
+
+    // Read the total transactions
+    total_transactions = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_transactions < 0)
+    {
+        res = total_transactions;
+        goto out;
+    }
+
+    // Read the transactions
+    for (int i = 0; i < total_transactions; i++)
+    {
+        struct block_transaction *transaction = block_transaction_new();
+        res = magicnet_read_transaction(client, transaction, packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
+        vector_push(transactions, &transaction);
+    }
+
+    // Set the packet output
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.key = key;
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.target_key = target_key;
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.total_per_page = total_per_page;
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.page = page;
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.type = type;
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.total_transactions = total_transactions;
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions = transactions;
+
+out:
+    if (res < 0)
+    {
+        vector_free(transactions);
+    }
+    return res;
+}
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1654,6 +1788,14 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
         res = magicnet_client_read_block_super_download_request_packet(client, packet_out);
+        break;
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
+        res = magicnet_client_read_transaction_list_request_packet(client, packet_out);
+        break;
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
+        res = magicnet_client_read_transaction_list_response_packet(client, packet_out);
         break;
 
     case MAGICNET_PACKET_TYPE_NOT_FOUND:
@@ -2093,6 +2235,114 @@ out:
     return res;
 }
 
+int magicnet_client_write_packet_transaction_list_request(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+
+    // Write the key
+    res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.transaction_list_request.key, sizeof(magicnet_signed_data(packet)->payload.transaction_list_request.key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // write the target key
+    res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.transaction_list_request.target_key, sizeof(magicnet_signed_data(packet)->payload.transaction_list_request.target_key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+
+    // Write the total per page
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.transaction_list_request.total_per_page, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+     
+    // Write the page
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.transaction_list_request.page, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+ out:
+    return res;
+}
+
+int magicnet_client_write_packet_transaction_list_response(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    // Check the total transactions equals the count of the transactions vector
+    if (magicnet_signed_data(packet)->payload.transaction_list_response.total_transactions != vector_count(magicnet_signed_data(packet)->payload.transaction_list_response.transactions))
+    {
+        // Show size mismatch message
+        magicnet_error("Transaction list response total transactions does not match the count of the transactions vector (%d != %d)", magicnet_signed_data(packet)->payload.transaction_list_response.total_transactions, vector_count(magicnet_signed_data(packet)->payload.transaction_list_response.transactions));
+        res = -1;
+        goto out;
+    }
+
+    // Write the key
+    res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.transaction_list_response.key, sizeof(magicnet_signed_data(packet)->payload.transaction_list_response.key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
+
+    // Write the target key
+    res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.transaction_list_response.target_key, sizeof(magicnet_signed_data(packet)->payload.transaction_list_response.target_key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the type
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.transaction_list_response.type, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the total per page
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.transaction_list_response.total_per_page, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the page
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.transaction_list_response.page, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the total transactions
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.transaction_list_response.total_transactions, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Set the peek pointer of transactions to zero
+    vector_set_peek_pointer(magicnet_signed_data(packet)->payload.transaction_list_response.transactions, 0);
+    // Write the transactions
+    struct block_transaction* transaction = vector_peek_ptr(magicnet_signed_data(packet)->payload.transaction_list_response.transactions);
+    while(transaction)
+    {
+        res = magicnet_write_transaction(client, transaction, packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
+        transaction = vector_peek_ptr(magicnet_signed_data(packet)->payload.transaction_list_response.transactions);
+    }
+out:
+    return res;
+}
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -2160,6 +2410,14 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
         res = magicnet_client_write_packet_block_super_download_request(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
+        res = magicnet_client_write_packet_transaction_list_request(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
+        res = magicnet_client_write_packet_transaction_list_response(client, packet);
         break;
     }
 
