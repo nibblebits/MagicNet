@@ -6,6 +6,11 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
 int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key* key, struct signature* signature);
 int magicnet_database_load_block_from_previous_hash(const char* prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash);
 int magicnet_database_load_block_from_previous_hash_no_locks(const char* prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash);
+int magicnet_database_load_block_transaction(const char *transaction_hash, struct block_transaction** transaction_out);
+int magicnet_database_load_block_transaction_no_locks(const char *transaction_hash, struct block_transaction** transaction_out);
+int magicnet_database_load_transactions(struct magicnet_transactions_request *transactions_request, struct block_transaction_group* transaction_group);
+int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_request *transactions_request, struct block_transaction_group* transaction_group);
+
 int magicnet_database_load();
 int magicnet_database_blockchain_increment_proven_verified_blocks(int blockchain_id);
 int magicnet_database_save_block(struct block *block);

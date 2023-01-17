@@ -41,10 +41,10 @@ struct block_transaction_group *block_transaction_group_new()
 
 /**
  * This function creates a new struct self_block_transaction. It is not saved into the database at this time
-*/
-struct self_block_transaction* block_self_transaction_new(struct block_transaction* transaction)
+ */
+struct self_block_transaction *block_self_transaction_new(struct block_transaction *transaction)
 {
-    struct self_block_transaction* self_block_transaction = calloc(1, sizeof(struct self_block_transaction));
+    struct self_block_transaction *self_block_transaction = calloc(1, sizeof(struct self_block_transaction));
     self_block_transaction->state = BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND;
     strncpy(self_block_transaction->status_message, "Pending", sizeof(self_block_transaction->status_message));
     self_block_transaction->transaction = block_transaction_clone(transaction);
@@ -53,7 +53,7 @@ struct self_block_transaction* block_self_transaction_new(struct block_transacti
 
 /**
  * This function checks if the block transaction has been signed yet
-*/
+ */
 bool block_transaction_is_signed(struct block_transaction *transaction)
 {
     struct signature blank_sig = {0};
@@ -62,7 +62,7 @@ bool block_transaction_is_signed(struct block_transaction *transaction)
 
 /**
  * Create function that gets active blockchain
-*/
+ */
 struct blockchain *magicnet_blockchain_get_active()
 {
     struct blockchain *blockchain = blockchain_new();
@@ -77,10 +77,23 @@ struct blockchain *magicnet_blockchain_get_active()
 }
 /**
  * Returns the current active blockchain id
-*/
+ */
 int magicnet_blockchain_get_active_id()
 {
     return magicnet_database_get_active_blockchain_id();
+}
+
+void block_transaction_vector_free(struct vector* vector)
+{
+    vector_set_peek_pointer(vector, 0);
+    struct block_transaction* transaction = vector_peek_ptr(vector);
+    while(transaction)
+    {
+        block_transaction_free(transaction);
+        transaction = vector_peek_ptr(vector);
+    }
+
+    vector_free(vector);
 }
 
 void block_transaction_group_free(struct block_transaction_group *transaction_group)
@@ -205,7 +218,7 @@ out:
     return res;
 }
 
-int block_transaction_coin_transfer_valid(struct block_transaction* transaction)
+int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
 {
     int res = 0;
     if (transaction->data.size != sizeof(struct block_transaction_money_transfer))
@@ -216,7 +229,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction* transaction)
         goto out;
     }
 
-    struct block_transaction_money_transfer *money_transfer = (struct block_transaction_money_transfer*)transaction->data.ptr;
+    struct block_transaction_money_transfer *money_transfer = (struct block_transaction_money_transfer *)transaction->data.ptr;
     if (money_transfer->amount <= 0)
     {
         // Show error message
@@ -247,7 +260,6 @@ int block_transaction_coin_transfer_valid(struct block_transaction* transaction)
 out:
     return res;
 }
-
 
 int block_transaction_valid(struct block_transaction *transaction)
 {
@@ -281,7 +293,6 @@ int block_transaction_valid(struct block_transaction *transaction)
         }
     }
 
-    
     char transaction_hash[SHA256_STRING_LENGTH];
     struct buffer *buffer = buffer_create();
     block_buffer_write_transaction_data(&transaction->data, buffer);
@@ -337,7 +348,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     }
 
     // Lets get the block with the previous hash
-    struct block* pervious_block = block_load(block->prev_hash);
+    struct block *pervious_block = block_load(block->prev_hash);
     if (pervious_block)
     {
         *blockchain_id_out = pervious_block->blockchain_id;
@@ -346,12 +357,12 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     }
 
     int bco = 0;
-    if(magicnet_database_load_block_from_previous_hash(block->hash, NULL, &bco, NULL) >= 0)
+    if (magicnet_database_load_block_from_previous_hash(block->hash, NULL, &bco, NULL) >= 0)
     {
         *blockchain_id_out = bco;
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
     }
-    
+
     return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
 }
 
@@ -463,7 +474,7 @@ int block_save(struct block *block)
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
-        //blockchain_reformat(block);
+        // blockchain_reformat(block);
         res = MAGICNET_BLOCK_SENT_BEFORE;
         goto out;
     }
@@ -485,7 +496,6 @@ int block_save(struct block *block)
     {
         goto out;
     }
-
 
 out:
     pthread_mutex_unlock(&blockchain_lock);
@@ -553,7 +563,7 @@ int block_hash_sign_verify(struct block *block)
 
     block_hash_create(block, block->hash);
     block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
-    
+
     res = block_sign(block);
     if (res < 0)
     {
@@ -712,7 +722,22 @@ void magicnet_get_block_path_for_hash(const char *hash, char *block_path_out)
     sprintf(block_path_out, "%s/%s/%s/%s.blk", getenv("HOME"), ".magicnet", MAGICNET_BLOCK_DIRECTORY, hash);
 }
 
-int block_load_transactions(struct block* block)
+struct block_transaction *block_transaction_load(const char *transaction_hash)
+{
+    struct block_transaction *transaction = NULL;
+    magicnet_database_load_block_transaction(transaction_hash, &transaction);
+    return transaction;
+}
+
+// This function loads transactions from a struct magicnet_transactions_request into a struct block_transaction_group
+int block_transactions_load(struct magicnet_transactions_request* request, struct block_transaction_group* transaction_group)
+{
+    int res = 0;
+    res = magicnet_database_load_transactions(request, transaction_group);
+    return res;
+}
+
+int block_load_transactions(struct block *block)
 {
     int res = 0;
     if (!block->transaction_group)
@@ -734,8 +759,7 @@ out:
     return res;
 }
 
-
-int block_load_fully(struct block* block)
+int block_load_fully(struct block *block)
 {
     int res = 0;
 

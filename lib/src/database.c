@@ -1085,6 +1085,141 @@ out:
     }
     return res;
 }
+
+// Load the block transaction no locks
+int magicnet_database_load_block_transaction_no_locks(const char *transaction_hash, struct block_transaction **transaction_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *load_block_sql = "SELECT hash, signature, type, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE hash = ?";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, transaction_hash, strlen(transaction_hash), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    struct block_transaction *transaction = block_transaction_new();
+    memcpy(transaction->hash, sqlite3_column_text(stmt, 0), strlen(sqlite3_column_text(stmt, 0)));
+    memcpy(&transaction->signature, sqlite3_column_text(stmt, 1), sizeof(transaction->signature));
+    transaction->type = sqlite3_column_int(stmt, 2);
+    memcpy(&transaction->key, sqlite3_column_text(stmt, 3), sizeof(transaction->key));
+    memcpy(&transaction->target_key, sqlite3_column_text(stmt, 4), sizeof(transaction->target_key));
+    memcpy(&transaction->data.prev_block_hash, sqlite3_column_text(stmt, 5), sizeof(transaction->data.prev_block_hash));
+
+    memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 6), strlen(sqlite3_column_text(stmt, 6)));
+    transaction->data.time = sqlite3_column_int(stmt, 7);
+    transaction->data.size = sqlite3_column_int(stmt, 8);
+    transaction->data.ptr = calloc(1, transaction->data.size);
+    memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 9), transaction->data.size);
+    *transaction_out = transaction;
+
+out:
+    return res;
+}
+
+// Load the block transaction
+int magicnet_database_load_block_transaction(const char *transaction_hash, struct block_transaction **transaction_out)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_block_transaction_no_locks(transaction_hash, transaction_out);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+// Load transactions by condition no locks
+int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_request *transactions_request, struct block_transaction_group* transaction_group)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    char load_transactions_sql[] = "SELECT hash, signature, type, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE (key = ? OR key IS NULL) AND (target_key = ? OR target_key IS NULL) AND (type = ? OR type = -1) ORDER BY time DESC LIMIT ? OFFSET ?";
+
+    res = sqlite3_prepare_v2(db, load_transactions_sql, -1, &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    int param_count = 1;
+    if(transactions_request->key.key != NULL)
+    {
+        sqlite3_bind_text(stmt, param_count, transactions_request->key.key, -1, SQLITE_STATIC);
+    } else {
+        sqlite3_bind_null(stmt, param_count);
+    }
+    param_count++;
+
+    if(transactions_request->target_key.key != NULL)
+    {
+        sqlite3_bind_text(stmt, param_count, transactions_request->target_key.key, -1, SQLITE_STATIC);
+    } else {
+        sqlite3_bind_null(stmt, param_count);
+    }
+    param_count++;
+
+    sqlite3_bind_int(stmt, param_count, transactions_request->type);
+    param_count++;
+
+    sqlite3_bind_int(stmt, param_count, transactions_request->total_per_page);
+    param_count++;
+
+    int offset = (transactions_request->page-1) * transactions_request->total_per_page;
+    sqlite3_bind_int(stmt, param_count, offset);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    while (step == SQLITE_ROW)
+    {
+        struct block_transaction *transaction = block_transaction_new();
+        memcpy(transaction->hash, sqlite3_column_text(stmt, 0), strlen(sqlite3_column_text(stmt, 0)));
+        memcpy(&transaction->signature, sqlite3_column_text(stmt, 1), sizeof(transaction->signature));
+        transaction->type = sqlite3_column_int(stmt, 2);
+        memcpy(&transaction->key, sqlite3_column_text(stmt, 3), sizeof(transaction->key));
+        memcpy(&transaction->target_key, sqlite3_column_text(stmt, 4), sizeof(transaction->target_key));
+        memcpy(&transaction->data.prev_block_hash, sqlite3_column_text(stmt, 5), sizeof(transaction->data.prev_block_hash));
+        // program name
+        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 6), strlen(sqlite3_column_text(stmt, 6)));
+        // time
+        transaction->data.time = sqlite3_column_int(stmt, 7);
+        // data size
+        transaction->data.size = sqlite3_column_int(stmt, 8);
+        // data
+        transaction->data.ptr = calloc(1, transaction->data.size);
+        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 9), transaction->data.size);
+        block_transaction_add(transaction_group, transaction);
+
+        // Step
+        step = sqlite3_step(stmt);
+    }
+
+out:
+    return res;
+}
+
+// Load transactions by condition
+int magicnet_database_load_transactions(struct magicnet_transactions_request *transactions_request, struct block_transaction_group* transaction_group)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_transactions_no_locks(transactions_request, transaction_group);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magicnet_database_load_block_transactions_no_locks(struct block *block)
 {
     int res = 0;
@@ -1219,7 +1354,6 @@ out:
     return res;
 }
 
-
 /**
  * Saves a money transaction into the magicnet database without locks
  * For table with columns
@@ -1228,7 +1362,7 @@ out:
                                 \"recipient_key\"	BLOB,  \
                                 \"amount_received\"	DECIMAL,  \
                                 \"amount_spent\"	DECIMAL,  \
- * 
+ *
 */
 int magicnet_database_save_money_transaction_no_locks(struct block_transaction *transaction)
 {
@@ -1248,7 +1382,7 @@ int magicnet_database_save_money_transaction_no_locks(struct block_transaction *
     }
 
     // Cast block transaction into money transaction
-    struct block_transaction_money_transfer *money_transaction = (struct block_transaction_money_transfer*) transaction->data.ptr;
+    struct block_transaction_money_transfer *money_transaction = (struct block_transaction_money_transfer *)transaction->data.ptr;
 
     sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
     sqlite3_bind_blob(stmt, 2, &transaction->key.key, sizeof(transaction->key.key), NULL);
@@ -1343,7 +1477,6 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
                 goto out;
             }
         }
-        
     }
 
 out:

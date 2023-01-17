@@ -87,6 +87,12 @@ void magicnet_block_send_packet_free(struct magicnet_packet *packet)
     vector_free(block_send_packet->blocks);
 }
 
+
+void magicnet_transactions_list_response_packet_free(struct magicnet_packet* packet)
+{
+    block_transaction_vector_free(magicnet_signed_data(packet)->payload.transaction_list_response.transactions);
+}
+
 void magicnet_free_packet_pointers(struct magicnet_packet *packet)
 {
     if (!packet)
@@ -127,6 +133,14 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
         magicnet_block_send_packet_free(packet);
         break;
 
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
+
+        break;
+
+    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
+        magicnet_transactions_list_response_packet_free(packet);
+        break;
     case MAGICNET_PACKET_TYPE_SERVER_SYNC:
 
         break;

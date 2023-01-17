@@ -864,6 +864,12 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out);
 struct block_transaction_group *block_transaction_group_clone(struct block_transaction_group *transaction_group_in);
 
+
+/**
+ * Loads the transaction with the given hash. If not found or error then NULL is returned.
+*/
+struct block_transaction *block_transaction_load(const char *transaction_hash);
+
 /**
  * Lazily loads a block from storage. Does not load transactions.
  */
@@ -872,6 +878,16 @@ struct block *block_load(const char *hash);
  * Loads the transactions of a lazily loaded block.
  */
 int block_load_transactions(struct block *block);
+
+/**
+ * Loads the transactions from the request into the output transaction group
+ */
+int block_transactions_load(struct magicnet_transactions_request* request, struct block_transaction_group* transaction_group);
+
+/**
+ * Frees a vector of struct block_transaction*
+*/
+void block_transaction_vector_free(struct vector* vector);
 
 /**
  * Fully loads what is not loaded with the provided lazily loaded block.
@@ -929,5 +945,13 @@ void magicnet_chain_downloaders_cleanup();
 // Banned peer functionality
 bool magicnet_peer_ip_is_banned(const char *ip_address);
 int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
+
+
+void magicnet_transactions_request_init(struct magicnet_transactions_request *request);
+void magicnet_transactions_request_set_type(struct magicnet_transactions_request *request, int type);
+void magicnet_transactions_request_set_total_per_page(struct magicnet_transactions_request *request, int total_per_page);
+void magicnet_transactions_request_set_page(struct magicnet_transactions_request *request, int page);
+void magicnet_transactions_request_set_key(struct magicnet_transactions_request *request, struct key* key);
+void magicnet_transactions_request_set_target_key(struct magicnet_transactions_request *request, struct key *target_key);
 
 #endif
