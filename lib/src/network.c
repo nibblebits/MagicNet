@@ -2818,6 +2818,18 @@ void magicnet_copy_packet_block_send(struct magicnet_packet *packet_out, struct 
     block_send_packet_out->blocks = block_vector_out;
 }
 
+void magicnet_copy_packet_transaction_list_response(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
+{
+    vector_set_peek_pointer(magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions, 0);
+    struct block_transaction *transaction = vector_peek_ptr(magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions);
+    while(transaction)
+    {
+        struct block_transaction *cloned_transaction = block_transaction_clone(transaction);
+        vector_push(magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions, &cloned_transaction);
+        transaction = vector_peek_ptr(magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions);
+    }
+}
+
 /**
  * @brief Copies the packet including copying all internal pointers and creating new memory
  * for the destination packet
@@ -2840,6 +2852,10 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         magicnet_copy_packet_block_send(packet_out, packet_in);
+        break;
+    
+    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
+        magicnet_copy_packet_transaction_list_response(packet_out, packet_in);
         break;
     }
 }

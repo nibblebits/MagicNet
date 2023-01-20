@@ -910,6 +910,8 @@ void blockchain_free(struct blockchain *blockchain);
 struct blockchain *magicnet_blockchain_get_active();
 int magicnet_blockchain_get_active_id();
 
+struct magicnet_transactions *magicnet_transactions_request(struct magicnet_program *program, struct magicnet_transactions_request* request_data);
+
 struct block *block_clone(struct block *block);
 struct block_transaction *block_transaction_new();
 struct self_block_transaction *block_self_transaction_new(struct block_transaction *transaction);

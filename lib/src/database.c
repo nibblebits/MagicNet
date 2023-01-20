@@ -1140,7 +1140,7 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    char load_transactions_sql[] = "SELECT hash, signature, type, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE (key = ? OR key IS NULL) AND (target_key = ? OR target_key IS NULL) AND (type = ? OR type = -1) ORDER BY time DESC LIMIT ? OFFSET ?";
+    char load_transactions_sql[] = "SELECT hash, signature, type, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions";
 
     res = sqlite3_prepare_v2(db, load_transactions_sql, -1, &stmt, 0);
     if (res != SQLITE_OK)
@@ -1150,31 +1150,8 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
     }
 
     int param_count = 1;
-    if(transactions_request->key.key != NULL)
-    {
-        sqlite3_bind_text(stmt, param_count, transactions_request->key.key, -1, SQLITE_STATIC);
-    } else {
-        sqlite3_bind_null(stmt, param_count);
-    }
-    param_count++;
 
-    if(transactions_request->target_key.key != NULL)
-    {
-        sqlite3_bind_text(stmt, param_count, transactions_request->target_key.key, -1, SQLITE_STATIC);
-    } else {
-        sqlite3_bind_null(stmt, param_count);
-    }
-    param_count++;
-
-    sqlite3_bind_int(stmt, param_count, transactions_request->type);
-    param_count++;
-
-    sqlite3_bind_int(stmt, param_count, transactions_request->total_per_page);
-    param_count++;
-
-    int offset = (transactions_request->page-1) * transactions_request->total_per_page;
-    sqlite3_bind_int(stmt, param_count, offset);
-
+   
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
@@ -1188,18 +1165,17 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
         memcpy(transaction->hash, sqlite3_column_text(stmt, 0), strlen(sqlite3_column_text(stmt, 0)));
         memcpy(&transaction->signature, sqlite3_column_text(stmt, 1), sizeof(transaction->signature));
         transaction->type = sqlite3_column_int(stmt, 2);
-        memcpy(&transaction->key, sqlite3_column_text(stmt, 3), sizeof(transaction->key));
-        memcpy(&transaction->target_key, sqlite3_column_text(stmt, 4), sizeof(transaction->target_key));
-        memcpy(&transaction->data.prev_block_hash, sqlite3_column_text(stmt, 5), sizeof(transaction->data.prev_block_hash));
+        memcpy(&transaction->target_key, sqlite3_column_text(stmt, 3), sizeof(transaction->target_key));
+        memcpy(&transaction->data.prev_block_hash, sqlite3_column_text(stmt, 4), sizeof(transaction->data.prev_block_hash));
         // program name
-        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 6), strlen(sqlite3_column_text(stmt, 6)));
+        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 5), strlen(sqlite3_column_text(stmt, 5)));
         // time
-        transaction->data.time = sqlite3_column_int(stmt, 7);
+        transaction->data.time = sqlite3_column_int(stmt, 6);
         // data size
-        transaction->data.size = sqlite3_column_int(stmt, 8);
+        transaction->data.size = sqlite3_column_int(stmt, 7);
         // data
         transaction->data.ptr = calloc(1, transaction->data.size);
-        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 9), transaction->data.size);
+        memcpy(transaction->data.ptr, sqlite3_column_blob(stmt, 8), transaction->data.size);
         block_transaction_add(transaction_group, transaction);
 
         // Step

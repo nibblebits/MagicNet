@@ -395,7 +395,7 @@ void magicnet_transactions_request_set_target_key(struct magicnet_transactions_r
 
 
 
-struct magicnet_transactions *magicnet_transactions_request_for_type(struct magicnet_program *program, struct magicnet_transactions_request* request_data)
+struct magicnet_transactions *magicnet_transactions_request(struct magicnet_program *program, struct magicnet_transactions_request* request_data)
 {
     // Create transaction list packet
     int res = 0;
@@ -430,7 +430,7 @@ struct magicnet_transactions *magicnet_transactions_request_for_type(struct magi
         goto out;
     }
 
-    transactions = magicnet_transactions_new(magicnet_signed_data(packet)->payload.transaction_list_response.transactions);
+    transactions = magicnet_transactions_new(magicnet_signed_data(response_packet)->payload.transaction_list_response.transactions);
     
     // Switch to the next page
     request_data->page++;
@@ -456,6 +456,7 @@ struct magicnet_transactions *magicnet_transactions_new(struct vector *block_tra
         transaction = vector_peek_ptr(block_transactions_vec);
     }
 
+    transactions->amount = total_transactions;
     return transactions;
 }
 

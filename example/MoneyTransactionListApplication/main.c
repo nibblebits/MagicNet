@@ -10,9 +10,9 @@
 int main(int argc, char** argv)
 {
 
-    if (argc < 3)
+    if (argc < 2)
     {
-        printf("USAGE: <public key> <amount_to_send>\n");
+        printf("USAGE: <public key> \n");
         return -1;
     }
 
@@ -24,13 +24,24 @@ int main(int argc, char** argv)
         return -1;
     }
     
-    int res = magicnet_make_money_transfer(decentralized_program, argv[1], atoi(argv[2]));
-
-    if (res == 0)
+    struct magicnet_transactions_request request;
+    magicnet_transactions_request_init(&request);
+    struct key key = MAGICNET_key_from_string(argv[1]);
+    magicnet_transactions_request_set_key(&request, &key);
+    struct magicnet_transactions* transactions = magicnet_transactions_request(decentralized_program, &request);
+    if (!transactions)
     {
-        printf("Created the transaction money has been sent\n");
+        printf("Problem with transactions request\n");
+        return -1;
     }
-    
+
+    printf("Transactions request completed found %i\n\n", (int)transactions->amount);
+    for (int i = 0; i < transactions->amount; i++)
+    {
+        struct block_transaction* transaction = transactions->transactions[i];
+        printf("Transaction: hash=%s, key=%s, target_key=%s\n", transaction->hash, transaction->key.key, transaction->target_key.key);
+
+    }
     
     return 0;
 }
