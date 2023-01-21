@@ -28,6 +28,7 @@ int main(int argc, char** argv)
     magicnet_transactions_request_init(&request);
     struct key key = MAGICNET_key_from_string(argv[1]);
     magicnet_transactions_request_set_key(&request, &key);
+    magicnet_transactions_request_set_type(&request, 5556);
     struct magicnet_transactions* transactions = magicnet_transactions_request(decentralized_program, &request);
     if (!transactions)
     {

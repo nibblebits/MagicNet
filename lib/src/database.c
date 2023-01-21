@@ -1136,11 +1136,15 @@ int magicnet_database_load_block_transaction(const char *transaction_hash, struc
 }
 
 // Load transactions by condition no locks
-int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_request *transactions_request, struct block_transaction_group* transaction_group)
+int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_request* transactions_request, struct block_transaction_group* transaction_group)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    char load_transactions_sql[] = "SELECT hash, signature, type, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions";
+    char load_transactions_sql[] = "SELECT hash, signature, type, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE 1";
+    if (transactions_request->type != -1)
+    {
+        strcat(load_transactions_sql, " AND type = ?");
+    }
 
     res = sqlite3_prepare_v2(db, load_transactions_sql, -1, &stmt, 0);
     if (res != SQLITE_OK)
@@ -1151,7 +1155,12 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
 
     int param_count = 1;
 
-   
+    if (transactions_request->type != -1)
+    {
+        sqlite3_bind_int(stmt, param_count, transactions_request->type);
+        param_count++;
+    }
+
     int step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
@@ -1185,9 +1194,8 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
 out:
     return res;
 }
-
 // Load transactions by condition
-int magicnet_database_load_transactions(struct magicnet_transactions_request *transactions_request, struct block_transaction_group* transaction_group)
+int magicnet_database_load_transactions(struct magicnet_transactions_request *transactions_request, struct block_transaction_group *transaction_group)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);
