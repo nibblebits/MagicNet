@@ -3354,6 +3354,8 @@ int magicnet_client_process_transaction_list_request_packet(struct magicnet_clie
     magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet_out)->payload.transaction_list_response.type = magicnet_signed_data(packet)->payload.transaction_list_request.type;
     magicnet_signed_data(packet_out)->payload.transaction_list_response.page = magicnet_signed_data(packet)->payload.transaction_list_request.page;
+    memcpy(magicnet_signed_data(packet_out)->payload.transaction_list_response.key, magicnet_signed_data(packet)->payload.transaction_list_request.key, sizeof(magicnet_signed_data(packet_out)->payload.transaction_list_response.key));
+    memcpy(magicnet_signed_data(packet_out)->payload.transaction_list_response.target_key, magicnet_signed_data(packet)->payload.transaction_list_request.target_key, sizeof(magicnet_signed_data(packet_out)->payload.transaction_list_response.target_key));
     magicnet_signed_data(packet_out)->payload.transaction_list_response.total_per_page = magicnet_signed_data(packet)->payload.transaction_list_request.total_per_page;
     magicnet_signed_data(packet_out)->payload.transaction_list_response.total_transactions = transaction_group->total_transactions;
     magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions = vector_create(sizeof(struct block_transaction*));
