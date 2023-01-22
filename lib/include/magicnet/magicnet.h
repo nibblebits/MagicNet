@@ -827,6 +827,8 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
  * @return int
  */
 int magicnet_make_transaction(struct magicnet_program *program, int type, void *data, size_t size);
+int magicnet_make_transaction_using_buffer(struct magicnet_program *program, int type, struct buffer *buffer);
+int magicnet_money_transfer_data(struct block_transaction* transaction, struct block_transaction_money_transfer* money_transfer);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);

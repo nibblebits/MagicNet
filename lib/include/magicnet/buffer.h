@@ -15,8 +15,25 @@ struct buffer
 };
 
 struct buffer* buffer_create();
+struct buffer* buffer_wrap(void* data, size_t size);
+
 int buffer_len(struct buffer* buffer);
 char buffer_read(struct buffer* buffer);
+
+int buffer_read_bytes(struct buffer *buffer, void *ptr, size_t amount);
+
+
+// Read short
+int buffer_read_short(struct buffer *buffer, short* short_out);
+// Read int
+int buffer_read_int(struct buffer *buffer, int* int_out);
+
+// Read long
+int buffer_read_long(struct buffer *buffer, long* long_out);
+// Read double
+int buffer_read_double(struct buffer *buffer, double* double_out);
+int buffer_read_float(struct buffer *buffer, float* float_out);
+
 char buffer_peek(struct buffer* buffer);
 void buffer_extend(struct buffer* buffer, size_t size);
 void buffer_printf(struct buffer* buffer, const char* fmt, ...);
@@ -26,6 +43,8 @@ int buffer_write_bytes(struct buffer *buffer, void *ptr, size_t amount);
 int buffer_write_int(struct buffer *buffer, int value);
 int buffer_write_long(struct buffer *buffer, long value);
 void* buffer_ptr(struct buffer* buffer);
+int buffer_write_double(struct buffer *buffer, double value);
+int buffer_write_float(struct buffer *buffer, float value);
 void buffer_free(struct buffer* buffer);
 
 

@@ -13,6 +13,15 @@ struct buffer* buffer_create()
     return buf;
 }
 
+struct buffer* buffer_wrap(void* data, size_t size)
+{
+    struct buffer* buf = calloc(sizeof(struct buffer), 1);
+    buf->data = data;
+    buf->len = size;
+    buf->msize = size;
+    return buf;
+}
+
 int buffer_len(struct buffer* buffer)
 {
     return buffer->len;
@@ -100,6 +109,27 @@ int buffer_write_long(struct buffer *buffer, long value)
     return 0;
 }
 
+// write double
+int buffer_write_double(struct buffer *buffer, double value)
+{
+    // Preform bit manipulation for big-endianness todo later...
+    if (buffer_write_bytes(buffer, &value, sizeof(value)) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+// write float
+int buffer_write_float(struct buffer *buffer, float value)
+{
+    // Preform bit manipulation for big-endianness todo later...
+    if (buffer_write_bytes(buffer, &value, sizeof(value)) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
 
 void* buffer_ptr(struct buffer* buffer)
 {
@@ -115,6 +145,72 @@ char buffer_read(struct buffer* buffer)
     char c = buffer->data[buffer->rindex];
     buffer->rindex++;
     return c;
+}
+
+// Read bytes
+int buffer_read_bytes(struct buffer *buffer, void *ptr, size_t amount)
+{
+    int res = 0;
+    if (buffer->rindex+amount > buffer->len)
+    {
+        return -1;
+    }
+    memcpy(ptr, &buffer->data[buffer->rindex], amount);
+    buffer->rindex += amount;
+    res = amount;
+    return res;
+}
+
+
+// Read short
+int buffer_read_short(struct buffer *buffer, short* short_out)
+{
+    if (buffer_read_bytes(buffer, short_out, sizeof(short_out)) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+// Read int
+int buffer_read_int(struct buffer *buffer, int* int_out)
+{
+    if (buffer_read_bytes(buffer, int_out, sizeof(int_out)) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+
+// Read long
+int buffer_read_long(struct buffer *buffer, long* long_out)
+{
+    if (buffer_read_bytes(buffer, long_out, sizeof(long_out)) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+// Read double
+int buffer_read_double(struct buffer *buffer, double* double_out)
+{
+    if (buffer_read_bytes(buffer, double_out, sizeof(double_out)) < 0)
+    {
+        return -1;
+    }
+    return 0;
+}
+
+// Read float
+int buffer_read_float(struct buffer *buffer, float* float_out)
+{
+    if (buffer_read_bytes(buffer, float_out, sizeof(float_out)) < 0)
+    {
+        return -1;
+    }
+    return 0;
 }
 
 char buffer_peek(struct buffer* buffer)

@@ -40,7 +40,10 @@ int main(int argc, char** argv)
     for (int i = 0; i < transactions->amount; i++)
     {
         struct block_transaction* transaction = transactions->transactions[i];
-        printf("Transaction: hash=%s, key=%s, target_key=%s\n", transaction->hash, transaction->key.key, transaction->target_key.key);
+        struct block_transaction_money_transfer money_data = {0};
+        magicnet_money_transfer_data(transaction, &money_data);
+
+        printf("Transaction: hash=%s, key=%s, target_key=%s amount_sent=%d\n", transaction->hash, transaction->key.key, transaction->target_key.key, money_data.amount);
 
     }
     

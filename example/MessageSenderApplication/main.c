@@ -24,7 +24,7 @@ int main()
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
 
     struct chat_packet packet;
-    strcpy(packet.message, "Hello world");
+    
 
     magicnet_send_packet(decentralized_program, CHAT_PACKET, &packet);
     while (1)

@@ -248,18 +248,44 @@ int magicnet_make_transaction(struct magicnet_program *program, int type, void *
     return _magicnet_make_transaction(program, type, data, size, true);
 }
 
+int magicnet_make_transaction_using_buffer(struct magicnet_program *program, int type, struct buffer *buffer)
+{
+    return magicnet_make_transaction(program, type, buffer->data, buffer->len);
+}
+
 /**
  * This function creates a money transfer transaction and sends money
  */
 int magicnet_make_money_transfer(struct magicnet_program *program, const char *to, double amount)
 {
+    int res = 0;
     struct block_transaction_money_transfer money_transfer = {};
     money_transfer.recipient_key = MAGICNET_key_from_string(to);
     // With a null transfer funding the server will figure out how to send that amount.
     bzero(money_transfer.transfer_funding, sizeof(money_transfer.transfer_funding));
     money_transfer.amount = amount;
-    return magicnet_make_transaction(program, MAGICNET_TRANSACTION_TYPE_COIN_SEND, &money_transfer, sizeof(money_transfer));
+
+    // OKay lets create a buffer and write the transfer data
+    struct buffer *buffer = buffer_create();
+    buffer_write_double(buffer, money_transfer.amount);
+    buffer_write_bytes(buffer, &money_transfer.recipient_key, sizeof(money_transfer.recipient_key));
+    buffer_write_bytes(buffer, money_transfer.transfer_funding, sizeof(money_transfer.transfer_funding));
+    res = magicnet_make_transaction_using_buffer(program, MAGICNET_TRANSACTION_TYPE_COIN_SEND, buffer);
+    buffer_free(buffer);
+    return res;
 }
+
+int magicnet_money_transfer_data(struct block_transaction* transaction, struct block_transaction_money_transfer* money_transfer)
+{
+    int res = 0;
+    struct buffer *buffer = buffer_wrap(transaction->data.ptr, transaction->data.size);
+    buffer_read_double(buffer, &money_transfer->amount);
+    buffer_read_bytes(buffer, &money_transfer->recipient_key, sizeof(money_transfer->recipient_key));
+    buffer_read_bytes(buffer, money_transfer->transfer_funding, sizeof(money_transfer->transfer_funding));
+    buffer_free(buffer);
+    return res;
+}
+
 
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet)
 {
