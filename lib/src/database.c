@@ -37,7 +37,7 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 \"hash\"	TEXT,  \
                                 \"transaction_group_hash\" TEXT, \
                                 \"signature\"	BLOB,  \
-                                \"type\" INTEGER \
+                                \"type\" INTEGER, \
                                 \"key\"	BLOB,  \
                                 \"target_key\"	BLOB,  \
                                 \"prev_block_hash\"	TEXT,  \
@@ -1140,7 +1140,9 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    char load_transactions_sql[] = "SELECT hash, signature, type, key, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE 1";
+    int param_count = 1;
+    int step = 0;
+    char load_transactions_sql[256] = "SELECT hash, signature, type, key, target_key, prev_block_hash, program_name, time, data_size, data FROM transactions WHERE 1";
     if (transactions_request->type != -1)
     {
         strcat(load_transactions_sql, " AND type = ?");
@@ -1153,7 +1155,6 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
         goto out;
     }
 
-    int param_count = 1;
 
     if (transactions_request->type != -1)
     {
@@ -1161,7 +1162,7 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
         param_count++;
     }
 
-    int step = sqlite3_step(stmt);
+    step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {
         res = MAGICNET_ERROR_NOT_FOUND;
@@ -1172,16 +1173,26 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
     {
         struct block_transaction *transaction = block_transaction_new();
         struct key tmp_key = {0};
-        memcpy(transaction->hash, sqlite3_column_text(stmt, 0), strlen(sqlite3_column_text(stmt, 0)));
+        if (sqlite3_column_text(stmt, 0))
+        {
+            memcpy(transaction->hash, sqlite3_column_text(stmt, 0), strlen(sqlite3_column_text(stmt, 0)));
+        }
         memcpy(&transaction->signature, sqlite3_column_text(stmt, 1), sizeof(transaction->signature));
         transaction->type = sqlite3_column_int(stmt, 2);
         tmp_key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 3));
         transaction->key = tmp_key;
         tmp_key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 4));
         transaction->target_key = tmp_key;
-        memcpy(&transaction->data.prev_block_hash, sqlite3_column_text(stmt, 5), sizeof(transaction->data.prev_block_hash));
-        // program name
-        memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 6), strlen(sqlite3_column_text(stmt, 6)));
+        if (sqlite3_column_text(stmt, 5))
+        {
+            memcpy(transaction->data.prev_block_hash, sqlite3_column_text(stmt, 5), sizeof(transaction->data.prev_block_hash));
+        }
+
+        if (sqlite3_column_text(stmt, 6))
+        {
+            // program name
+            memcpy(transaction->data.program_name, sqlite3_column_text(stmt, 6), strlen(sqlite3_column_text(stmt, 6)));
+        }
         // time
         transaction->data.time = sqlite3_column_int(stmt, 7);
         // data size
