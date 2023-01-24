@@ -221,16 +221,14 @@ out:
 int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
 {
     int res = 0;
-    if (transaction->data.size != sizeof(struct block_transaction_money_transfer))
+    struct block_transaction_money_transfer money_transfer;
+    res = magicnet_money_transfer_data(transaction, &money_transfer);
+    if (res < 0)
     {
-        // Show error message
-        magicnet_log("%s the transaction data is not the correct size for a money transfer.\n", __FUNCTION__);
-        res = -1;
         goto out;
     }
 
-    struct block_transaction_money_transfer *money_transfer = (struct block_transaction_money_transfer *)transaction->data.ptr;
-    if (money_transfer->amount <= 0)
+    if (money_transfer.amount <= 0)
     {
         // Show error message
         magicnet_log("%s the amount is not valid\n", __FUNCTION__);
@@ -239,7 +237,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
     }
 
     // Check that the recipient key is valid
-    if (!MAGICNET_key_valid(&money_transfer->recipient_key))
+    if (!MAGICNET_key_valid(&money_transfer.recipient_key))
     {
         magicnet_log("%s the recipient key is invalid\n", __FUNCTION__);
         res = -1;
@@ -247,7 +245,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
     }
 
     // Check that the recipient key is equal to the target key on the main transaction
-    if (memcmp(&money_transfer->recipient_key, &transaction->target_key, sizeof(money_transfer->recipient_key)) != 0)
+    if (memcmp(&money_transfer.recipient_key, &transaction->target_key, sizeof(money_transfer.recipient_key)) != 0)
     {
         magicnet_log("%s the recipient key is not equal to the target key\n", __FUNCTION__);
         res = -1;

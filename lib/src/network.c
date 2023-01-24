@@ -3192,16 +3192,16 @@ out:
 int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction *transaction)
 {
     int res = 0;
-    // Check that the data is big enough to hold the money transfer transaction
-    if (transaction->data.size < sizeof(struct block_transaction_money_transfer))
+    // Cast the transaction data to a coin send transaction
+    struct block_transaction_money_transfer money_transfer_transaction;
+    res = magicnet_money_transfer_data(transaction, &money_transfer_transaction);
+    if (res < 0)
     {
-        res = -1;
         goto out;
     }
-    // Cast the transaction data to a coin send transaction
-    struct block_transaction_money_transfer *money_transfer_transaction = (struct block_transaction_money_transfer *)transaction->data.ptr;
+
     struct block_transaction_money_funding_source_and_amount empty_transfer_funding[MAGICNET_MONEY_TRANSACTION_TOTAL_FUNDING_SOURCES] = {0};
-    if (memcmp(empty_transfer_funding, money_transfer_transaction->transfer_funding, sizeof(empty_transfer_funding)) == 0)
+    if (memcmp(empty_transfer_funding, money_transfer_transaction.transfer_funding, sizeof(empty_transfer_funding)) == 0)
     {
         // We have a NULL funding source. We need to rebuild it. And find transaction that meet the entire balance we are trying to send.
         // Genesis key does not need a funding source to send money but the key can only send up to 1 million coins.
@@ -3212,7 +3212,7 @@ int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction *tran
     }
 
     // The target key of the transaction will be the recipient key of the money transfer transaction.
-    memcpy(&transaction->target_key, &money_transfer_transaction->recipient_key, sizeof(transaction->target_key));
+    memcpy(&transaction->target_key, &money_transfer_transaction.recipient_key, sizeof(transaction->target_key));
 
 out:
     return res;

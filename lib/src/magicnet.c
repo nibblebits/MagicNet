@@ -279,9 +279,22 @@ int magicnet_money_transfer_data(struct block_transaction* transaction, struct b
 {
     int res = 0;
     struct buffer *buffer = buffer_wrap(transaction->data.ptr, transaction->data.size);
-    buffer_read_double(buffer, &money_transfer->amount);
-    buffer_read_bytes(buffer, &money_transfer->recipient_key, sizeof(money_transfer->recipient_key));
-    buffer_read_bytes(buffer, money_transfer->transfer_funding, sizeof(money_transfer->transfer_funding));
+    res = buffer_read_double(buffer, &money_transfer->amount);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = buffer_read_bytes(buffer, &money_transfer->recipient_key, sizeof(money_transfer->recipient_key));
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = buffer_read_bytes(buffer, money_transfer->transfer_funding, sizeof(money_transfer->transfer_funding));
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
     buffer_free(buffer);
     return res;
 }

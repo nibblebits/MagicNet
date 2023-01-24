@@ -1366,6 +1366,7 @@ out:
 int magicnet_database_save_money_transaction_no_locks(struct block_transaction *transaction)
 {
     int res = 0;
+    struct block_transaction_money_transfer money_transaction;
     // Check that this transaction is a coin transfer type, if its not leave
     if (transaction->type != MAGICNET_TRANSACTION_TYPE_COIN_SEND)
     {
@@ -1381,12 +1382,16 @@ int magicnet_database_save_money_transaction_no_locks(struct block_transaction *
     }
 
     // Cast block transaction into money transaction
-    struct block_transaction_money_transfer *money_transaction = (struct block_transaction_money_transfer *)transaction->data.ptr;
+    res = magicnet_money_transfer_data(transaction, &money_transaction);
+    if (res < 0)
+    {
+        goto out;
+    }
 
     sqlite3_bind_text(stmt, 1, transaction->hash, strlen(transaction->hash), NULL);
     sqlite3_bind_blob(stmt, 2, &transaction->key.key, sizeof(transaction->key.key), NULL);
-    sqlite3_bind_blob(stmt, 3, &money_transaction->recipient_key.key, sizeof(money_transaction->recipient_key.key), NULL);
-    sqlite3_bind_double(stmt, 4, money_transaction->amount);
+    sqlite3_bind_blob(stmt, 3, &money_transaction.recipient_key.key, sizeof(money_transaction.recipient_key.key), NULL);
+    sqlite3_bind_double(stmt, 4, money_transaction.amount);
     sqlite3_bind_double(stmt, 5, 0);
 
     res = sqlite3_step(stmt);
