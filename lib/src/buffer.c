@@ -10,6 +10,7 @@ struct buffer* buffer_create()
     buf->data = calloc(BUFFER_REALLOC_AMOUNT, 1);
     buf->len = 0;
     buf->msize = BUFFER_REALLOC_AMOUNT;
+    buf->flags |= BUFFER_FLAG_WRAPPED;
     return buf;
 }
 
@@ -225,7 +226,10 @@ char buffer_peek(struct buffer* buffer)
 
 void buffer_free(struct buffer* buffer)
 {
-    free(buffer->data);
+    if (!(buffer->flags & BUFFER_FLAG_WRAPPED))
+    {
+        free(buffer->data);
+    }
     free(buffer);
 }
 

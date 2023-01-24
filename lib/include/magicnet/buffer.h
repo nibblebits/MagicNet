@@ -5,8 +5,11 @@
 #include <stddef.h>
 
 #define BUFFER_REALLOC_AMOUNT 2000
+#define BUFFER_FLAG_WRAPPED 0b00000001
+
 struct buffer
 {
+    int flags;
     char* data;
     // Read index
     int rindex;
