@@ -10,7 +10,6 @@ struct buffer* buffer_create()
     buf->data = calloc(BUFFER_REALLOC_AMOUNT, 1);
     buf->len = 0;
     buf->msize = BUFFER_REALLOC_AMOUNT;
-    buf->flags |= BUFFER_FLAG_WRAPPED;
     return buf;
 }
 
@@ -20,6 +19,7 @@ struct buffer* buffer_wrap(void* data, size_t size)
     buf->data = data;
     buf->len = size;
     buf->msize = size;
+    buf->flags |= BUFFER_FLAG_WRAPPED;
     return buf;
 }
 
