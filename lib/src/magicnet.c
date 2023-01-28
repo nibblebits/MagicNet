@@ -401,6 +401,7 @@ out:
 
 void magicnet_transactions_request_init(struct magicnet_transactions_request *request)
 {
+    memset(request, 0, sizeof(struct magicnet_transactions_request));
     request->type = -1;
     request->total_per_page = MAGICNET_MAX_TRANSACTIONS_IN_TRANSACTIONS_LIST_REQUEST;
     request->page = 1;
@@ -432,7 +433,10 @@ void magicnet_transactions_request_set_target_key(struct magicnet_transactions_r
     memcpy(&request->target_key, &target_key, sizeof(request->target_key));
 }
 
-
+void magicnet_transactions_request_set_transaction_group_hash(struct magicnet_transactions_request *request, const char *transaction_group_hash)
+{
+    strncpy(request->transaction_group_hash, transaction_group_hash, sizeof(request->transaction_group_hash));
+}
 
 struct magicnet_transactions *magicnet_transactions_request(struct magicnet_program *program, struct magicnet_transactions_request* request_data)
 {
@@ -445,6 +449,7 @@ struct magicnet_transactions *magicnet_transactions_request(struct magicnet_prog
     magicnet_signed_data(packet)->payload.transaction_list_request.type = request_data->type;
     magicnet_signed_data(packet)->payload.transaction_list_request.total_per_page = request_data->total_per_page;
     magicnet_signed_data(packet)->payload.transaction_list_request.page = request_data->page;
+    memcpy(magicnet_signed_data(packet)->payload.transaction_list_request.transaction_group_hash, request_data->transaction_group_hash, sizeof(magicnet_signed_data(packet)->payload.transaction_list_request.transaction_group_hash));
     memcpy(&magicnet_signed_data(packet)->payload.transaction_list_request.key, &request_data->key, sizeof(struct key));
     memcpy(&magicnet_signed_data(packet)->payload.transaction_list_request.key, &request_data->target_key, sizeof(struct key));
 

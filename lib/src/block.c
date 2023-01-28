@@ -727,11 +727,73 @@ struct block_transaction *block_transaction_load(const char *transaction_hash)
     return transaction;
 }
 
+bool block_transactions_empty(struct block *block)
+{
+    return block->transaction_group->total_transactions == 0;
+}
+
 // This function loads transactions from a struct magicnet_transactions_request into a struct block_transaction_group
 int block_transactions_load(struct magicnet_transactions_request* request, struct block_transaction_group* transaction_group)
 {
     int res = 0;
-    res = magicnet_database_load_transactions(request, transaction_group);
+    struct block* last_block = NULL;
+    struct block* current_block = NULL;
+    struct block* tmp_block = NULL;
+    // Do we have a transaction group hash in the filter request? If not then we will follow the chain downwards to ensure that the chain
+    // is maintained. If we do have a transaction group hash then we will load the transactions from that group hash.
+    if (!sha256_empty(request->transaction_group_hash))
+    {
+        // Not empty? Great! We will load the transactions from that group hash.
+        res = magicnet_database_load_transactions(request, transaction_group);
+        return res;
+    }
+
+    // We have no transaction group hash. We will load the transactions from the block hash.
+    // Get last blockchain
+    struct blockchain* active_chain = magicnet_blockchain_get_active();
+    if (!active_chain)
+    {
+        magicnet_log("%s cannot load transactions when no active blockchain exists\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Lets load the last block from the active chain
+    last_block = block_load(active_chain->last_hash);
+    if (!last_block)
+    {
+        magicnet_log("%s cannot load transactions when no last block exists\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    current_block = last_block;
+    while(current_block)
+    {
+        block_load_fully(current_block);
+        tmp_block = current_block;
+        // Do we have a transaction group hash in this block?
+        if (block_transactions_empty(current_block))
+        {
+            // No transactions in this block then we cant do anything with this one, lets go to the next
+            current_block = block_load(current_block->prev_hash);
+            block_free(tmp_block);
+            continue;
+        }
+
+        // We have transactions in this block. Lets load them.
+        magicnet_transactions_request_set_transaction_group_hash(request, current_block->transaction_group->hash);
+        res = magicnet_database_load_transactions(request, transaction_group);
+        if (res < 0 && res != MAGICNET_ERROR_NOT_FOUND)
+        {
+            magicnet_log("%s failed to load transactions from block %s\n", __FUNCTION__, current_block->hash);
+            block_free(tmp_block);
+            goto out;
+        }
+        current_block = block_load(current_block->prev_hash);
+        block_free(tmp_block);
+    }
+out:
     return res;
 }
 

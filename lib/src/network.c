@@ -1601,6 +1601,13 @@ int magicnet_client_read_transaction_list_request_packet(struct magicnet_client 
         goto out;
     }
 
+    // Read the transaction group hash
+    res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.transaction_list_request.transaction_group_hash, sizeof(magicnet_signed_data(packet_out)->payload.transaction_list_request.transaction_group_hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
     // Read the type
     res = magicnet_read_signed_int(client, packet_out->not_sent.tmp_buf, &type);
     if (res < 0)
@@ -1654,6 +1661,13 @@ int magicnet_client_read_transaction_list_response_packet(struct magicnet_client
 
     // Read the target key
     res = magicnet_read_bytes(client, &target_key, sizeof(target_key), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Read the transaction group hash
+    res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.transaction_list_response.transaction_group_hash, sizeof(magicnet_signed_data(packet_out)->payload.transaction_list_response.transaction_group_hash), packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
@@ -2281,9 +2295,16 @@ int magicnet_client_write_packet_transaction_list_request(struct magicnet_client
     {
         goto out;
     }
-
+    
     // write the target key
     res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.transaction_list_request.target_key, sizeof(magicnet_signed_data(packet)->payload.transaction_list_request.target_key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the transaction group hash
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.transaction_list_request.transaction_group_hash, sizeof(magicnet_signed_data(packet)->payload.transaction_list_request.transaction_group_hash), packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
@@ -2337,6 +2358,13 @@ int magicnet_client_write_packet_transaction_list_response(struct magicnet_clien
 
     // Write the target key
     res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.transaction_list_response.target_key, sizeof(magicnet_signed_data(packet)->payload.transaction_list_response.target_key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write transaction group hash
+    res = magicnet_write_bytes(client, magicnet_signed_data(packet)->payload.transaction_list_response.transaction_group_hash, sizeof(magicnet_signed_data(packet)->payload.transaction_list_response.transaction_group_hash), packet->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;

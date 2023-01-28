@@ -1148,6 +1148,11 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
         strcat(load_transactions_sql, " AND type = ?");
     }
 
+    if (!sha256_empty(transactions_request->transaction_group_hash))
+    {
+        strcat(load_transactions_sql, " AND transaction_group_hash = ?");
+    }
+
     res = sqlite3_prepare_v2(db, load_transactions_sql, -1, &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1162,6 +1167,12 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
         param_count++;
     }
 
+    if (!sha256_empty(transactions_request->transaction_group_hash))
+    {
+        sqlite3_bind_text(stmt, param_count, transactions_request->transaction_group_hash, strlen(transactions_request->transaction_group_hash), NULL);
+        param_count++;
+    }
+    
     step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {

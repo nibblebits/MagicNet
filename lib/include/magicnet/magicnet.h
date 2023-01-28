@@ -132,6 +132,9 @@ enum
 struct magicnet_transactions_request
 {
     int flags;
+
+    // This it not NULL if the request must only bring back transactions with the given transaction group hash
+    char transaction_group_hash[SHA256_STRING_LENGTH];
     // Null key if we do not care who made the transaction
     struct key key;
     // nulL key if we do not care what the target key is
@@ -288,6 +291,9 @@ struct magicnet_packet
                     // target key
                     struct key target_key;
 
+                    // The group hash
+                    char transaction_group_hash[SHA256_STRING_LENGTH];
+
                     // -1 iF WE WISH to bring back all transactions
                     int type;
                     int total_per_page;
@@ -300,6 +306,10 @@ struct magicnet_packet
                     struct key key;
                     // The target key the transactions were targetted too, NULL if not aplicable
                     struct key target_key;
+                    
+                    // The group hash
+                    char transaction_group_hash[SHA256_STRING_LENGTH];
+
                     // -1 if all types have been brought back.
                     int type;
                     int total_per_page;
@@ -951,6 +961,7 @@ int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
 
 
 void magicnet_transactions_request_init(struct magicnet_transactions_request *request);
+void magicnet_transactions_request_set_transaction_group_hash(struct magicnet_transactions_request *request, const char *transaction_group_hash);
 void magicnet_transactions_request_set_type(struct magicnet_transactions_request *request, int type);
 void magicnet_transactions_request_set_total_per_page(struct magicnet_transactions_request *request, int total_per_page);
 void magicnet_transactions_request_set_page(struct magicnet_transactions_request *request, int page);

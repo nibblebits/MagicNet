@@ -80,6 +80,14 @@
 #define MAGICNET_MAX_TRANSACTIONS_IN_TRANSACTIONS_LIST_REQUEST 1024
 #define MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA 65535
 
+// Blocks older than three months will have their transactions voided
+// The idea is that this will ensure people always use the network to ensure their coins get recycled
+// Before a expire deadline the transactions will be resent from oneself to oneself.
+// This will result in a fresh transaction not older than 3 months
+// If your received money transaction is not spent after 3 months then it is voided forever
+// This design also helps maintain speed until a viable cacheing mechnism can be implemented.
+// 13392 is aprox the amount of blocks created in 3 months time, assuming that one block is created every 10 minutes.
+#define MAGICNET_MAX_BLOCKS_FOR_VALID_TRANSACTIONS 13392 // Rename this later.. bad name..
 
 // We will download a chain from a maximum of 1 peers.
 #define MAGICNET_MAX_CHAIN_DOWNLOADER_CONNECTIONS 1
