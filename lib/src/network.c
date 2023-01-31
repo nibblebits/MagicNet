@@ -831,6 +831,8 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
     int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, signal_id);
     if (res < 0)
     {
+        // entry protocol failed show message
+        magicnet_log("%s entry protocol failed\n", __FUNCTION__);
         magicnet_server_lock(server);
         magicnet_close(mclient);
         magicnet_server_unlock(server);
