@@ -1136,7 +1136,7 @@ int magicnet_database_load_block_transaction(const char *transaction_hash, struc
 }
 
 // Load transactions by condition no locks
-int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_request* transactions_request, struct block_transaction_group* transaction_group)
+int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_request *transactions_request, struct block_transaction_group *transaction_group)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -1153,13 +1153,30 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
         strcat(load_transactions_sql, " AND transaction_group_hash = ?");
     }
 
+    if (transactions_request->flags & MAGICNET_TRANSACTIONS_REQUEST_FLAG_KEY_OR_TARGET_KEY && key_loaded(&transactions_request->key) && key_loaded(&transactions_request->target_key))
+    {
+        // This is a key or target key request
+        strcat(load_transactions_sql, "AND (key=? OR target_key=?)");
+    }
+    else
+    {
+        if (key_loaded(&transactions_request->key))
+        {
+            strcat(load_transactions_sql, "AND key=?");
+        }
+
+        if (key_loaded(&transactions_request->target_key))
+        {
+            strcat(load_transactions_sql, "AND target_key=?");
+        }
+    }
+
     res = sqlite3_prepare_v2(db, load_transactions_sql, -1, &stmt, 0);
     if (res != SQLITE_OK)
     {
         res = -1;
         goto out;
     }
-
 
     if (transactions_request->type != -1)
     {
@@ -1172,7 +1189,19 @@ int magicnet_database_load_transactions_no_locks(struct magicnet_transactions_re
         sqlite3_bind_text(stmt, param_count, transactions_request->transaction_group_hash, strlen(transactions_request->transaction_group_hash), NULL);
         param_count++;
     }
-    
+
+    if (key_loaded(&transactions_request->key))
+    {
+        sqlite3_bind_blob(stmt, param_count, &transactions_request->key, sizeof(transactions_request->key), NULL);
+        param_count++;
+    }
+
+    if (key_loaded(&transactions_request->target_key))
+    {
+        sqlite3_bind_blob(stmt, param_count, &transactions_request->target_key, sizeof(transactions_request->target_key), NULL);
+        param_count++;
+    }
+
     step = sqlite3_step(stmt);
     if (step != SQLITE_ROW)
     {

@@ -127,6 +127,9 @@ struct magicnet_transactions
 enum
 {
     MAGICNET_TRANSACTIONS_REQUEST_FLAG_INITIALIZED = 0b00000001,
+    // Signifies that we should search for either the key or the target key, without this flag
+    // both will be required to be equal for a transaction to be returned.
+    MAGICNET_TRANSACTIONS_REQUEST_FLAG_KEY_OR_TARGET_KEY = 0b00000010,
 };
 
 struct magicnet_transactions_request
@@ -285,35 +288,13 @@ struct magicnet_packet
 
                 struct magicnet_transaction_list_request
                 {
-                    // Null key if we do not care who made the transaction
-                    struct key key;
-                    // nulL key if we do not care what the target key is
-                    // target key
-                    struct key target_key;
-
-                    // The group hash
-                    char transaction_group_hash[SHA256_STRING_LENGTH];
-
-                    // -1 iF WE WISH to bring back all transactions
-                    int type;
-                    int total_per_page;
-                    int page;
+                    struct magicnet_transactions_request req;  
                 } transaction_list_request;
 
                 struct magicnet_transaction_list_response
                 {
-                    // The key that the transactions were created by. NULL if not applicable
-                    struct key key;
-                    // The target key the transactions were targetted too, NULL if not aplicable
-                    struct key target_key;
-                    
-                    // The group hash
-                    char transaction_group_hash[SHA256_STRING_LENGTH];
+                    struct magicnet_transactions_request req;  
 
-                    // -1 if all types have been brought back.
-                    int type;
-                    int total_per_page;
-                    int page;
                     int total_transactions;
                     // Vector of struct block_transaction*
                     struct vector *transactions;
@@ -719,6 +700,16 @@ struct block
     int blockchain_id;
 };
 
+
+struct magicnet_wallet
+{
+    // The public key of the wallet
+    struct key key;
+
+    // The balance of the wallet
+    double balance;
+};
+
 struct magicnet_chain_downloader;
 struct magicnet_chain_downloader_hash_to_download
 {
@@ -962,6 +953,7 @@ int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
 
 void magicnet_transactions_request_init(struct magicnet_transactions_request *request);
 void magicnet_transactions_request_set_transaction_group_hash(struct magicnet_transactions_request *request, const char *transaction_group_hash);
+void magicnet_transactions_request_set_flag(struct magicnet_transactions_request * request, int flag);
 void magicnet_transactions_request_set_type(struct magicnet_transactions_request *request, int type);
 void magicnet_transactions_request_set_total_per_page(struct magicnet_transactions_request *request, int total_per_page);
 void magicnet_transactions_request_set_page(struct magicnet_transactions_request *request, int page);

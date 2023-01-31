@@ -407,6 +407,11 @@ void magicnet_transactions_request_init(struct magicnet_transactions_request *re
     request->page = 1;
 }
 
+void magicnet_transactions_request_set_flag(struct magicnet_transactions_request * request, int flag)
+{
+    request->flags |= flag;
+}
+
 void magicnet_transactions_request_set_type(struct magicnet_transactions_request *request, int type)
 {
     request->type = type;
@@ -446,12 +451,7 @@ struct magicnet_transactions *magicnet_transactions_request(struct magicnet_prog
     struct magicnet_packet *packet = magicnet_packet_new();
     struct magicnet_packet* response_packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST;
-    magicnet_signed_data(packet)->payload.transaction_list_request.type = request_data->type;
-    magicnet_signed_data(packet)->payload.transaction_list_request.total_per_page = request_data->total_per_page;
-    magicnet_signed_data(packet)->payload.transaction_list_request.page = request_data->page;
-    memcpy(magicnet_signed_data(packet)->payload.transaction_list_request.transaction_group_hash, request_data->transaction_group_hash, sizeof(magicnet_signed_data(packet)->payload.transaction_list_request.transaction_group_hash));
-    memcpy(&magicnet_signed_data(packet)->payload.transaction_list_request.key, &request_data->key, sizeof(struct key));
-    memcpy(&magicnet_signed_data(packet)->payload.transaction_list_request.key, &request_data->target_key, sizeof(struct key));
+    magicnet_signed_data(packet)->payload.transaction_list_request.req = *request_data;
 
     // Send packet
     struct magicnet_client *client = program->client;

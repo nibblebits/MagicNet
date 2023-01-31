@@ -27,7 +27,10 @@ int main(int argc, char** argv)
     struct magicnet_transactions_request request;
     magicnet_transactions_request_init(&request);
     struct key key = MAGICNET_key_from_string(argv[1]);
-    //magicnet_transactions_request_set_key(&request, &key);
+    magicnet_transactions_request_set_flag(&request, MAGICNET_TRANSACTIONS_REQUEST_FLAG_KEY_OR_TARGET_KEY);
+    magicnet_transactions_request_set_key(&request, &key);
+    magicnet_transactions_request_set_target_key(&request, &key);
+
     magicnet_transactions_request_set_type(&request, MAGICNET_TRANSACTION_TYPE_COIN_SEND);
     struct magicnet_transactions* transactions = magicnet_transactions_request(decentralized_program, &request);
     if (!transactions)
