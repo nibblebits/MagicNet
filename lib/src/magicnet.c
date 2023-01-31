@@ -498,6 +498,7 @@ struct magicnet_transactions *magicnet_transactions_new(struct vector *block_tra
     {
         transactions->transactions[i] = block_transaction_clone(transaction);
         transaction = vector_peek_ptr(block_transactions_vec);
+        i++;
     }
 
     transactions->amount = total_transactions;
