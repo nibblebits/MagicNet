@@ -1495,7 +1495,7 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
         sqlite3_bind_blob(stmt, 2, &transaction->signature, sizeof(transaction->signature), NULL);
         sqlite3_bind_int(stmt, 3, transaction->type);
         sqlite3_bind_text(stmt, 4, transaction->key.key, strlen(transaction->key.key), NULL);
-        sqlite3_bind_text(stmt, 4, transaction->target_key.key, strlen(transaction->target_key.key), NULL);
+        sqlite3_bind_text(stmt, 5, transaction->target_key.key, strlen(transaction->target_key.key), NULL);
         sqlite3_bind_text(stmt, 6, transaction->data.prev_block_hash, sizeof(transaction->data.prev_block_hash), NULL);
         sqlite3_bind_text(stmt, 7, transaction->data.program_name, sizeof(transaction->data.program_name), NULL);
         sqlite3_bind_int64(stmt, 8, transaction->data.time);

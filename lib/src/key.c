@@ -50,6 +50,11 @@ struct key MAGICNET_key_from_string(const char* key)
 {
     struct key k;
     bzero(&k, sizeof(k));
+    if (!key)
+    {
+        return k;
+    }
+    
     strncpy(k.key, key, sizeof(k.key));
     k.size = strlen(key);
     return k;
