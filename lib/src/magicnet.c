@@ -429,13 +429,13 @@ void magicnet_transactions_request_set_page(struct magicnet_transactions_request
 
 void magicnet_transactions_request_set_key(struct magicnet_transactions_request *request, struct key* key)
 {
-    memcpy(&request->key, &key, sizeof(request->key));
+    memcpy(&request->key, key, sizeof(request->key));
 }
 
 // set target key
 void magicnet_transactions_request_set_target_key(struct magicnet_transactions_request *request, struct key *target_key)
 {
-    memcpy(&request->target_key, &target_key, sizeof(request->target_key));
+    memcpy(&request->target_key, target_key, sizeof(request->target_key));
 }
 
 void magicnet_transactions_request_set_transaction_group_hash(struct magicnet_transactions_request *request, const char *transaction_group_hash)

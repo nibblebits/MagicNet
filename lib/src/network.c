@@ -1622,7 +1622,7 @@ int magicnet_client_read_transaction_request(struct magicnet_client *client, str
     {
         goto out;
     }
-    request_out->type = res;
+
     res = magicnet_read_int(client, store_in_buffer);
     if (res < 0)
     {
