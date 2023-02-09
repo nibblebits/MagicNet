@@ -1,4 +1,4 @@
-OBJECTS= ./build/vector.o ./build/magicnet.o ./build/init.o ./build/block.o ./build/log.o ./build/network.o ./build/peer.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
+OBJECTS= ./build/vector.o ./build/magicnet.o ./build/init.o ./build/block.o ./build/log.o ./build/network.o ./build/peer.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/wallet.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
 INCLUDES= -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector
 ADDITIONAL_FLAGS= -g -fPIC
 all: ${OBJECTS}
@@ -32,6 +32,8 @@ all: ${OBJECTS}
 ./build/database.o:./src/database.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./src/database.c -c -o ./build/database.o 
 
+./build/wallet.o:./src/wallet.c
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS} ./src/wallet.c -c -o ./build/wallet.o 
 
 ./build/log.o:./src/log.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/log.c -c -o ./build/log.o 

@@ -422,6 +422,7 @@ void magicnet_transactions_request_set_total_per_page(struct magicnet_transactio
     request->total_per_page = total_per_page;
 }
 
+
 void magicnet_transactions_request_set_page(struct magicnet_transactions_request *request, int page)
 {
     request->page = page;
@@ -437,10 +438,27 @@ void magicnet_transactions_request_set_target_key(struct magicnet_transactions_r
 {
     memcpy(&request->target_key, target_key, sizeof(request->target_key));
 }
+void magicnet_transactions_request_remove_transaction_group_hash(struct magicnet_transactions_request *request)
+{
+    bzero(request->transaction_group_hash, sizeof(request->transaction_group_hash));
+}
+
 
 void magicnet_transactions_request_set_transaction_group_hash(struct magicnet_transactions_request *request, const char *transaction_group_hash)
 {
     strncpy(request->transaction_group_hash, transaction_group_hash, sizeof(request->transaction_group_hash));
+}
+
+
+void magicnet_transactions_request_remove_block_hash(struct magicnet_transactions_request* request)
+{
+    bzero(request->block_hash, sizeof(request->block_hash));
+}
+
+void magicnet_transactions_request_set_block_hash(struct magicnet_transactions_request* request, const char* hash)
+{
+    bzero(request->block_hash, sizeof(request->block_hash));
+    strncpy(request->block_hash, hash, sizeof(request->block_hash));
 }
 
 struct magicnet_transactions *magicnet_transactions_request(struct magicnet_program *program, struct magicnet_transactions_request* request_data)

@@ -83,6 +83,8 @@ enum
     // Sent when data was believed to be available but during a running algorithm the data became non-existant or incorrect.
     MAGICNET_ERROR_DATA_NO_LONGER_AVAILABLE = -1007,
     MAGICNET_ERROR_INCOMPATIBLE = -1008,
+    MAGICNET_ERROR_INVALID_PARAMETERS = -1008,
+    MAGICNET_ERROR_END_OF_STREAM = -1009,
 
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
@@ -138,6 +140,12 @@ struct magicnet_transactions_request
 
     // This it not NULL if the request must only bring back transactions with the given transaction group hash
     char transaction_group_hash[SHA256_STRING_LENGTH];
+
+    // The block hash to load, this is set while loading transactions using the request
+    // it can also be set prior to the request in which case it will load the block with the hash you provided
+    // and look for transactions. By default loading transactions will change this block hash to the hash of the next block  to load
+    char block_hash[SHA256_STRING_LENGTH];
+
     // Null key if we do not care who made the transaction
     struct key key;
     // nulL key if we do not care what the target key is
@@ -952,12 +960,20 @@ int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
 
 
 void magicnet_transactions_request_init(struct magicnet_transactions_request *request);
+void magicnet_transactions_request_remove_block_hash(struct magicnet_transactions_request* request);
+void magicnet_transactions_request_remove_transaction_group_hash(struct magicnet_transactions_request *request);
 void magicnet_transactions_request_set_transaction_group_hash(struct magicnet_transactions_request *request, const char *transaction_group_hash);
+void magicnet_transactions_request_set_block_hash(struct magicnet_transactions_request* request, const char* hash);
 void magicnet_transactions_request_set_flag(struct magicnet_transactions_request * request, int flag);
 void magicnet_transactions_request_set_type(struct magicnet_transactions_request *request, int type);
+void magicnet_transactions_request_set_block_hash(struct magicnet_transactions_request* request, const char* block_hash);
 void magicnet_transactions_request_set_total_per_page(struct magicnet_transactions_request *request, int total_per_page);
 void magicnet_transactions_request_set_page(struct magicnet_transactions_request *request, int page);
 void magicnet_transactions_request_set_key(struct magicnet_transactions_request *request, struct key* key);
 void magicnet_transactions_request_set_target_key(struct magicnet_transactions_request *request, struct key *target_key);
+
+
+// Wallets
+struct magicnet_wallet *magicnet_wallet_find(struct key *key);
 
 #endif

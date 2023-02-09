@@ -68,6 +68,17 @@
 
 #define MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS 60
 
+// 86400 seconds in a 24 hour period. 90 days is 7776000 seconds.
+// total blocks in 90 days = 7776000 / 60 = 129600 if we make one block every minute.
+// If we make one block every ten minutes its 12960 blocks in 90 days.
+#define MAGICNET_TOTAL_BLOCKS_IN_THREE_MONTHS 86400 / MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS * 90 
+
+// We allow a maximum of three months of blocks to be used to calculate the balance of a wallet
+// any blocks made after three months are not used to calculate the balance of a wallet.
+// and are deemed invalid and lost monies are voided.
+#define MAGICNET_BALANCE_CALCULATION_BLOCK_LIMIT  MAGICNET_TOTAL_BLOCKS_IN_THREE_MONTHS
+
+
 #define MAGICNET_CHAIN_DOWNLOADER_BLOCK_REQUEST_DELAY_SECONDS 10
 
 #define MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND 50000

@@ -83,11 +83,11 @@ int magicnet_blockchain_get_active_id()
     return magicnet_database_get_active_blockchain_id();
 }
 
-void block_transaction_vector_free(struct vector* vector)
+void block_transaction_vector_free(struct vector *vector)
 {
     vector_set_peek_pointer(vector, 0);
-    struct block_transaction* transaction = vector_peek_ptr(vector);
-    while(transaction)
+    struct block_transaction *transaction = vector_peek_ptr(vector);
+    while (transaction)
     {
         block_transaction_free(transaction);
         transaction = vector_peek_ptr(vector);
@@ -733,12 +733,22 @@ bool block_transactions_empty(struct block *block)
 }
 
 // This function loads transactions from a struct magicnet_transactions_request into a struct block_transaction_group
-int block_transactions_load(struct magicnet_transactions_request* request, struct block_transaction_group* transaction_group)
+int block_transactions_load(struct magicnet_transactions_request *request, struct block_transaction_group *transaction_group)
 {
     int res = 0;
-    struct block* last_block = NULL;
-    struct block* current_block = NULL;
-    struct block* tmp_block = NULL;
+    struct blockchain* active_chain = NULL;
+    struct block *last_block = NULL;
+    struct block *current_block = NULL;
+    struct block *tmp_block = NULL;
+
+    // If we have the transaction group hash set and the block hash set then this is an error
+    if (!sha256_empty(request->transaction_group_hash) && !sha256_empty(request->block_hash))
+    {
+        // We cant have the block hash set and the transaction group hash set because if the transaction group hash is set
+        // then we must only load the transactions for that group hash.
+        return MAGICNET_ERROR_INVALID_PARAMETERS;
+    }
+
     // Do we have a transaction group hash in the filter request? If not then we will follow the chain downwards to ensure that the chain
     // is maintained. If we do have a transaction group hash then we will load the transactions from that group hash.
     if (!sha256_empty(request->transaction_group_hash))
@@ -748,52 +758,77 @@ int block_transactions_load(struct magicnet_transactions_request* request, struc
         return res;
     }
 
-    // We have no transaction group hash. We will load the transactions from the block hash.
-    // Get last blockchain
-    struct blockchain* active_chain = magicnet_blockchain_get_active();
-    if (!active_chain)
+    // No block hash? then we should load the last block hash.
+    if (sha256_empty(request->block_hash))
     {
-        magicnet_log("%s cannot load transactions when no active blockchain exists\n", __FUNCTION__);
-        res = -1;
-        goto out;
-    }
-
-    // Lets load the last block from the active chain
-    last_block = block_load(active_chain->last_hash);
-    if (!last_block)
-    {
-        magicnet_log("%s cannot load transactions when no last block exists\n", __FUNCTION__);
-        res = -1;
-        goto out;
-    }
-
-    current_block = last_block;
-    while(current_block)
-    {
-        block_load_fully(current_block);
-        tmp_block = current_block;
-        // Do we have a transaction group hash in this block?
-        if (block_transactions_empty(current_block))
+        // We have no transaction group hash. We will load the transactions from the block hash.
+        // Get last blockchain
+        active_chain = magicnet_blockchain_get_active();
+        if (!active_chain)
         {
-            // No transactions in this block then we cant do anything with this one, lets go to the next
-            current_block = block_load(current_block->prev_hash);
-            block_free(tmp_block);
-            continue;
-        }
-
-        // We have transactions in this block. Lets load them.
-        magicnet_transactions_request_set_transaction_group_hash(request, current_block->transaction_group->hash);
-        res = magicnet_database_load_transactions(request, transaction_group);
-        if (res < 0 && res != MAGICNET_ERROR_NOT_FOUND)
-        {
-            magicnet_log("%s failed to load transactions from block %s\n", __FUNCTION__, current_block->hash);
-            block_free(tmp_block);
+            magicnet_log("%s cannot load transactions when no active blockchain exists\n", __FUNCTION__);
+            res = -1;
             goto out;
         }
-        current_block = block_load(current_block->prev_hash);
-        block_free(tmp_block);
+
+        // Lets load the last block from the active chain
+        last_block = block_load(active_chain->last_hash);
+        if (!last_block)
+        {
+            magicnet_log("%s cannot load transactions when no last block exists\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+
+        current_block = last_block;
+    }
+    else
+    {
+        current_block = block_load(request->block_hash);
+    }
+
+    if (!current_block)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+
+    block_load_fully(current_block);
+    // Do we have a transaction group hash in this block?
+    if (block_transactions_empty(current_block))
+    {
+        goto out;
+    }
+
+    // We have transactions in this block. Lets load them.
+    magicnet_transactions_request_remove_block_hash(request);
+    magicnet_transactions_request_set_transaction_group_hash(request, current_block->transaction_group->hash);
+    res = magicnet_database_load_transactions(request, transaction_group);
+    if (res < 0 && res != MAGICNET_ERROR_NOT_FOUND)
+    {
+        magicnet_log("%s failed to load transactions from block %s\n", __FUNCTION__, current_block->hash);
+        goto out;
     }
 out:
+    magicnet_transactions_request_remove_transaction_group_hash(request);
+    magicnet_transactions_request_remove_block_hash(request);
+    if (current_block)
+    {
+        if (sha256_empty(current_block->prev_hash))
+        {
+            res = MAGICNET_ERROR_END_OF_STREAM;
+        }
+        else
+        {
+            magicnet_transactions_request_set_block_hash(request, current_block->prev_hash);
+        }
+        block_free(current_block);
+    }
+
+    if (active_chain)
+    {
+        blockchain_free(active_chain);
+    }
     return res;
 }
 
