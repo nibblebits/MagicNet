@@ -4840,6 +4840,8 @@ out:
 
 bool magicnet_server_should_sign_and_send_self_transaction(struct self_block_transaction *self_transaction)
 {
+    return true;
+    
     return self_transaction->state == BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND;
 }
 
