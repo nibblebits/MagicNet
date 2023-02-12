@@ -2349,7 +2349,6 @@ int magicnet_client_write_packet_transaction_list_response(struct magicnet_clien
         goto out;
     }
 
-
     // Write the actual request
     res = magicnet_client_write_transaction_request(client, &magicnet_signed_data(packet)->payload.transaction_list_response.req, packet->not_sent.tmp_buf);
     if (res < 0)
@@ -3316,32 +3315,33 @@ int magicnet_client_process_transaction_list_request_packet(struct magicnet_clie
     int res = 0;
     struct block_transaction_group *transaction_group = block_transaction_group_new();
     struct magicnet_packet *packet_out = magicnet_packet_new();
-    struct magicnet_transactions_request* request = &magicnet_signed_data(packet)->payload.transaction_list_request.req;
-
+    struct magicnet_transactions_request *request = &magicnet_signed_data(packet)->payload.transaction_list_request.req;
+    size_t total_transactions = 0;
+    struct vector *transactions_vec = vector_create(sizeof(struct block_transaction *));
     // Entry message
     magicnet_log("%s transaction list request\n", __FUNCTION__);
 
-    res = block_transactions_load(request, transaction_group);
-    if (res < 0 && res != MAGICNET_ERROR_NOT_FOUND)
+    // We want to go through all possible transactions
+    while ((res = block_transactions_load(request, transaction_group)) >= 0)
     {
-        // ERROR message
-        magicnet_log("%s failed to load transactions\n", __FUNCTION__);
-        goto out;
+        // Fill the transactions in the packet
+        total_transactions += transaction_group->total_transactions;
+        for (int i = 0; i < transaction_group->total_transactions; i++)
+        {
+            struct block_transaction *transaction = block_transaction_clone(transaction_group->transactions[i]);
+            vector_push(transactions_vec, &transaction);
+        }
+
+        block_transaction_group_free(transaction_group);
+        transaction_group = block_transaction_group_new();
     }
 
     // Create a response packet
     magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE;
     magicnet_signed_data(packet_out)->flags = MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet_out)->payload.transaction_list_response.req = *request;
-    magicnet_signed_data(packet_out)->payload.transaction_list_response.total_transactions = transaction_group->total_transactions;
-    magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions = vector_create(sizeof(struct block_transaction *));
-
-    // Fill the transactions in the packet
-    for (int i = 0; i < transaction_group->total_transactions; i++)
-    {
-        struct block_transaction *transaction = block_transaction_clone(transaction_group->transactions[i]);
-        vector_push(magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions, &transaction);
-    }
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.total_transactions = total_transactions;
+    magicnet_signed_data(packet_out)->payload.transaction_list_response.transactions = transactions_vec;
 
     // Send the packet back to the client
     res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
@@ -3353,8 +3353,9 @@ int magicnet_client_process_transaction_list_request_packet(struct magicnet_clie
     }
 
 out:
-    magicnet_free_packet(packet_out);
+
     block_transaction_group_free(transaction_group);
+    magicnet_free_packet(packet_out);
     return res;
 }
 
@@ -4841,7 +4842,7 @@ out:
 bool magicnet_server_should_sign_and_send_self_transaction(struct self_block_transaction *self_transaction)
 {
     return true;
-    
+
     return self_transaction->state == BLOCK_TRANSACTION_STATE_PENDING_SIGN_AND_SEND;
 }
 

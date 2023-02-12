@@ -12,6 +12,7 @@ int magicnet_wallet_calculate_balance(struct key *key, double *balance_out)
     magicnet_transactions_request_init(&transactions_request);
     magicnet_transactions_request_set_type(&transactions_request, MAGICNET_TRANSACTION_TYPE_COIN_SEND);
     magicnet_transactions_request_set_key(&transactions_request, key);
+    magicnet_transactions_request_set_flag(&transactions_request, MAGICNET_TRANSACTIONS_REQUEST_FLAG_KEY_OR_TARGET_KEY);
     magicnet_transactions_request_set_target_key(&transactions_request, key);
 
     struct block_transaction_group *group = block_transaction_group_new();
