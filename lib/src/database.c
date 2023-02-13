@@ -1309,6 +1309,9 @@ out:
     {
         sqlite3_finalize(stmt);
     }
+
+    block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
+
     return res;
 }
 
