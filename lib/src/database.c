@@ -1651,10 +1651,11 @@ int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, si
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
+    struct vector* hash_vec = vector_create(SHA256_STRING_LENGTH);
     pthread_mutex_lock(&db_lock);
 
     int pos = vector_count(block_vec_out);
-    const char *load_block_sql = "SELECT hash, prev_hash, blockchain_id, transaction_group_hash, key, signature FROM blocks WHERE blockchain_id = 0 LIMIT ?, ?";
+    const char *load_block_sql = "SELECT hash FROM blocks WHERE blockchain_id = 0 LIMIT ?, ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1673,41 +1674,12 @@ int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, si
 
     while (step == SQLITE_ROW)
     {
-        char hash[SHA256_STRING_LENGTH];
-        char prev_hash[SHA256_STRING_LENGTH];
-        int blockchain_id = 0;
-        char transaction_group_hash[SHA256_STRING_LENGTH];
-        struct key key;
-        struct signature signature;
-
-        bzero(hash, SHA256_STRING_LENGTH);
-        strncpy(hash, sqlite3_column_text(stmt, 0), SHA256_STRING_LENGTH);
-
-        bzero(prev_hash, SHA256_STRING_LENGTH);
-        strncpy(prev_hash, sqlite3_column_text(stmt, 1), SHA256_STRING_LENGTH);
-
-        blockchain_id = sqlite3_column_int(stmt, 2);
-
-        bzero(transaction_group_hash, SHA256_STRING_LENGTH);
-        if (sqlite3_column_text(stmt, 3))
+        if(sqlite3_column_text(stmt, 0))
         {
-            strncpy(transaction_group_hash, sqlite3_column_text(stmt, 3), SHA256_STRING_LENGTH);
+            char hash[SHA256_STRING_LENGTH] = {0};
+            strncpy(hash, sqlite3_column_text(stmt, 0), sizeof(hash));
+            vector_push(hash_vec, hash);
         }
-
-        if (sqlite3_column_blob(stmt, 4))
-        {
-            memcpy(&key, sqlite3_column_blob(stmt, 4), sizeof(struct key));
-        }
-
-        if (sqlite3_column_blob(stmt, 5))
-        {
-            memcpy(&signature, sqlite3_column_blob(stmt, 5), sizeof(struct signature));
-        }
-        struct block *block = block_create_with_group(hash, prev_hash, NULL);
-        block->blockchain_id = blockchain_id;
-        block->key = key;
-        block->signature = signature;
-        vector_push(block_vec_out, &block);
         step = sqlite3_step(stmt);
     }
 out:
@@ -1716,6 +1688,20 @@ out:
         sqlite3_finalize(stmt);
     }
     pthread_mutex_unlock(&db_lock);
+
+    // Now we no longer have a database lock we must load all the blocks for the hashes we obtained.
+    vector_set_peek_pointer(hash_vec, 0);
+    const char* hash = vector_peek_ptr(hash_vec);
+    while(hash)
+    {
+        struct block* block = block_load(hash);
+        if (block)
+        {
+            block_load_fully(block);
+        }
+        vector_push(block_vec_out, &block);
+    }
+    vector_free(hash_vec);
     return res;
 }
 
