@@ -1691,7 +1691,7 @@ out:
 
     // Now we no longer have a database lock we must load all the blocks for the hashes we obtained.
     vector_set_peek_pointer(hash_vec, 0);
-    const char* hash = vector_peek_ptr(hash_vec);
+    const char* hash = vector_peek(hash_vec);
     while(hash)
     {
         struct block* block = block_load(hash);
@@ -1700,6 +1700,7 @@ out:
             block_load_fully(block);
         }
         vector_push(block_vec_out, &block);
+        hash = vector_peek(hash_vec);
     }
     vector_free(hash_vec);
     return res;
