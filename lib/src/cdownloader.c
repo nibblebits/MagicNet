@@ -438,7 +438,11 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
             }
 
             // Lets make sure it was the block we was expecting
-            magicnet_log("%s saving block %s\n", __FUNCTION__, block->hash);
+            magicnet_log("%s saving block %s, transaction_group_hash %s\n", __FUNCTION__, block->hash, block->transaction_group->hash);
+            if (sha256_empty(block->transaction_group->hash) && block->transaction_group->total_transactions > 0)
+            {
+                magicnet_log("bug");
+            }
             block_save(block);
             // Remove the block from the downloader hashes
             magicnet_chain_downloaders_remove_hash(block);
