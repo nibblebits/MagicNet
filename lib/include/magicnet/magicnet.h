@@ -85,6 +85,7 @@ enum
     MAGICNET_ERROR_INCOMPATIBLE = -1008,
     MAGICNET_ERROR_INVALID_PARAMETERS = -1008,
     MAGICNET_ERROR_END_OF_STREAM = -1009,
+    MAGICNET_DATA_SENT_BEFORE = -1010,
 
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
@@ -92,7 +93,6 @@ enum
     MAGICNET_ACKNOWLEGED_ALL_OKAY = 0,
     // Sometimes returned for certain operations when something is completed.
     MAGICNET_TASK_COMPLETE = 200,
-    MAGICNET_BLOCK_SENT_BEFORE = 201,
     MAGICNET_CREATED = 202,
     MAGICNET_UPDATED = 203,
 };

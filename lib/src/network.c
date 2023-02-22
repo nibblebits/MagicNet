@@ -4085,7 +4085,18 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
     while (block)
     {
         hash_is_requested = magicnet_default_downloader_is_hash_queued(block->hash);
-        block_save(block);
+        int save_res = block_save(block);
+        if (save_res < 0)
+        {
+            if (save_res == MAGICNET_DATA_SENT_BEFORE)
+            {
+                block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_group_send.blocks);
+                continue;
+            }
+            break;
+        }
+
+        // All okay the block was saved? Great lets update the hashes and verified blocks.
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
         magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
 
@@ -4662,6 +4673,17 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     magicnet_free_packet(packet);
 }
 
+bool magicnet_vote_allowed(struct key *key, struct key *votes_for)
+{
+    // Cannot vote for yourself
+    if (key_cmp(key, votes_for))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 struct key *magicnet_server_get_random_block_verifier(struct magicnet_server *server)
 {
     if (vector_count(server->next_block.signed_up_verifiers) == 0)
@@ -4673,12 +4695,35 @@ struct key *magicnet_server_get_random_block_verifier(struct magicnet_server *se
     return vector_peek_ptr_at(server->next_block.signed_up_verifiers, random_key_index);
 }
 
+size_t magicnet_total_verifiers(struct magicnet_server *server)
+{
+    return vector_count(server->next_block.signed_up_verifiers);
+}
+
+struct key *magicnet_server_find_verifier_to_vote_for(struct magicnet_server *server)
+{
+    struct key *verifier_key = NULL;
+    size_t attempts = 0;
+    while ((verifier_key = magicnet_server_get_random_block_verifier(server)) != NULL && attempts < 4)
+    {
+        // Is the key that we chose allowed?
+        if (magicnet_vote_allowed(MAGICNET_public_key(), verifier_key))
+        {
+            // yeah allowed? okay great
+            break;
+        }
+        attempts++;
+    }
+
+    return verifier_key;
+}
+
 void magicnet_server_client_vote_for_verifier(struct magicnet_server *server)
 {
-    struct key *verifier_key = magicnet_server_get_random_block_verifier(server);
+    struct key *verifier_key = magicnet_server_find_verifier_to_vote_for(server);
     if (!verifier_key)
     {
-        magicnet_error("%s we went to cast a vote for a verifier but their isnt any verifiers available\n", __FUNCTION__);
+        magicnet_error("%s failed to find a key to vote for\n", __FUNCTION__);
         return;
     }
 

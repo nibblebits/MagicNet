@@ -473,7 +473,7 @@ int block_save(struct block *block)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
         // blockchain_reformat(block);
-        res = MAGICNET_BLOCK_SENT_BEFORE;
+        res = MAGICNET_DATA_SENT_BEFORE;
         goto out;
     }
 
