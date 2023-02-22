@@ -4090,7 +4090,7 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         {
             if (save_res == MAGICNET_DATA_SENT_BEFORE)
             {
-                block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_group_send.blocks);
+                block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
                 continue;
             }
             break;
