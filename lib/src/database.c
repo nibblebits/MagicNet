@@ -17,7 +17,7 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                 \"blockchain_id\" INTEGER, \
                                                 \"transaction_group_hash\" TEXT, \
                                                 \"key\"	TEXT, \
-                                                \"signature\" TEXT \
+                                                \"signature\" TEXT, \
                                                 \"time_created\" INTEGER);",
 
                                "CREATE TABLE \"blockchains\" ( \
