@@ -507,6 +507,7 @@ struct block *block_clone(struct block *block)
     block_cloned->key = block->key;
     block_cloned->signature = block->signature;
     block_cloned->blockchain_id = block->blockchain_id;
+    block_cloned->time = block->time;
     return block_cloned;
 }
 
