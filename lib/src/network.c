@@ -1391,12 +1391,14 @@ out:
 int magicnet_client_read_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
+
     int total_transactions = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (total_transactions < 0)
     {
         res = total_transactions;
         goto out;
     }
+    
 
     struct block_transaction_group *transaction_group = block_transaction_group_new();
     magicnet_signed_data(packet_out)->payload.block_send.transaction_group = transaction_group;
@@ -1427,6 +1429,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         char hash[SHA256_STRING_LENGTH];
         char prev_hash[SHA256_STRING_LENGTH];
         char transaction_group_hash[SHA256_STRING_LENGTH];
+        time_t block_time;
         struct key key;
         struct signature signature;
         res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
@@ -1444,6 +1447,14 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         {
             break;
         }
+
+        block_time = magicnet_read_long(client, packet_out->not_sent.tmp_buf);
+        if (block_time < 0)
+        {
+            res = block_time;
+            break;
+        }
+
 
         if (memcmp(transaction_group_hash, transaction_group->hash, sizeof(transaction_group_hash)) != 0)
         {
@@ -1473,6 +1484,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
 
         block->key = key;
         block->signature = signature;
+        block->time = block_time;
 
         res = block_verify(block);
         if (res < 0)
@@ -2213,6 +2225,12 @@ int magicnet_client_write_packet_block_send(struct magicnet_client *client, stru
         }
 
         res = magicnet_write_bytes(client, block->transaction_group->hash, sizeof(block->transaction_group->hash), packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            break;
+        }
+
+        res = magicnet_write_long(client, block->time, packet->not_sent.tmp_buf);
         if (res < 0)
         {
             break;

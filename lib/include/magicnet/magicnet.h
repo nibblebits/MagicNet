@@ -704,6 +704,12 @@ struct block
 
     struct block_transaction_group *transaction_group;
 
+    // The timestamp of when the block was created. Note that this is the time the block verifier has told us
+    // he created the block. He could lie here we dont know. So this field shouldnt be used for security reasons.
+    // and should just be used as informative reasons. However all blocks should be rejected if the previous block
+    // has a time that is greater than the time provided to us.
+    time_t time;
+
     // LOCAL DATA ONLY The below data is not sent across the network
     int blockchain_id;
 };

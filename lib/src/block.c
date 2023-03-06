@@ -355,7 +355,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     }
 
     int bco = 0;
-    if (magicnet_database_load_block_from_previous_hash(block->hash, NULL, &bco, NULL) >= 0)
+    if (magicnet_database_load_block_from_previous_hash(block->hash, NULL, &bco, NULL, NULL) >= 0)
     {
         *blockchain_id_out = bco;
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
@@ -468,7 +468,7 @@ int block_save(struct block *block)
         goto out;
     }
 
-    res = magicnet_database_load_block(block->hash, NULL, &block->blockchain_id, NULL, NULL, NULL);
+    res = magicnet_database_load_block(block->hash, NULL, &block->blockchain_id, NULL, NULL, NULL, NULL);
     if (res >= 0)
     {
         magicnet_log("%s the same block was sent to us twice, we will ignore this one\n", __FUNCTION__);
@@ -535,8 +535,9 @@ const char *block_hash_create(struct block *block, char *hash_out)
 {
     struct buffer *tmp_buf = buffer_create();
 
-    buffer_write_bytes(tmp_buf, &block->key, sizeof(block->key));
+    buffer_write_bytes(tmp_buf, &block->key.key, sizeof(block->key.key));
     buffer_write_bytes(tmp_buf, block->prev_hash, strlen(block->prev_hash));
+    buffer_write_long(tmp_buf, block->time);
     char transaction_group_hash[SHA256_STRING_LENGTH];
     if (block_transaction_group_hash_create(block->transaction_group, transaction_group_hash))
     {
@@ -590,6 +591,14 @@ int block_sign(struct block *block)
 
     return res;
 }
+
+int block_verify_timestamp(struct block* block)
+{
+    int res = 0;
+    // TODO Verify the block time is fair.
+    return res;
+}
+
 int block_verify(struct block *block)
 {
     int res = 0;
@@ -598,6 +607,14 @@ int block_verify(struct block *block)
     if (memcmp(block->hash, block_hash, sizeof(block_hash)) != 0)
     {
         magicnet_log("%s the hash in the block does not match the hash it should be\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    res = block_verify_timestamp(block);
+    if (res < 0)
+    {
+        magicnet_log("%s the timestamp for the block cannot be real. The block is rejected.\n", __FUNCTION__);
         res = -1;
         goto out;
     }
@@ -672,6 +689,7 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
 {
     char last_hash[SHA256_STRING_LENGTH] = {0};
     struct block *block = calloc(1, sizeof(struct block));
+    block->time = time(NULL);
     if (transaction_group)
     {
         block->transaction_group = block_transaction_group_clone(transaction_group);
@@ -878,7 +896,8 @@ struct block *block_load(const char *hash)
     char transaction_group_hash[SHA256_STRING_LENGTH];
     struct key key;
     struct signature signature;
-    res = magicnet_database_load_block(hash, prev_hash, &blockchain_id, transaction_group_hash, &key, &signature);
+    time_t created_time;
+    res = magicnet_database_load_block(hash, prev_hash, &blockchain_id, transaction_group_hash, &key, &signature, &created_time);
     if (res < 0)
     {
         goto out;
@@ -890,6 +909,7 @@ struct block *block_load(const char *hash)
     block->blockchain_id = blockchain_id;
     block->key = key;
     block->signature = signature;
+    block->time = created_time;
 
 out:
     if (res < 0)
