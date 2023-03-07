@@ -16,6 +16,7 @@ int magicnet_wallet_calculate_balance(struct key *key, double *balance_out)
     magicnet_transactions_request_set_target_key(&transactions_request, key);
 
     struct block_transaction_group *group = block_transaction_group_new();
+    bool done = false;
     while ((res = block_transactions_load(&transactions_request, group)) >= 0)
     {
         // Lets go through the transactions and
@@ -27,22 +28,25 @@ int magicnet_wallet_calculate_balance(struct key *key, double *balance_out)
             {
                 goto out;
             }
-            double amount = 0;
+            
             // Is the recipient key our key?
             if (key_cmp(key, &money_transfer.recipient_key))
             {
-                amount += money_transfer.amount;
+                balance = money_transfer.new_balances.recipient_balance;
+                done = true;
             }
 
             // Is the transaction key our key?
             if (key_cmp(key, &group->transactions[i]->key))
             {
-                // Then this means we sent the money . We have both checks because you might be sending money to yourself
-                // this is why "else" statement isnt sufficient and we have to check both keys.
-                amount -= money_transfer.amount;
+               balance = money_transfer.new_balances.sender_balance;
+               done = true;
             }
 
-            balance += amount;
+            if (done)
+            {
+                break;
+            }
         }
         block_transaction_group_free(group);
         group = block_transaction_group_new();

@@ -525,15 +525,8 @@ struct block_transaction_data
     // will have access to the transaction
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
     time_t time;
-    // This is the bid that the signer has wedged. This is the amount of money they are willing to pay to put a transaction
-    // on the next block. Zero is completley valid, theirs a certain amount of transactions allowed in a block.
-    // If your bid is lower than someone elses and we run out of transactions for the next block, we will begin to remove transactions
-    // whose bid is lower than the  bidder who has no room in the next block. The new bidder will then take their place.
-    // The bid money disappears forever, never being sent to anyone. It deflates the currency.
-    // If a peer bids an amount that he does not have then the transaction is dropped.
-    // If a peer bids and the receiver of the transaction is not aware of the peer then they cannot prove the balance of the peer therefore
-    // the peer transaction is dropped.
-    double bid;
+
+
     char *ptr;
     size_t size;
 };
@@ -558,6 +551,7 @@ struct block_transaction
     // The type of transaction. Can be a custom integer, should be over 1000 for non protocol related transactions
     // i.e custom applications
     int type;
+
 
     // Signed signature of the creator of the transaction.
     struct signature signature;
@@ -610,28 +604,11 @@ struct self_block_transaction
     char status_message[MAGICNET_MAX_SMALL_STRING_SIZE];
 };
 
-/**
- * Custom block transaction types
- */
 
-struct block_transaction_money_funding_source_and_amount
-{
-    // Where are we getting the "amount" from? What transaction is funding this transfer.
-    // Basically we reference a transaction that has already been added to the blockchain where we received money.
-    char funding_transaction_hash[SHA256_STRING_LENGTH];
-
-    // The amount of money being sent
-    double amount;
-};
 
 // Block transaction type for money transfer
 struct block_transaction_money_transfer
 {
-    // Since some funding sources might only have a balance of like 10 coins and maybe you want to send 12 coins we need
-    // multiple funding sources to send money.
-    // This way you could have one funding source that uses 10 coins
-    // and another that uses two. completing the transfer.
-    struct block_transaction_money_funding_source_and_amount transfer_funding[MAGICNET_MONEY_TRANSACTION_TOTAL_FUNDING_SOURCES];
     // The public key of the recipient
     struct key recipient_key;
 
@@ -643,6 +620,13 @@ struct block_transaction_money_transfer
     // The server will calculate the transfer funding array to match the amount provided.
     // If the server is unable to fill the array with  funding sources that reach the amount provided then the transaction will be rejected.
     double amount;
+
+    // These are the new balances after the transfer is completed. It is rejected by everyone who receives this transfer, if the balances are invalid once taking into account the amount
+    struct block_transaction_money_transfer_balances
+    {
+        double sender_balance;
+        double recipient_balance;
+    } new_balances;
 
     // The sender is the person who signed the transaction.
 };
@@ -844,6 +828,7 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
 int magicnet_make_transaction(struct magicnet_program *program, int type, void *data, size_t size);
 int magicnet_make_transaction_using_buffer(struct magicnet_program *program, int type, struct buffer *buffer);
 int magicnet_money_transfer_data(struct block_transaction* transaction, struct block_transaction_money_transfer* money_transfer);
+int magicnet_money_transfer_data_write(struct block_transaction* transaction, struct block_transaction_money_transfer *money_transfer);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
@@ -981,5 +966,5 @@ void magicnet_transactions_request_set_target_key(struct magicnet_transactions_r
 
 // Wallets
 struct magicnet_wallet *magicnet_wallet_find(struct key *key);
-
+int magicnet_wallet_calculate_balance(struct key *key, double *balance_out);
 #endif

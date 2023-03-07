@@ -3212,19 +3212,32 @@ int magicnet_transaction_packet_coin_send_rebuild(struct block_transaction *tran
         goto out;
     }
 
-    struct block_transaction_money_funding_source_and_amount empty_transfer_funding[MAGICNET_MONEY_TRANSACTION_TOTAL_FUNDING_SOURCES] = {0};
-    if (memcmp(empty_transfer_funding, money_transfer_transaction.transfer_funding, sizeof(empty_transfer_funding)) == 0)
+    res = magicnet_wallet_calculate_balance(&money_transfer_transaction.recipient_key, &money_transfer_transaction.new_balances.recipient_balance);
+    if (res < 0)
     {
-        // We have a NULL funding source. We need to rebuild it. And find transaction that meet the entire balance we are trying to send.
-        // Genesis key does not need a funding source to send money but the key can only send up to 1 million coins.
-        // For best design in that case its best to send 1 million to yourself and then send the rest to the other person.
-        // This will ensure you know how much money you have at any moment in time.
-
-        // TODO Later
+        magicnet_log("%s problem calculating balance for recipient", __FUNCTION__);
+        goto out;
     }
+
+    res = magicnet_wallet_calculate_balance(&transaction->key, &money_transfer_transaction.new_balances.sender_balance);
+    if (res < 0)
+    {
+        magicnet_log("%s problem calculating balance for sender", __FUNCTION__);
+        goto out;
+    }
+
+    money_transfer_transaction.new_balances.sender_balance -= money_transfer_transaction.amount;
+    money_transfer_transaction.new_balances.recipient_balance += money_transfer_transaction.amount;
 
     // The target key of the transaction will be the recipient key of the money transfer transaction.
     memcpy(&transaction->target_key, &money_transfer_transaction.recipient_key, sizeof(transaction->target_key));
+
+    // Write the changed data back to the transaction
+    res = magicnet_money_transfer_data_write(transaction, &money_transfer_transaction);
+    if (res < 0)
+    {
+        goto out;
+    }
 
 out:
     return res;
