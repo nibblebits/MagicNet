@@ -3497,6 +3497,16 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
         {
             goto out;
         }
+        
+        char ip_str[MAGICNET_MAX_IP_STRING_SIZE] = {0};
+        // Convert the in_addr to a string
+        inet_ntop(AF_INET, &s_addr, ip_str, INET_ADDRSTRLEN);
+        struct magicnet_peer_information peer_info = {0};
+        peer_info.key = key;
+        strncpy(peer_info.ip_address, ip_str, MAGICNET_MAX_IP_STRING_SIZE);
+        magicnet_save_peer_info(&peer_info);
+
+
     }
 
 out:

@@ -244,15 +244,15 @@ int magicnet_database_peer_update_or_create(struct magicnet_peer_information *pe
     sqlite3_bind_null(stmt, 3);
     sqlite3_bind_null(stmt, 4);
 
-    if (peer_info->ip_address)
+    if (peer_info->ip_address[0])
     {
         sqlite3_bind_text(stmt, 1, peer_info->ip_address, strlen(peer_info->ip_address), NULL);
     }
-    if (peer_info->name)
+    if (peer_info->name[0])
     {
         sqlite3_bind_text(stmt, 2, peer_info->name, strlen(peer_info->name), NULL);
     }
-    if (peer_info->email)
+    if (peer_info->email[0])
     {
         sqlite3_bind_text(stmt, 3, peer_info->email, strlen(peer_info->email), NULL);
     }
