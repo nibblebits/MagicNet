@@ -252,6 +252,31 @@ int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
         goto out;
     }
 
+    double sender_balance_after_send = 0;
+    magicnet_wallet_calculate_balance(&transaction->key, &sender_balance_after_send);
+    sender_balance_after_send -= money_transfer.amount;
+    
+    // Check the balances are the same
+    if (sender_balance_after_send != money_transfer.new_balances.sender_balance)
+    {
+        magicnet_log("%s the coin transaction contains an incorrect sender balance\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    double recipient_balance_after_send = 0;
+    magicnet_wallet_calculate_balance(&money_transfer.recipient_key, &recipient_balance_after_send);
+    recipient_balance_after_send += money_transfer.amount;
+
+    // Check the balances match
+    if (recipient_balance_after_send != money_transfer.new_balances.recipient_balance)
+    {
+        magicnet_log("%s the coin transaction contains an incorrect recipient balance\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+    
+
     // TODO check the funding sources to ensure that the sender has enough funds
     // TODO check the funding sources to ensure that the sender has not already spent the funds
 
