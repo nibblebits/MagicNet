@@ -194,10 +194,12 @@ int buffer_read_long(struct buffer *buffer, long* long_out)
     return 0;
 }
 
+
+
 // Read double
 int buffer_read_double(struct buffer *buffer, double* double_out)
 {
-    if (buffer_read_bytes(buffer, double_out, sizeof(double_out)) < 0)
+    if (buffer_read_bytes(buffer, double_out, sizeof(*double_out)) < 0)
     {
         return -1;
     }

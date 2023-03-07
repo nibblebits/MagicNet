@@ -17,7 +17,7 @@ int magicnet_wallet_calculate_balance(struct key *key, double *balance_out)
 
     struct block_transaction_group *group = block_transaction_group_new();
     bool done = false;
-    while ((res = block_transactions_load(&transactions_request, group)) >= 0)
+    while (!done && (res = block_transactions_load(&transactions_request, group)) >= 0)
     {
         // Lets go through the transactions and
         for (int i = 0; i < group->total_transactions; i++)
