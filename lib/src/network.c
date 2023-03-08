@@ -3251,6 +3251,7 @@ out:
 int magicnet_transaction_rebuild(struct block_transaction *transaction)
 {
     int res = 0;
+    transaction->key = *MAGICNET_public_key();
     if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
     {
         res = magicnet_transaction_packet_coin_send_rebuild(transaction);
