@@ -65,6 +65,27 @@ enum
     MAGICNET_PACKET_FLAG_MUST_BE_SIGNED = 0b00000100
 };
 
+
+enum
+{
+    MAGICNET_BLOCK_SAVE_FLAG_NONE = 0,
+    // Preforms a weak verification, only checks the signature and that the key that signed it is  valid.
+    // Ignores verification of money transfers and other such things.. This is ideal for chain downloads when its not possible
+    // to know right away if a transaction is completely valid. But we will assume that it is valid because
+    // for it to end up as the active chain most of the network would of had to approve the block at some point.
+    MAGICNET_BLOCK_SAVE_FLAG_WEAK_VERIFY = 1
+};
+
+enum
+{
+    MAGICNET_BLOCK_VERIFICATION_VERIFY_SIGNATURE = 0b000000001,
+    MAGICNET_BLOCK_VERIFICATION_VERIFY_TIMESTAMP = 0b000000010,
+    MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTIONS = 0b000000100,
+    MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTION_DATA = 0b000001000,
+};
+
+#define MAGICNET_BLOCK_VERIFICATION_VERIFY_ALL (MAGICNET_BLOCK_VERIFICATION_VERIFY_SIGNATURE | MAGICNET_BLOCK_VERIFICATION_VERIFY_TIMESTAMP | MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTIONS | MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTION_DATA)
+#define MAGICNET_BLOCK_VERIFICATION_VERIFY_WITHOUT_TRANSACTION_DATA (MAGICNET_BLOCK_VERIFICATION_VERIFY_ALL) & ~MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTION_DATA
 enum
 {
     // Sent when the receiver of a packet should expect a packet to be sent upon reading this flag.
@@ -898,6 +919,7 @@ void block_transaction_vector_free(struct vector* vector);
 int block_load_fully(struct block *block);
 
 int block_save(struct block *block);
+int block_save_with_rules(struct block *block, int flags);
 int block_sign(struct block *block);
 void block_free(struct block *block);
 void block_free_vector(struct vector *block_vec);
@@ -930,6 +952,7 @@ int block_transaction_hash_and_sign(struct block_transaction *transaction);
 bool block_transaction_is_signed(struct block_transaction *transaction);
 
 int block_verify(struct block *block);
+int block_verify_specified(struct block *block, int flags);
 int block_hash_sign_verify(struct block *block);
 void magicnet_get_block_path(struct block *block, char *block_path_out);
 const char *block_hash_create(struct block *block, char *hash_out);

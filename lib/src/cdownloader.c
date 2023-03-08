@@ -443,7 +443,13 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
             {
                 magicnet_log("block has transactions\n");
             }
-            block_save(block);
+            // Since we receive blocks from the network from recent to old, its made harder to verify the transaction data.
+            // But we can assume it is correct because if this chain ever does become the active one then we know
+            // that the likely hood is that it was verified by the network at some point.
+            // If you want to come back and verify this at some point, then the blocks should be flagged and as soon
+            // as a block is downloaded whose previous hash loops back to the first block then you can go forward and verify them.
+            block_save_with_rules(block, MAGICNET_BLOCK_VERIFICATION_VERIFY_WITHOUT_TRANSACTION_DATA);
+
             // Remove the block from the downloader hashes
             magicnet_chain_downloaders_remove_hash(block);
             strncpy(current_hash, block->prev_hash, sizeof(current_hash));

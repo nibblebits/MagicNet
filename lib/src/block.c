@@ -221,7 +221,6 @@ out:
 int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
 {
     int res = 0;
-    return 0;
     struct block_transaction_money_transfer money_transfer;
     res = magicnet_money_transfer_data(transaction, &money_transfer);
     if (res < 0)
@@ -256,7 +255,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
     double sender_balance_after_send = 0;
     magicnet_wallet_calculate_balance(&transaction->key, &sender_balance_after_send);
     sender_balance_after_send -= money_transfer.amount;
-    
+
     // Check the balances are the same
     if (sender_balance_after_send != money_transfer.new_balances.sender_balance)
     {
@@ -276,7 +275,6 @@ int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
         res = -1;
         goto out;
     }
-    
 
     // TODO check the funding sources to ensure that the sender has enough funds
     // TODO check the funding sources to ensure that the sender has not already spent the funds
@@ -285,7 +283,7 @@ out:
     return res;
 }
 
-int block_transaction_valid(struct block_transaction *transaction)
+int block_transaction_valid_specified(struct block_transaction *transaction, int flags)
 {
     if (transaction->data.size > MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA)
     {
@@ -308,12 +306,15 @@ int block_transaction_valid(struct block_transaction *transaction)
         return -1;
     }
 
-    if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
+    if (flags & MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTION_DATA)
     {
-        int res = block_transaction_coin_transfer_valid(transaction);
-        if (res < 0)
+        if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
         {
-            return res;
+            int res = block_transaction_coin_transfer_valid(transaction);
+            if (res < 0)
+            {
+                return res;
+            }
         }
     }
 
@@ -335,6 +336,11 @@ int block_transaction_valid(struct block_transaction *transaction)
         return -1;
     }
     return 0;
+}
+
+int block_transaction_valid(struct block_transaction *transaction)
+{
+    return block_transaction_valid_specified(transaction, MAGICNET_BLOCK_VERIFICATION_VERIFY_ALL);
 }
 
 struct block_transaction *block_transaction_clone(struct block_transaction *transaction)
@@ -471,7 +477,7 @@ int blockchain_reformat(struct block *block)
     return res;
 }
 
-int block_save(struct block *block)
+int block_save_with_rules(struct block *block, int flags)
 {
     int res = 0;
     if (!block)
@@ -481,7 +487,8 @@ int block_save(struct block *block)
     }
 
     pthread_mutex_lock(&blockchain_lock);
-    res = block_verify(block);
+
+    res = block_verify_specified(block, flags);
     if (res < 0)
     {
         magicnet_log("%s block verification failed\n", __FUNCTION__);
@@ -524,6 +531,11 @@ int block_save(struct block *block)
 out:
     pthread_mutex_unlock(&blockchain_lock);
     return res;
+}
+
+int block_save(struct block *block)
+{
+    return block_save_with_rules(block, MAGICNET_BLOCK_VERIFICATION_VERIFY_ALL);
 }
 
 struct block *block_clone(struct block *block)
@@ -619,14 +631,14 @@ int block_sign(struct block *block)
     return res;
 }
 
-int block_verify_timestamp(struct block* block)
+int block_verify_timestamp(struct block *block)
 {
     int res = 0;
     // TODO Verify the block time is fair.
     return res;
 }
 
-int block_verify(struct block *block)
+int block_verify_specified(struct block *block, int flags)
 {
     int res = 0;
     char block_hash[SHA256_STRING_LENGTH];
@@ -638,23 +650,27 @@ int block_verify(struct block *block)
         goto out;
     }
 
-    res = block_verify_timestamp(block);
-    if (res < 0)
+    if (flags & MAGICNET_BLOCK_VERIFICATION_VERIFY_TIMESTAMP)
     {
-        magicnet_log("%s the timestamp for the block cannot be real. The block is rejected.\n", __FUNCTION__);
-        res = -1;
-        goto out;
+        res = block_verify_timestamp(block);
+        if (res < 0)
+        {
+            magicnet_log("%s the timestamp for the block cannot be real. The block is rejected.\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
     }
 
     // Okay the hashes are correct but was this block signed by the key in the block?
-
-    if (public_verify(&block->key, block->hash, sizeof(block->hash), &block->signature) < 0)
+    if (flags & MAGICNET_BLOCK_VERIFICATION_VERIFY_SIGNATURE)
     {
-        magicnet_log("%s block is invalid, signature did not sign this data\n", __FUNCTION__);
-        res = -1;
-        goto out;
+        if (public_verify(&block->key, block->hash, sizeof(block->hash), &block->signature) < 0)
+        {
+            magicnet_log("%s block is invalid, signature did not sign this data\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
     }
-
     // We only deal deal with transaction groups when transactions exist.
     if (block->transaction_group->total_transactions > 0)
     {
@@ -669,22 +685,25 @@ int block_verify(struct block *block)
         }
 
         // Validate every transaction to ensure they are correct.
-        for (int i = 0; i < block->transaction_group->total_transactions; i++)
+        if (flags & MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTIONS)
         {
-            struct block_transaction *transaction = block->transaction_group->transactions[i];
-            res = block_transaction_valid(transaction);
-            if (res < 0)
+            for (int i = 0; i < block->transaction_group->total_transactions; i++)
             {
-                goto out;
-            }
+                struct block_transaction *transaction = block->transaction_group->transactions[i];
+                res = block_transaction_valid_specified(transaction, flags);
+                if (res < 0)
+                {
+                    goto out;
+                }
 
-            // Though the transaction may be valid its also essential that all the transactions have a prev block hash
-            // that point to our previous hash
-            if (memcmp(transaction->data.prev_block_hash, block->prev_hash, sizeof(block->prev_hash)) != 0)
-            {
-                magicnet_log("%s A transaction within this block was not made for this block\n", __FUNCTION__);
-                res = -1;
-                goto out;
+                // Though the transaction may be valid its also essential that all the transactions have a prev block hash
+                // that point to our previous hash
+                if (memcmp(transaction->data.prev_block_hash, block->prev_hash, sizeof(block->prev_hash)) != 0)
+                {
+                    magicnet_log("%s A transaction within this block was not made for this block\n", __FUNCTION__);
+                    res = -1;
+                    goto out;
+                }
             }
         }
     }
@@ -696,6 +715,12 @@ out:
     }
     return res;
 }
+
+int block_verify(struct block *block)
+{
+    return block_verify_specified(block, MAGICNET_BLOCK_VERIFICATION_VERIFY_ALL);
+}
+
 struct block *block_create_with_group(const char *hash, const char *prev_hash, struct block_transaction_group *group)
 {
     struct block *block = calloc(1, sizeof(struct block));
@@ -781,7 +806,7 @@ bool block_transactions_empty(struct block *block)
 int block_transactions_load(struct magicnet_transactions_request *request, struct block_transaction_group *transaction_group)
 {
     int res = 0;
-    struct blockchain* active_chain = NULL;
+    struct blockchain *active_chain = NULL;
     struct block *last_block = NULL;
     struct block *current_block = NULL;
     struct block *tmp_block = NULL;
