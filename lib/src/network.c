@@ -2137,6 +2137,7 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
         goto out;
     }
 
+    // Write the time.
     res = magicnet_write_long(client, transaction->data.time, store_in_buffer);
     if (res < 0)
     {

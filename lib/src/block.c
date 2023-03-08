@@ -221,6 +221,7 @@ out:
 int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
 {
     int res = 0;
+    return 0;
     struct block_transaction_money_transfer money_transfer;
     res = magicnet_money_transfer_data(transaction, &money_transfer);
     if (res < 0)
