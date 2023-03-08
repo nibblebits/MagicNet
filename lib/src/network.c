@@ -2110,7 +2110,13 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
     // so nothing has been signed.
     if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
     {
-        res = block_transaction_valid(transaction);
+        // It is possible that the state of the blockchain is greater than it was
+        // for when the transaction we are writing was created. For that reason we dont want to verify transaction data
+        // THis isnt an issue as the receiver of this transaction will ensure the transaction is valid.
+        // We dont care what we are writing as we already know this transaction is valid as we have it.
+        // We will just to a basic validation of this transaction to ensure its error free. But it will not 
+        // verify the validility of the transaction.
+        res = block_transaction_valid_specified(transaction, MAGICNET_BLOCK_VERIFICATION_VERIFY_WITHOUT_TRANSACTION_DATA);
         if (res < 0)
         {
             magicnet_log("%s the transaction to write is invalid\n", __FUNCTION__);

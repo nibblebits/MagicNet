@@ -948,6 +948,7 @@ void block_transaction_free(struct block_transaction *transaction);
 struct block_transaction *block_transaction_build(const char *program_name, char *data, size_t data_len);
 int block_transaction_add(struct block_transaction_group *transaction_group, struct block_transaction *transaction);
 int block_transaction_valid(struct block_transaction *transaction);
+int block_transaction_valid_specified(struct block_transaction *transaction, int flags);
 int block_transaction_hash_and_sign(struct block_transaction *transaction);
 bool block_transaction_is_signed(struct block_transaction *transaction);
 
