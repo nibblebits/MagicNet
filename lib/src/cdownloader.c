@@ -411,7 +411,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
         // Read the response packet from the client
         // We want to ignore the transaction validation because we are downloading the chain from top to bottom
         // so of course we are going to fail validation at times.
-        new_client->flags |= MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_VALIDATION;
+        new_client->flags |= MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION;
         res = magicnet_client_read_packet(new_client, super_download_response);
         if (res < 0)
         {

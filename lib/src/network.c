@@ -1402,7 +1402,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     // localhost clients can send us data that is not signed with our keys because they dont know what our keys are
     // its our responsibility to take it then sign it.
     // If we fail to sign it then we know not to pass it to others. This is all done in the packet processing stage.
-    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) && !(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_VALIDATION))
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) && !(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
     {
         if (block_transaction_valid(transaction_out) < 0)
         {
@@ -1512,12 +1512,15 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         block->signature = signature;
         block->time = block_time;
 
-        res = block_verify(block);
-        if (res < 0)
+        if (!(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
         {
-            magicnet_log("%s issue verifying the received block\n", __FUNCTION__);
-            block_free(block);
-            break;
+            res = block_verify(block);
+            if (res < 0)
+            {
+                magicnet_log("%s issue verifying the received block\n", __FUNCTION__);
+                block_free(block);
+                break;
+            }
         }
         // Add the block
         vector_push(magicnet_signed_data(packet_out)->payload.block_send.blocks, &block);
