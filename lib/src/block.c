@@ -253,7 +253,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
     }
 
     double sender_balance_after_send = 0;
-    magicnet_wallet_calculate_balance(&transaction->key, &sender_balance_after_send);
+    magicnet_wallet_calculate_balance_from_block(&transaction->key, &sender_balance_after_send, transaction->data.prev_block_hash);
     sender_balance_after_send -= money_transfer.amount;
 
     // Check the balances are the same
@@ -265,7 +265,7 @@ int block_transaction_coin_transfer_valid(struct block_transaction *transaction)
     }
 
     double recipient_balance_after_send = 0;
-    magicnet_wallet_calculate_balance(&money_transfer.recipient_key, &recipient_balance_after_send);
+    magicnet_wallet_calculate_balance_from_block(&money_transfer.recipient_key, &recipient_balance_after_send, transaction->data.prev_block_hash);
     recipient_balance_after_send += money_transfer.amount;
 
     // Check the balances match

@@ -991,4 +991,5 @@ void magicnet_transactions_request_set_target_key(struct magicnet_transactions_r
 // Wallets
 struct magicnet_wallet *magicnet_wallet_find(struct key *key);
 int magicnet_wallet_calculate_balance(struct key *key, double *balance_out);
+int magicnet_wallet_calculate_balance_from_block(struct key *key, double *balance_out, const char *block_hash);
 #endif
