@@ -5066,7 +5066,7 @@ void magicnet_server_sign_and_send_self_transactions(struct magicnet_server *ser
         // Nothing for us to send of ours.. Nothing waiting
         return;
     }
-    magicnet_log("%s we will now sign and send %i transactions of ours to the network\n", __FUNCTION__, vector_count(server->our_waiting_transactions));
+    magicnet_log("%s we have %i transactions in the queue, if they havent been put in the chain yet we will broadcast them now. If they are in the chain they will be ignored\n", __FUNCTION__, vector_count(server->our_waiting_transactions));
     int active_blockchain_id = magicnet_blockchain_get_active_id();
     if (active_blockchain_id != block->blockchain_id)
     {
