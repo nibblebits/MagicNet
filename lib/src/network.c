@@ -4378,6 +4378,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     magicnet_server_read_lock(client->server);
     if (magicnet_server_has_seen_packet(client->server, packet))
     {
+        magicnet_log("%s we already saw this packet before ID=%i\n", __FUNCTION__, magicnet_sigend_data(packet)->id);
         magicnet_server_unlock(client->server);
         return 0;
     }
