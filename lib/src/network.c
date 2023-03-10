@@ -3181,12 +3181,13 @@ int magicnet_client_process_server_sync_packet(struct magicnet_client *client, s
     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
     bool has_packet_to_relay = false;
     // We got to lock this server
-    magicnet_server_read_lock(client->server);
+    magicnet_server_lock(client->server);
     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
     if (tmp_packet)
     {
         magicnet_copy_packet(packet_to_relay, tmp_packet);
         has_packet_to_relay = true;
+        magicnet_client_relay_packet_finished(client, tmp_packet);
     }
     magicnet_server_unlock(client->server);
 
