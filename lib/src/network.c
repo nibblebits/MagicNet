@@ -2469,7 +2469,8 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     res = magicnet_read_int(client, packet->not_sent.tmp_buf);
     if (res < 0)
     {
-        // Yeah we sent this packet already lets go.
+        // Yeah we sent this packet already lets go but htis isnt an error.
+        res = 0;
         goto out;
     }
 
