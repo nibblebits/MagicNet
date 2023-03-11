@@ -316,15 +316,20 @@ struct magicnet_server *magicnet_server_start(int port)
     return server;
 }
 
-bool magicnet_server_has_seen_packet(struct magicnet_server *server, struct magicnet_packet *packet)
+bool magicnet_server_has_seen_packet_with_id(struct magicnet_server *server, int packet_id)
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        if (server->seen_packets.packet_ids[i] == magicnet_signed_data(packet)->id)
+        if (server->seen_packets.packet_ids[i] == packet_id)
             return true;
     }
 
     return false;
+}
+
+bool magicnet_server_has_seen_packet(struct magicnet_server *server, struct magicnet_packet *packet)
+{
+    return magicnet_server_has_seen_packet_with_id(server, magicnet_signed_data(packet)->id);
 }
 
 int magicnet_server_add_seen_packet(struct magicnet_server *server, struct magicnet_packet *packet)
@@ -1823,13 +1828,29 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     packet_id = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_id < 0)
     {
-        return -1;
+        goto out;
+    }
+
+    if (client->server && magicnet_server_has_seen_packet_with_id(client->server, packet_id))
+    {
+        magicnet_signed_data(packet_out)->id = packet_id;
+        magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
+        magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
+        res = magicnet_write_int(client, MAGICNET_ERROR_RECEIVED_PACKET_BEFORE, packet_out->not_sent.tmp_buf);
+        goto out;
+    }
+
+    // Since we are okay to proceed with reading the packet we should make that clear.
+    res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY, packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
     }
 
     packet_type = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_type < 0)
     {
-        return -1;
+        goto out;
     }
 
     switch (packet_type)
@@ -2441,6 +2462,14 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
     if (res < 0)
     {
+        goto out;
+    }
+
+    // Lets see if the client wishes to proceed now they know the packet we want to send
+    res = magicnet_read_int(client, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        // Yeah we sent this packet already lets go.
         goto out;
     }
 
