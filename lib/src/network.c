@@ -1833,17 +1833,17 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     if (client->server)
     {
-      //  magicnet_server_read_lock(client->server);
-        // if (magicnet_server_has_seen_packet_with_id(client->server, packet_id))
-        // {
-        //     magicnet_signed_data(packet_out)->id = packet_id;
-        //     magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
-        //     // magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
-        //     res = magicnet_write_int(client, MAGICNET_ERROR_RECEIVED_PACKET_BEFORE, packet_out->not_sent.tmp_buf);
-        //     magicnet_server_unlock(client->server);
-        //     goto out;
-        // }
-     //   magicnet_server_unlock(client->server);
+        magicnet_server_read_lock(client->server);
+        if (magicnet_server_has_seen_packet_with_id(client->server, packet_id))
+        {
+            magicnet_signed_data(packet_out)->id = packet_id;
+            magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
+            // magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
+            res = magicnet_write_int(client, MAGICNET_ERROR_RECEIVED_PACKET_BEFORE, packet_out->not_sent.tmp_buf);
+            magicnet_server_unlock(client->server);
+            goto out;
+        }
+        magicnet_server_unlock(client->server);
     }
 
     // Since we are okay to proceed with reading the packet we should make that clear.
@@ -2045,9 +2045,9 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     // We have seen this packet now.
     if (client->server)
     {
-   ///    magicnet_server_lock(client->server);
+        magicnet_server_lock(client->server);
         magicnet_server_add_seen_packet(client->server, packet_out);
-      //  magicnet_server_unlock(client->server);
+        magicnet_server_unlock(client->server);
     }
 
 out:
