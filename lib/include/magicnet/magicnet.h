@@ -65,7 +65,6 @@ enum
     MAGICNET_PACKET_FLAG_MUST_BE_SIGNED = 0b00000100
 };
 
-
 enum
 {
     MAGICNET_BLOCK_SAVE_FLAG_NONE = 0,
@@ -317,12 +316,12 @@ struct magicnet_packet
 
                 struct magicnet_transaction_list_request
                 {
-                    struct magicnet_transactions_request req;  
+                    struct magicnet_transactions_request req;
                 } transaction_list_request;
 
                 struct magicnet_transaction_list_response
                 {
-                    struct magicnet_transactions_request req;  
+                    struct magicnet_transactions_request req;
 
                     int total_transactions;
                     // Vector of struct block_transaction*
@@ -547,7 +546,6 @@ struct block_transaction_data
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
     time_t time;
 
-
     char *ptr;
     size_t size;
 };
@@ -572,7 +570,6 @@ struct block_transaction
     // The type of transaction. Can be a custom integer, should be over 1000 for non protocol related transactions
     // i.e custom applications
     int type;
-
 
     // Signed signature of the creator of the transaction.
     struct signature signature;
@@ -624,8 +621,6 @@ struct self_block_transaction
     // A message declaring the state of the message (If any)
     char status_message[MAGICNET_MAX_SMALL_STRING_SIZE];
 };
-
-
 
 // Block transaction type for money transfer
 struct block_transaction_money_transfer
@@ -694,6 +689,95 @@ struct blockchain
     size_t proved_verified_blocks;
 };
 
+struct council_certificate_transfer_vote
+{
+    struct council_certificate_transfer_vote_signed_data
+    {
+        char vote_hash[SHA256_STRING_LENGTH];
+        struct council_certificate_transfer_vote_signed_data_payload
+        {
+            char previous_vote_hash[SHA256_STRING_LENGTH];
+            struct key voter_key;
+            struct key vote_for_key;
+        } payload;
+    } signed_data;
+
+    // The signature signed by the voter key.
+    struct signature signature;
+};
+
+struct council_certificate_transfer
+{
+    struct council_certificate_transfer_signed_data
+    {
+        // The key of the old owner.
+        struct key old_owner;
+
+        // The key who this certificate will be transfeered too
+        // The new owner will be the most voted key in the transfer votes.
+        struct key new_owner;
+
+        time_t valid_from;
+        time_t expires_at;
+
+        // Theres obviously voters who vote on the new owner.
+        size_t total_voters;
+
+        // Voters are stored here each voter must be a valid council certificate. We ill check this before approving a transfer
+        // that we receive.
+        struct council_certificate_transfer_vote *voters;
+    } signed_data;
+
+    // This is the signing key that will confirm this transfer. It is best that the old owner signs this, that is the cherry on top
+    // If the old owner refuses then any one of the voters can sign that but it is always possible someone could conspire 
+    // with a known signer, and ask them to sign. For this reason certificates that are broadcast around the network will be fact checked
+    // and if their is found to be a liar then rights can be removed.
+    char hash[SHA256_STRING_LENGTH];
+    struct key signing_key;
+    struct signature signature;
+};
+
+
+/**
+ * To preform council actions you need a council license, each license is valid for 24 hours only
+ * This is so we have a natural way of people losing power in the event an attack is made on newer clients who do not know
+ * the true state of the blockchain yet.
+*/
+struct council_license
+{
+    struct council_license_signed_data
+    {
+        // Certificate hash is signed. Licenses can only be issued to valid certificates. This is the certificate that owns the license
+        struct council_certificate* certificate;
+        // This is the certificate that signed this license, allowing it to exist.
+        struct council_certificate* signing_certificate;
+        time_t valid_from;
+        time_t expires_at;
+    } signed_data;
+
+    char hash[SHA256_STRING_LENGTH];
+
+    // The key of the owner of the signing certificate.
+    struct key signing_key;
+    struct signature signature;
+};
+
+
+struct council_certificate
+{
+    // We have all the transfer history of the certificate here.
+    struct council_certificate_signed_data
+    {
+        size_t total_transfers;
+        struct council_certificate_transfer *transfers;
+    } signed_data;
+
+    // Should be the signing key of the last transfer who signed this certificate.
+    char hash[SHA256_STRING_LENGTH];
+    struct key signing_key;
+    struct signature signature;
+};
+
 struct block
 {
 
@@ -718,7 +802,6 @@ struct block
     // LOCAL DATA ONLY The below data is not sent across the network
     int blockchain_id;
 };
-
 
 struct magicnet_wallet
 {
@@ -849,8 +932,8 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
  */
 int magicnet_make_transaction(struct magicnet_program *program, int type, void *data, size_t size);
 int magicnet_make_transaction_using_buffer(struct magicnet_program *program, int type, struct buffer *buffer);
-int magicnet_money_transfer_data(struct block_transaction* transaction, struct block_transaction_money_transfer* money_transfer);
-int magicnet_money_transfer_data_write(struct block_transaction* transaction, struct block_transaction_money_transfer *money_transfer);
+int magicnet_money_transfer_data(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
+int magicnet_money_transfer_data_write(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
@@ -887,10 +970,9 @@ struct block *block_create(struct block_transaction_group *transaction_group, co
 const char *block_transaction_group_hash_create(struct block_transaction_group *group, char *hash_out);
 struct block_transaction_group *block_transaction_group_clone(struct block_transaction_group *transaction_group_in);
 
-
 /**
  * Loads the transaction with the given hash. If not found or error then NULL is returned.
-*/
+ */
 struct block_transaction *block_transaction_load(const char *transaction_hash);
 
 /**
@@ -905,12 +987,12 @@ int block_load_transactions(struct block *block);
 /**
  * Loads the transactions from the request into the output transaction group
  */
-int block_transactions_load(struct magicnet_transactions_request* request, struct block_transaction_group* transaction_group);
+int block_transactions_load(struct magicnet_transactions_request *request, struct block_transaction_group *transaction_group);
 
 /**
  * Frees a vector of struct block_transaction*
-*/
-void block_transaction_vector_free(struct vector* vector);
+ */
+void block_transaction_vector_free(struct vector *vector);
 
 /**
  * Fully loads what is not loaded with the provided lazily loaded block.
@@ -934,7 +1016,7 @@ void blockchain_free(struct blockchain *blockchain);
 struct blockchain *magicnet_blockchain_get_active();
 int magicnet_blockchain_get_active_id();
 
-struct magicnet_transactions *magicnet_transactions_request(struct magicnet_program *program, struct magicnet_transactions_request* request_data);
+struct magicnet_transactions *magicnet_transactions_request(struct magicnet_program *program, struct magicnet_transactions_request *request_data);
 
 struct block *block_clone(struct block *block);
 struct block_transaction *block_transaction_new();
@@ -974,20 +1056,18 @@ void magicnet_chain_downloaders_cleanup();
 bool magicnet_peer_ip_is_banned(const char *ip_address);
 int magicnet_save_peer_info(struct magicnet_peer_information *peer_info);
 
-
 void magicnet_transactions_request_init(struct magicnet_transactions_request *request);
-void magicnet_transactions_request_remove_block_hash(struct magicnet_transactions_request* request);
+void magicnet_transactions_request_remove_block_hash(struct magicnet_transactions_request *request);
 void magicnet_transactions_request_remove_transaction_group_hash(struct magicnet_transactions_request *request);
 void magicnet_transactions_request_set_transaction_group_hash(struct magicnet_transactions_request *request, const char *transaction_group_hash);
-void magicnet_transactions_request_set_block_hash(struct magicnet_transactions_request* request, const char* hash);
-void magicnet_transactions_request_set_flag(struct magicnet_transactions_request * request, int flag);
+void magicnet_transactions_request_set_block_hash(struct magicnet_transactions_request *request, const char *hash);
+void magicnet_transactions_request_set_flag(struct magicnet_transactions_request *request, int flag);
 void magicnet_transactions_request_set_type(struct magicnet_transactions_request *request, int type);
-void magicnet_transactions_request_set_block_hash(struct magicnet_transactions_request* request, const char* block_hash);
+void magicnet_transactions_request_set_block_hash(struct magicnet_transactions_request *request, const char *block_hash);
 void magicnet_transactions_request_set_total_per_page(struct magicnet_transactions_request *request, int total_per_page);
 void magicnet_transactions_request_set_page(struct magicnet_transactions_request *request, int page);
-void magicnet_transactions_request_set_key(struct magicnet_transactions_request *request, struct key* key);
+void magicnet_transactions_request_set_key(struct magicnet_transactions_request *request, struct key *key);
 void magicnet_transactions_request_set_target_key(struct magicnet_transactions_request *request, struct key *target_key);
-
 
 // Wallets
 struct magicnet_wallet *magicnet_wallet_find(struct key *key);
