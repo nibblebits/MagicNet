@@ -11,6 +11,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpermissive")
+
 find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets)
 
@@ -25,6 +27,7 @@ set(PROJECT_SOURCES
         mainwindow.h
         mainwindow.ui
 )
+
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
     qt_add_executable(ChainAdmin
@@ -50,6 +53,11 @@ else()
 endif()
 
 target_link_libraries(ChainAdmin PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(ChainAdmin PRIVATE Qt${QT_VERSION_MAJOR}::Widgets magicnet)
+
+link_directories(/usr/lib)
+
+include_directories(../../lib/include)
 
 set_target_properties(ChainAdmin PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER my.example.com

@@ -389,6 +389,7 @@
 	[
 		"/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug",
 		"/home/daniel/MagicNet/qt-chain-admin/ChainAdmin",
+		"/home/daniel/MagicNet/lib/include",
 		"/home/daniel/Qt/6.4.1/gcc_64/include/QtCore",
 		"/home/daniel/Qt/6.4.1/gcc_64/include",
 		"/home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++",

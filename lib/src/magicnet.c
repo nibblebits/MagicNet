@@ -412,8 +412,6 @@ struct magicnet_program *magicnet_program(const char *name)
     // We must register the program
 
     program = calloc(1, sizeof(struct magicnet_program));
-    strncpy(program->name, name, sizeof(program->name));
-    vector_push(program_vec, program);
 
     struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, name);
     if (!client)
@@ -421,6 +419,9 @@ struct magicnet_program *magicnet_program(const char *name)
         res = -1;
         goto out;
     }
+
+    strncpy(program->name, name, sizeof(program->name));
+    vector_push(program_vec, program);
     program->client = client;
 out:
     if (res < 0)

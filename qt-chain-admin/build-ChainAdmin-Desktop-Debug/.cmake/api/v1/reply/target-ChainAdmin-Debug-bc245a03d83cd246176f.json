@@ -21,7 +21,8 @@
 			"find_package",
 			"find_dependency",
 			"_qt_internal_find_third_party_dependencies",
-			"_qt_internal_find_qt_dependencies"
+			"_qt_internal_find_qt_dependencies",
+			"include_directories"
 		],
 		"files" : 
 		[
@@ -45,7 +46,7 @@
 			{
 				"command" : 3,
 				"file" : 1,
-				"line" : 27,
+				"line" : 33,
 				"parent" : 0
 			},
 			{
@@ -69,50 +70,56 @@
 			{
 				"command" : 4,
 				"file" : 1,
-				"line" : 59,
+				"line" : 70,
 				"parent" : 0
 			},
 			{
 				"command" : 5,
 				"file" : 1,
-				"line" : 49,
+				"line" : 55,
+				"parent" : 0
+			},
+			{
+				"command" : 5,
+				"file" : 1,
+				"line" : 56,
 				"parent" : 0
 			},
 			{
 				"command" : 8,
 				"file" : 1,
-				"line" : 15,
+				"line" : 17,
 				"parent" : 0
 			},
 			{
 				"file" : 4,
-				"parent" : 7
+				"parent" : 8
 			},
 			{
 				"command" : 8,
 				"file" : 4,
 				"line" : 157,
-				"parent" : 8
+				"parent" : 9
 			},
 			{
 				"file" : 3,
-				"parent" : 9
+				"parent" : 10
 			},
 			{
 				"command" : 7,
 				"file" : 3,
 				"line" : 52,
-				"parent" : 10
+				"parent" : 11
 			},
 			{
 				"file" : 2,
-				"parent" : 11
+				"parent" : 12
 			},
 			{
 				"command" : 6,
 				"file" : 2,
 				"line" : 56,
-				"parent" : 12
+				"parent" : 13
 			},
 			{
 				"command" : 5,
@@ -124,71 +131,77 @@
 				"command" : 7,
 				"file" : 3,
 				"line" : 40,
-				"parent" : 10
+				"parent" : 11
 			},
 			{
 				"file" : 10,
-				"parent" : 15
+				"parent" : 16
 			},
 			{
 				"command" : 11,
 				"file" : 10,
 				"line" : 39,
-				"parent" : 16
+				"parent" : 17
 			},
 			{
 				"command" : 9,
 				"file" : 7,
 				"line" : 108,
-				"parent" : 17
+				"parent" : 18
 			},
 			{
 				"command" : 8,
 				"file" : 6,
 				"line" : 47,
-				"parent" : 18
+				"parent" : 19
 			},
 			{
 				"file" : 9,
-				"parent" : 19
+				"parent" : 20
 			},
 			{
 				"command" : 7,
 				"file" : 9,
 				"line" : 40,
-				"parent" : 20
+				"parent" : 21
 			},
 			{
 				"file" : 8,
-				"parent" : 21
+				"parent" : 22
 			},
 			{
 				"command" : 10,
 				"file" : 8,
 				"line" : 30,
-				"parent" : 22
+				"parent" : 23
 			},
 			{
 				"command" : 9,
 				"file" : 7,
 				"line" : 33,
-				"parent" : 23
+				"parent" : 24
 			},
 			{
 				"command" : 8,
 				"file" : 6,
 				"line" : 47,
-				"parent" : 24
+				"parent" : 25
 			},
 			{
 				"file" : 5,
-				"parent" : 25
+				"parent" : 26
 			},
 			{
 				"command" : 5,
 				"file" : 5,
 				"line" : 44,
-				"parent" : 26
+				"parent" : 27
+			},
+			{
+				"command" : 12,
+				"file" : 1,
+				"line" : 60,
+				"parent" : 0
 			}
 		]
 	},
@@ -198,10 +211,10 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : "-DQT_QML_DEBUG -g"
+					"fragment" : "-DQT_QML_DEBUG -fpermissive -g"
 				},
 				{
-					"backtrace" : 14,
+					"backtrace" : 15,
 					"fragment" : "-fPIC"
 				},
 				{
@@ -211,7 +224,7 @@
 			"defines" : 
 			[
 				{
-					"backtrace" : 14,
+					"backtrace" : 15,
 					"define" : "QT_CORE_LIB"
 				},
 				{
@@ -236,17 +249,21 @@
 					"path" : "/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include"
 				},
 				{
-					"backtrace" : 14,
+					"backtrace" : 29,
+					"path" : "/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/../../lib/include"
+				},
+				{
+					"backtrace" : 15,
 					"isSystem" : true,
 					"path" : "/home/daniel/Qt/6.4.1/gcc_64/include/QtCore"
 				},
 				{
-					"backtrace" : 14,
+					"backtrace" : 15,
 					"isSystem" : true,
 					"path" : "/home/daniel/Qt/6.4.1/gcc_64/include"
 				},
 				{
-					"backtrace" : 14,
+					"backtrace" : 15,
 					"isSystem" : true,
 					"path" : "/home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++"
 				},
@@ -266,8 +283,8 @@
 			{
 				"backtraces" : 
 				[
-					14,
-					14
+					15,
+					15
 				],
 				"standard" : "17"
 			},
@@ -276,18 +293,19 @@
 				0,
 				1,
 				2,
-				3
+				3,
+				6
 			]
 		}
 	],
 	"dependencies" : 
 	[
 		{
-			"id" : "ChainAdmin_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
-		},
-		{
 			"backtrace" : 0,
 			"id" : "ChainAdmin_autogen::@6890427a1f51a3e7e1df"
+		},
+		{
+			"id" : "ChainAdmin_autogen_timestamp_deps::@6890427a1f51a3e7e1df"
 		}
 	],
 	"id" : "ChainAdmin::@6890427a1f51a3e7e1df",
@@ -310,7 +328,7 @@
 		"commandFragments" : 
 		[
 			{
-				"fragment" : "-DQT_QML_DEBUG -g",
+				"fragment" : "-DQT_QML_DEBUG -fpermissive -g",
 				"role" : "flags"
 			},
 			{
@@ -327,17 +345,22 @@
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 13,
-				"fragment" : "/home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Gui.so.6.4.1",
+				"backtrace" : 7,
+				"fragment" : "-lmagicnet",
 				"role" : "libraries"
 			},
 			{
 				"backtrace" : 14,
+				"fragment" : "/home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Gui.so.6.4.1",
+				"role" : "libraries"
+			},
+			{
+				"backtrace" : 15,
 				"fragment" : "/home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Core.so.6.4.1",
 				"role" : "libraries"
 			},
 			{
-				"backtrace" : 27,
+				"backtrace" : 28,
 				"fragment" : "/usr/lib/x86_64-linux-gnu/libGL.so",
 				"role" : "libraries"
 			}
@@ -360,7 +383,8 @@
 				0,
 				1,
 				2,
-				3
+				3,
+				6
 			]
 		},
 		{
@@ -369,22 +393,23 @@
 			[
 				4,
 				5,
-				7
+				7,
+				9
 			]
 		},
 		{
 			"name" : "",
 			"sourceIndexes" : 
 			[
-				6,
-				8
+				8,
+				10
 			]
 		},
 		{
 			"name" : "CMake Rules",
 			"sourceIndexes" : 
 			[
-				9
+				11
 			]
 		}
 	],
@@ -419,6 +444,17 @@
 			"backtrace" : 4,
 			"path" : "magicnetclientmanager.h",
 			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 4,
+			"path" : "magicnetclientthread.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 4,
+			"compileGroupIndex" : 0,
+			"path" : "magicnetclientthread.cpp",
+			"sourceGroupIndex" : 0
 		},
 		{
 			"backtrace" : 4,

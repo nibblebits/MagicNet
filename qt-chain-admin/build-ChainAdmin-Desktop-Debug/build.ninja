@@ -52,40 +52,40 @@ build cmake_object_order_depends_target_ChainAdmin: phony || ChainAdmin_autogen 
 build CMakeFiles/ChainAdmin.dir/ChainAdmin_autogen/mocs_compilation.cpp.o: CXX_COMPILER__ChainAdmin_Debug /home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/mocs_compilation.cpp || cmake_object_order_depends_target_ChainAdmin
   DEFINES = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB
   DEP_FILE = CMakeFiles/ChainAdmin.dir/ChainAdmin_autogen/mocs_compilation.cpp.o.d
-  FLAGS = -DQT_QML_DEBUG -g -fPIC -std=gnu++17
-  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
+  FLAGS = -DQT_QML_DEBUG -fpermissive -g -fPIC -std=gnu++17
+  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/../../lib/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
   OBJECT_DIR = CMakeFiles/ChainAdmin.dir
   OBJECT_FILE_DIR = CMakeFiles/ChainAdmin.dir/ChainAdmin_autogen
 
 build CMakeFiles/ChainAdmin.dir/main.cpp.o: CXX_COMPILER__ChainAdmin_Debug /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/main.cpp || cmake_object_order_depends_target_ChainAdmin
   DEFINES = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB
   DEP_FILE = CMakeFiles/ChainAdmin.dir/main.cpp.o.d
-  FLAGS = -DQT_QML_DEBUG -g -fPIC -std=gnu++17
-  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
+  FLAGS = -DQT_QML_DEBUG -fpermissive -g -fPIC -std=gnu++17
+  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/../../lib/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
   OBJECT_DIR = CMakeFiles/ChainAdmin.dir
   OBJECT_FILE_DIR = CMakeFiles/ChainAdmin.dir
 
 build CMakeFiles/ChainAdmin.dir/mainwindow.cpp.o: CXX_COMPILER__ChainAdmin_Debug /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/mainwindow.cpp || cmake_object_order_depends_target_ChainAdmin
   DEFINES = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB
   DEP_FILE = CMakeFiles/ChainAdmin.dir/mainwindow.cpp.o.d
-  FLAGS = -DQT_QML_DEBUG -g -fPIC -std=gnu++17
-  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
+  FLAGS = -DQT_QML_DEBUG -fpermissive -g -fPIC -std=gnu++17
+  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/../../lib/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
   OBJECT_DIR = CMakeFiles/ChainAdmin.dir
   OBJECT_FILE_DIR = CMakeFiles/ChainAdmin.dir
 
 build CMakeFiles/ChainAdmin.dir/magicnetclientmanager.cpp.o: CXX_COMPILER__ChainAdmin_Debug /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientmanager.cpp || cmake_object_order_depends_target_ChainAdmin
   DEFINES = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB
   DEP_FILE = CMakeFiles/ChainAdmin.dir/magicnetclientmanager.cpp.o.d
-  FLAGS = -DQT_QML_DEBUG -g -fPIC -std=gnu++17
-  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
+  FLAGS = -DQT_QML_DEBUG -fpermissive -g -fPIC -std=gnu++17
+  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/../../lib/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
   OBJECT_DIR = CMakeFiles/ChainAdmin.dir
   OBJECT_FILE_DIR = CMakeFiles/ChainAdmin.dir
 
 build CMakeFiles/ChainAdmin.dir/magicnetclientthread.cpp.o: CXX_COMPILER__ChainAdmin_Debug /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientthread.cpp || cmake_object_order_depends_target_ChainAdmin
   DEFINES = -DQT_CORE_LIB -DQT_GUI_LIB -DQT_WIDGETS_LIB
   DEP_FILE = CMakeFiles/ChainAdmin.dir/magicnetclientthread.cpp.o.d
-  FLAGS = -DQT_QML_DEBUG -g -fPIC -std=gnu++17
-  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
+  FLAGS = -DQT_QML_DEBUG -fpermissive -g -fPIC -std=gnu++17
+  INCLUDES = -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin -I/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/include -I/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/../../lib/include -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtCore -isystem /home/daniel/Qt/6.4.1/gcc_64/include -isystem /home/daniel/Qt/6.4.1/gcc_64/mkspecs/linux-g++ -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets -isystem /home/daniel/Qt/6.4.1/gcc_64/include/QtGui
   OBJECT_DIR = CMakeFiles/ChainAdmin.dir
   OBJECT_FILE_DIR = CMakeFiles/ChainAdmin.dir
 
@@ -98,8 +98,8 @@ build CMakeFiles/ChainAdmin.dir/magicnetclientthread.cpp.o: CXX_COMPILER__ChainA
 # Link the executable ChainAdmin
 
 build ChainAdmin: CXX_EXECUTABLE_LINKER__ChainAdmin_Debug CMakeFiles/ChainAdmin.dir/ChainAdmin_autogen/mocs_compilation.cpp.o CMakeFiles/ChainAdmin.dir/main.cpp.o CMakeFiles/ChainAdmin.dir/mainwindow.cpp.o CMakeFiles/ChainAdmin.dir/magicnetclientmanager.cpp.o CMakeFiles/ChainAdmin.dir/magicnetclientthread.cpp.o | /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Widgets.so.6.4.1 /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Gui.so.6.4.1 /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Core.so.6.4.1 /usr/lib/x86_64-linux-gnu/libGL.so || ChainAdmin_autogen ChainAdmin_autogen_timestamp_deps
-  FLAGS = -DQT_QML_DEBUG -g
-  LINK_LIBRARIES = -Wl,-rpath,/home/daniel/Qt/6.4.1/gcc_64/lib:  /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Widgets.so.6.4.1  /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Gui.so.6.4.1  /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Core.so.6.4.1  /usr/lib/x86_64-linux-gnu/libGL.so
+  FLAGS = -DQT_QML_DEBUG -fpermissive -g
+  LINK_LIBRARIES = -Wl,-rpath,/home/daniel/Qt/6.4.1/gcc_64/lib:  /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Widgets.so.6.4.1  -lmagicnet  /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Gui.so.6.4.1  /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Core.so.6.4.1  /usr/lib/x86_64-linux-gnu/libGL.so
   OBJECT_DIR = CMakeFiles/ChainAdmin.dir
   POST_BUILD = :
   PRE_LINK = :
@@ -198,7 +198,7 @@ build ChainAdmin_autogen/timestamp ChainAdmin_autogen/mocs_compilation.cpp | ${c
 #############################################
 # Phony custom command for CMakeFiles/ChainAdmin_autogen_timestamp_deps
 
-build CMakeFiles/ChainAdmin_autogen_timestamp_deps | ${cmake_ninja_workdir}CMakeFiles/ChainAdmin_autogen_timestamp_deps: phony /home/daniel/Qt/6.4.1/gcc_64/./libexec/uic /home/daniel/Qt/6.4.1/gcc_64/./libexec/moc /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Core.so.6.4.1 /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Widgets.so.6.4.1
+build CMakeFiles/ChainAdmin_autogen_timestamp_deps | ${cmake_ninja_workdir}CMakeFiles/ChainAdmin_autogen_timestamp_deps: phony /home/daniel/Qt/6.4.1/gcc_64/./libexec/moc /home/daniel/Qt/6.4.1/gcc_64/lib/libQt6Core.so.6.4.1 /home/daniel/Qt/6.4.1/gcc_64/./libexec/uic
 
 
 #############################################
