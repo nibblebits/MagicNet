@@ -26,7 +26,7 @@ color: white;</string>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
-        <widget class="QTreeWidget" name="treeWidget">
+        <widget class="QTreeWidget" name="blockchainsTreeWidget">
          <column>
           <property name="text">
            <string notr="true">1</string>
@@ -47,22 +47,13 @@ color: white;</string>
     <item>
      <widget class="QGroupBox" name="groupBox_2">
       <property name="title">
-       <string>My Keys</string>
+       <string>Network Information</string>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <widget class="QTreeWidget" name="treeWidget_2">
-         <column>
-          <property name="text">
-           <string notr="true">1</string>
-          </property>
-         </column>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="pushButton_2">
+        <widget class="QLabel" name="serverStateLabel">
          <property name="text">
-          <string>PushButton</string>
+          <string>Local server is disconnected</string>
          </property>
         </widget>
        </item>

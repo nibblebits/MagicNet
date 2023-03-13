@@ -14,6 +14,7 @@
 #include <QtWidgets/QGroupBox>
 #include <QtWidgets/QHBoxLayout>
 #include <QtWidgets/QHeaderView>
+#include <QtWidgets/QLabel>
 #include <QtWidgets/QMainWindow>
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QPushButton>
@@ -31,12 +32,11 @@ public:
     QHBoxLayout *horizontalLayout;
     QGroupBox *groupBox;
     QVBoxLayout *verticalLayout;
-    QTreeWidget *treeWidget;
+    QTreeWidget *blockchainsTreeWidget;
     QPushButton *pushButton;
     QGroupBox *groupBox_2;
     QVBoxLayout *verticalLayout_2;
-    QTreeWidget *treeWidget_2;
-    QPushButton *pushButton_2;
+    QLabel *serverStateLabel;
     QMenuBar *menubar;
     QStatusBar *statusbar;
 
@@ -55,13 +55,13 @@ public:
         groupBox->setObjectName("groupBox");
         verticalLayout = new QVBoxLayout(groupBox);
         verticalLayout->setObjectName("verticalLayout");
-        treeWidget = new QTreeWidget(groupBox);
+        blockchainsTreeWidget = new QTreeWidget(groupBox);
         QTreeWidgetItem *__qtreewidgetitem = new QTreeWidgetItem();
         __qtreewidgetitem->setText(0, QString::fromUtf8("1"));
-        treeWidget->setHeaderItem(__qtreewidgetitem);
-        treeWidget->setObjectName("treeWidget");
+        blockchainsTreeWidget->setHeaderItem(__qtreewidgetitem);
+        blockchainsTreeWidget->setObjectName("blockchainsTreeWidget");
 
-        verticalLayout->addWidget(treeWidget);
+        verticalLayout->addWidget(blockchainsTreeWidget);
 
         pushButton = new QPushButton(groupBox);
         pushButton->setObjectName("pushButton");
@@ -75,18 +75,10 @@ public:
         groupBox_2->setObjectName("groupBox_2");
         verticalLayout_2 = new QVBoxLayout(groupBox_2);
         verticalLayout_2->setObjectName("verticalLayout_2");
-        treeWidget_2 = new QTreeWidget(groupBox_2);
-        QTreeWidgetItem *__qtreewidgetitem1 = new QTreeWidgetItem();
-        __qtreewidgetitem1->setText(0, QString::fromUtf8("1"));
-        treeWidget_2->setHeaderItem(__qtreewidgetitem1);
-        treeWidget_2->setObjectName("treeWidget_2");
+        serverStateLabel = new QLabel(groupBox_2);
+        serverStateLabel->setObjectName("serverStateLabel");
 
-        verticalLayout_2->addWidget(treeWidget_2);
-
-        pushButton_2 = new QPushButton(groupBox_2);
-        pushButton_2->setObjectName("pushButton_2");
-
-        verticalLayout_2->addWidget(pushButton_2);
+        verticalLayout_2->addWidget(serverStateLabel);
 
 
         horizontalLayout->addWidget(groupBox_2);
@@ -110,8 +102,8 @@ public:
         MainWindow->setWindowTitle(QCoreApplication::translate("MainWindow", "Magic Net Chain Administrator", nullptr));
         groupBox->setTitle(QCoreApplication::translate("MainWindow", "Blockchains", nullptr));
         pushButton->setText(QCoreApplication::translate("MainWindow", "PushButton", nullptr));
-        groupBox_2->setTitle(QCoreApplication::translate("MainWindow", "My Keys", nullptr));
-        pushButton_2->setText(QCoreApplication::translate("MainWindow", "PushButton", nullptr));
+        groupBox_2->setTitle(QCoreApplication::translate("MainWindow", "Network Information", nullptr));
+        serverStateLabel->setText(QCoreApplication::translate("MainWindow", "Local server is disconnected", nullptr));
     } // retranslateUi
 
 };

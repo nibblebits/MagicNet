@@ -1,11 +1,20 @@
 ChainAdmin_autogen/timestamp: \
 	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/CMakeLists.txt \
+	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientmanager.cpp \
+	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientmanager.h \
+	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientthread.cpp \
+	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientthread.h \
 	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/main.cpp \
 	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/mainwindow.cpp \
 	/home/daniel/MagicNet/qt-chain-admin/ChainAdmin/mainwindow.h \
 	/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/3.24.2/CMakeCXXCompiler.cmake \
 	/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/CMakeFiles/3.24.2/CMakeSystem.cmake \
 	/home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/moc_predefs.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QMutex \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QMutexLocker \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QObject \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QThread \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qabstractitemmodel.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qalgorithms.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qanystringview.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qarraydata.h \
@@ -29,7 +38,9 @@ ChainAdmin_autogen/timestamp: \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qcontainertools_impl.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qcontiguouscache.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qdatastream.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qdeadlinetimer.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qdebug.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qelapsedtimer.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qflags.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qforeach.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qgenericatomic.h \
@@ -38,16 +49,19 @@ ChainAdmin_autogen/timestamp: \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qhash.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qhashfunctions.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qiodevicebase.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qitemselectionmodel.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qiterable.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qiterator.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qline.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qlist.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qlocale.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qlogging.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmap.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmargins.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmath.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmetacontainer.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmetatype.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmutex.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qnamespace.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qnumeric.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qobject.h \
@@ -59,6 +73,7 @@ ChainAdmin_autogen/timestamp: \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qprocessordetection.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qrect.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qrefcount.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qregularexpression.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qscopedpointer.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qscopeguard.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qset.h \
@@ -83,7 +98,9 @@ ChainAdmin_autogen/timestamp: \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtcore-config.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtcoreexports.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtextstream.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qthread.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtmetamacros.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtsan_impl.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtypeinfo.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qutf8stringview.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qvariant.h \
@@ -112,11 +129,27 @@ ChainAdmin_autogen/timestamp: \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qtguiexports.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qtguiglobal.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qtransform.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qvalidator.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qwindowdefs.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/QMainWindow \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/QTreeWidgetItem \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractitemdelegate.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractitemview.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractscrollarea.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractslider.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractspinbox.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qframe.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qmainwindow.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qrubberband.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qsizepolicy.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qslider.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qstyle.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qstyleoption.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtabbar.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtabwidget.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtreeview.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtreewidget.h \
+	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtreewidgetitemiterator.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtwidgets-config.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtwidgetsexports.h \
 	/home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtwidgetsglobal.h \
@@ -330,76 +363,22 @@ ChainAdmin_autogen/timestamp: \
 	/home/daniel/Qt/6.4.1/gcc_64/lib/cmake/Qt6WidgetsTools/Qt6WidgetsToolsTargets-relwithdebinfo.cmake \
 	/home/daniel/Qt/6.4.1/gcc_64/lib/cmake/Qt6WidgetsTools/Qt6WidgetsToolsTargets.cmake \
 	/home/daniel/Qt/6.4.1/gcc_64/lib/cmake/Qt6WidgetsTools/Qt6WidgetsToolsVersionlessTargets.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeCXXCompiler.cmake.in \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeCXXCompilerABI.cpp \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeCXXInformation.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeCheckCompilerFlagCommonPatterns.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeCommonLanguageInclude.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeCompilerIdDetection.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeDetermineCXXCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeDetermineCompileFeatures.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeDetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeDetermineCompilerABI.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeDetermineCompilerId.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeDetermineSystem.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeFindBinUtils.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeFindDependencyMacro.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeGenericSystem.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeInitializeConfigs.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeLanguageInformation.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeNinjaFindMake.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeParseImplicitIncludeInfo.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeParseImplicitLinkInfo.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeParseLibraryArchitecture.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeSystem.cmake.in \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeSystemSpecificInformation.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeSystemSpecificInitialize.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeTestCXXCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CMakeTestCompilerCommon.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CheckCXXCompilerFlag.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CheckCXXSourceCompiles.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CheckIncludeFileCXX.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/CheckLibraryExists.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/ADSP-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/ARMCC-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/ARMClang-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/AppleClang-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Borland-DetermineCompiler.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/CMakeCommonCompilerMacros.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Clang-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Clang-DetermineCompilerInternal.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Comeau-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Compaq-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Cray-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Embarcadero-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Fujitsu-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/FujitsuClang-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/GHS-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/GNU-CXX-DetermineCompiler.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/GNU-CXX.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/GNU-FindBinUtils.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/GNU.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/HP-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/IAR-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/IBMCPP-CXX-DetermineVersionInternal.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/IBMClang-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Intel-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/IntelLLVM-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/LCC-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/MSVC-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/NVHPC-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/NVIDIA-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/OpenWatcom-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/PGI-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/PathScale-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/SCO-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/SunPro-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/TI-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/VisualAge-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/Watcom-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/XL-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/XLClang-CXX-DetermineCompiler.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Compiler/zOS-CXX-DetermineCompiler.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/FeatureSummary.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/FindOpenGL.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/FindPackageHandleStandardArgs.cmake \
@@ -411,9 +390,7 @@ ChainAdmin_autogen/timestamp: \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Internal/CheckCompilerFlag.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Internal/CheckFlagCommonConfig.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Internal/CheckSourceCompiles.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Internal/FeatureTesting.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/MacroAddFileDependencies.cmake \
-	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Platform/Linux-Determine-CXX.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Platform/Linux-GNU-CXX.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Platform/Linux-GNU.cmake \
 	/home/daniel/Qt/Tools/CMake/share/cmake-3.24/Modules/Platform/Linux.cmake \
@@ -547,6 +524,7 @@ ChainAdmin_autogen/timestamp: \
 	/usr/include/c++/11/ext/string_conversions.h \
 	/usr/include/c++/11/ext/type_traits.h \
 	/usr/include/c++/11/functional \
+	/usr/include/c++/11/future \
 	/usr/include/c++/11/initializer_list \
 	/usr/include/c++/11/ios \
 	/usr/include/c++/11/iosfwd \

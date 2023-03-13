@@ -1,5 +1,12 @@
 /home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/EWIEGA46WW/moc_mainwindow.cpp: /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/mainwindow.h \
   /home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/moc_predefs.h \
+  /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientmanager.h \
+  /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientthread.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QMutex \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QMutexLocker \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QObject \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QThread \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qabstractitemmodel.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qalgorithms.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qanystringview.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qarraydata.h \
@@ -23,7 +30,9 @@
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qcontainertools_impl.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qcontiguouscache.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qdatastream.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qdeadlinetimer.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qdebug.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qelapsedtimer.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qflags.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qforeach.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qgenericatomic.h \
@@ -32,16 +41,19 @@
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qhash.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qhashfunctions.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qiodevicebase.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qitemselectionmodel.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qiterable.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qiterator.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qline.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qlist.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qlocale.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qlogging.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmap.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmargins.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmath.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmetacontainer.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmetatype.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qmutex.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qnamespace.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qnumeric.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qobject.h \
@@ -53,6 +65,7 @@
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qprocessordetection.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qrect.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qrefcount.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qregularexpression.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qscopedpointer.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qscopeguard.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qset.h \
@@ -77,7 +90,9 @@
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtcore-config.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtcoreexports.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtextstream.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qthread.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtmetamacros.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtsan_impl.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qtypeinfo.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qutf8stringview.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qvariant.h \
@@ -106,11 +121,27 @@
   /home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qtguiexports.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qtguiglobal.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qtransform.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qvalidator.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtGui/qwindowdefs.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/QMainWindow \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/QTreeWidgetItem \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractitemdelegate.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractitemview.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractscrollarea.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractslider.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qabstractspinbox.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qframe.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qmainwindow.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qrubberband.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qsizepolicy.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qslider.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qstyle.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qstyleoption.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtabbar.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtabwidget.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtreeview.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtreewidget.h \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtreewidgetitemiterator.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtwidgets-config.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtwidgetsexports.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtwidgetsglobal.h \
@@ -243,6 +274,7 @@
   /usr/include/c++/11/ext/string_conversions.h \
   /usr/include/c++/11/ext/type_traits.h \
   /usr/include/c++/11/functional \
+  /usr/include/c++/11/future \
   /usr/include/c++/11/initializer_list \
   /usr/include/c++/11/ios \
   /usr/include/c++/11/iosfwd \
