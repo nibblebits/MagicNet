@@ -1822,6 +1822,65 @@ out:
     return res;
 }
 
+int magicnet_client_read_event_poll_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{
+    int res = 0;
+    // Do nothing.
+    return res;
+}
+
+int magicnet_client_read_event_packet_data_type_block(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{   
+    int res = 0;
+    // TODO read the block.
+    return res;
+}
+
+int magicnet_client_read_event_packet_data(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{
+    int res = 0;
+    int packet_type = magicnet_signed_data(packet_out)->payload.event.data.type;
+    switch(packet_type)
+    {
+        case MAGICNET_EVENT_TYPE_NEW_BLOCK:
+            res = magicnet_client_read_event_packet_data_type_block(client, packet_out);
+        break;
+
+        default:
+        {
+            magicnet_log("%s Found a strange event type of %i, we don't support this perhaps its for another protocol.\n", __FUNCTION__, packet_type);
+            res = -1;
+        }
+    };
+
+    return res;
+}
+
+int magicnet_client_read_event_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{
+    int res = 0;
+    int event_type = 0;
+    event_type = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (event_type < 0)
+    {
+        magicnet_log("%s failed to read the event type\n", __FUNCTION__);
+        res = event_type;
+        goto out;
+    }
+
+    magicnet_signed_data(packet_out)->payload.event.data.type = event_type;
+    res = magicnet_client_read_event_packet_data(client, packet_out);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read the event packet data\n", __FUNCTION__);
+        goto out;
+    }
+
+out:
+    return res;
+}
+
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1882,6 +1941,21 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         }
         break;
 
+    case MAGICNET_PACKET_TYPE_EVENT_POLL:
+        res = magicnet_client_read_event_poll_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s event poll packet failed\n", __FUNCTION__);
+        }
+        break;
+
+    case MAGICNET_PACKET_TYPE_EVENT:
+        res = magicnet_client_read_event_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s failed to read event packe\n", __FUNCTION__);
+        }
+        break;
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_read_poll_packets_packet(client, packet_out);
         if (res < 0)
@@ -2474,6 +2548,14 @@ int magicnet_client_write_packet_transaction_list_response(struct magicnet_clien
 out:
     return res;
 }
+
+int magicnet_client_write_packet_event_poll(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    // Do nothing.
+    return res;
+}
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -2508,6 +2590,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_write_packet_poll_packets(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_EVENT_POLL:
+        res = magicnet_client_write_packet_event_poll(client, packet);
         break;
 
     case MAGICNET_PACKET_TYPE_USER_DEFINED:

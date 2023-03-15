@@ -35,6 +35,7 @@ int magicnet_flags()
     return mn_set_flags;
 }
 
+
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out)
 {
     vector_set_peek_pointer(structure_vec, 0);
@@ -351,8 +352,8 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out, b
     struct magicnet_packet *packet_to_send = magicnet_packet_new();
     packet_to_send->signed_data.type = MAGICNET_PACKET_TYPE_POLL_PACKETS;
     // First we poll to see if thiers packets for us
-    bool packet_found = false;
-    while (!packet_found)
+    bool loop = true;
+    while (loop)
     {
         // We want a new packet ID as we cant send the same packet twice.
         magicnet_packet_make_new_id(packet_to_send);
@@ -366,14 +367,20 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out, b
             res = -1;
             goto out;
         }
-        packet_found = true;
+        loop = false;
         if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
         {
             // Someone sent as a dodgy packet. we only want user defined packets.
             // Do cleanup.
-            packet_found = false;
+            loop = true;
         }
-        sleep(2);
+
+        if (!(magicnet_flags() & MAGICNET_INIT_FLAG_ENABLE_BLOCKING))
+        {
+            // Blocking not allowed then leave
+           // break;
+           // TODO NOT YET DONE
+        }  
     }
 
     int payload_packet_type = magicnet_signed_data(packet)->payload.user_defined.type;
@@ -402,6 +409,67 @@ out:
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out)
 {
     return _magicnet_next_packet(program, packet_out, true);
+}
+
+
+struct magicnet_event* magicnet_event_new()
+{
+    return calloc(1, sizeof(struct magicnet_event));
+}
+
+void magicnet_event_free(struct magicnet_event* event)
+{
+    if (event->packet)
+    {
+        magicnet_free_packet(event->packet);
+    }
+    free(event);
+}
+
+int magicnet_next_event(struct magicnet_program* program, struct magicnet_event** event_out)
+{
+    int res = 0;
+    struct magicnet_event* event = magicnet_event_new();
+    struct magicnet_packet *packet = magicnet_packet_new();
+    struct magicnet_packet* recv_packet = magicnet_packet_new();
+    struct magicnet_client *client = program->client;
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_EVENT_POLL;
+    // Let's send the request for the next event
+    res = magicnet_client_write_packet(client, packet, 0);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Alright let us now read the next packet.
+    res = magicnet_client_read_packet(client, recv_packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // If we dont have an event packet returned then either theirs no pending events or 
+    // something went wrong.
+    if (magicnet_signed_data(recv_packet)->type != MAGICNET_PACKET_TYPE_EVENT)
+    {
+        goto out;
+    }
+
+    // Cool we should copy the event data into the event, dont worry about packet event pointers and so on
+    // because we will set the event packet soon, so when the event is freed the packet data will be too.
+    memcpy(&event->data, &magicnet_signed_data(recv_packet)->payload.event.data, sizeof(event->data));
+
+out:
+    event->packet = recv_packet;
+    if (res < 0)
+    {
+        // Don't worry this will free the recv packet 
+        magicnet_event_free(event);
+        event = NULL;
+    }
+    *event_out = event;
+    magicnet_free_packet(packet);
+    return res;
 }
 
 struct magicnet_program *magicnet_program(const char *name)

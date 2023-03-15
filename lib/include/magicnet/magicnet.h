@@ -19,6 +19,8 @@ enum
     MAGICNET_INIT_FLAG_NO_STDOUT_GENERAL_LOGGING = 0b00000001,
     MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING = 0b00000010,
     MAGICNET_INIT_FLAG_NO_STDOUT_ERROR_LOGGING = 0b00000100,
+    // When set we will block on certain requests in magicnet.c wait forever.
+    MAGICNET_INIT_FLAG_ENABLE_BLOCKING = 0b00001000
 };
 
 struct magicnet_registered_structure
@@ -39,11 +41,13 @@ struct magicnet_program
 enum
 {
     MAGICNET_PACKET_TYPE_EMPTY_PACKET,
-    MAGICNET_PACKET_TYPE_USER_DEFINED = 158,
+    MAGICNET_PACKET_TYPE_USER_DEFINED,
+    MAGICNET_PACKET_TYPE_EVENT_POLL,
+    MAGICNET_PACKET_TYPE_EVENT,
+    MAGICNET_PACKET_TYPE_POLL_PACKETS,
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
-    MAGICNET_PACKET_TYPE_POLL_PACKETS,
-    MAGICNET_PACKET_TYPE_SERVER_SYNC,
+    MAGICNET_PACKET_TYPE_SERVER_SYNC = 200,
     MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP,
     MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER,
     MAGICNET_PACKET_TYPE_TRANSACTION_SEND,
@@ -186,6 +190,33 @@ struct magicnet_transactions_request
     int page;
 };
 
+enum
+{
+    // Signifies a new block was made.
+    MAGICNET_EVENT_TYPE_NEW_BLOCK
+};
+
+struct magicnet_event_data
+{
+    int type;
+    union
+    {
+        struct
+        {
+            struct block *block;
+        } new_block_event;
+    };
+};
+
+struct magicnet_event
+{
+    // The packet that delivered this event
+    struct magicnet_packet* packet;
+
+    // The event its self.
+    struct magicnet_event_data* data;
+};
+
 struct magicnet_packet
 {
 
@@ -242,6 +273,16 @@ struct magicnet_packet
                     // Pointer to the actual packet data known by the application using the network
                     void *data;
                 } user_defined;
+
+                struct event_poll
+                {
+
+                } event_poll;
+
+                struct event_packet
+                {
+                    struct magicnet_event_data data;
+                } event;
 
                 struct sync
                 {
@@ -737,7 +778,7 @@ struct council_certificate_transfer
     } signed_data;
 
     // This is the signing key that will confirm this transfer. It is best that the old owner signs this, that is the cherry on top
-    // If the old owner refuses then any one of the voters can sign that but it is always possible someone could conspire 
+    // If the old owner refuses then any one of the voters can sign that but it is always possible someone could conspire
     // with a known signer, and ask them to sign. For this reason certificates that are broadcast around the network will be fact checked
     // and if their is found to be a liar then rights can be removed.
     char hash[SHA256_STRING_LENGTH];
@@ -745,20 +786,19 @@ struct council_certificate_transfer
     struct signature signature;
 };
 
-
 /**
  * To preform council actions you need a council license, each license is valid for 24 hours only
  * This is so we have a natural way of people losing power in the event an attack is made on newer clients who do not know
  * the true state of the blockchain yet.
-*/
+ */
 struct council_license
 {
     struct council_license_signed_data
     {
         // Certificate hash is signed. Licenses can only be issued to valid certificates. This is the certificate that owns the license
-        struct council_certificate* certificate;
+        struct council_certificate *certificate;
         // This is the certificate that signed this license, allowing it to exist.
-        struct council_certificate* signing_certificate;
+        struct council_certificate *signing_certificate;
         time_t valid_from;
         time_t expires_at;
     } signed_data;
@@ -769,7 +809,6 @@ struct council_license
     struct key signing_key;
     struct signature signature;
 };
-
 
 struct council_certificate
 {
@@ -947,13 +986,26 @@ int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
 void magicnet_free_packet_pointers(struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new();
-void magicnet_packet_make_new_id(struct magicnet_packet* packet);
+void magicnet_packet_make_new_id(struct magicnet_packet *packet);
 int magicnet_init(int flags);
 int magicnet_flags();
 
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
+
+
+/**
+ * Frees the system event and any internal structures within such as blocks.
+*/
+void magicnet_event_free(struct magicnet_event* event);
+
+/**
+ * Gets the next event from the MagicNet server, this could be a block created event to signify a block was created
+ * or some other important event that should be known
+*/
+int magicnet_next_event(struct magicnet_program* program, struct magicnet_event** event_out);
+
 /**
  * Makes a money transfer to the recipient
  * \param to The recipient's public key
