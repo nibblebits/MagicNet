@@ -8,7 +8,7 @@
 
 int main()
 {
-    magicnet_init();
+    magicnet_init(0);
     struct magicnet_program *decentralized_program = magicnet_program("chat-app");
     if (!decentralized_program)
     {

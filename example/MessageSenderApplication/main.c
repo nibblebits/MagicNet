@@ -14,7 +14,7 @@ struct chat_packet
 
 int main()
 {
-    magicnet_init();
+    magicnet_init(MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING | MAGICNET_INIT_FLAG_NO_STDOUT_GENERAL_LOGGING);
     struct magicnet_program *decentralized_program = magicnet_program("chat-app");
     if (!decentralized_program)
     {
@@ -24,6 +24,7 @@ int main()
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
 
     struct chat_packet packet;
+    strncpy(packet.message, "Hello world", strlen("Hello world"));
     
 
     magicnet_send_packet(decentralized_program, CHAT_PACKET, &packet);

@@ -19,14 +19,20 @@ static struct vector *program_vec;
 
 struct magicnet_transactions *magicnet_transactions_new(struct vector *block_transactions_vec);
 
+int mn_set_flags;
 
-int magicnet_init()
+int magicnet_init(int flags)
 {
     structure_vec = vector_create(sizeof(struct magicnet_registered_structure));
     program_vec = vector_create(sizeof(struct magicnet_program));
     srand(time(NULL));
-
+    mn_set_flags = flags;
     return 0;
+}
+
+int magicnet_flags()
+{
+    return mn_set_flags;
 }
 
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out)

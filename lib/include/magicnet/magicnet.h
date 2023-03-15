@@ -13,6 +13,14 @@
 #include "key.h"
 #include "buffer.h"
 
+// Initialization flags for magicnet
+enum
+{
+    MAGICNET_INIT_FLAG_NO_STDOUT_GENERAL_LOGGING = 0b00000001,
+    MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING = 0b00000010,
+    MAGICNET_INIT_FLAG_NO_STDOUT_ERROR_LOGGING = 0b00000100,
+};
+
 struct magicnet_registered_structure
 {
     // Numerical ID determined by the application using this network. This is the structure ID
@@ -940,7 +948,9 @@ void magicnet_free_packet(struct magicnet_packet *packet);
 void magicnet_free_packet_pointers(struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new();
 void magicnet_packet_make_new_id(struct magicnet_packet* packet);
-int magicnet_init();
+int magicnet_init(int flags);
+int magicnet_flags();
+
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);

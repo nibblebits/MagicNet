@@ -3213,7 +3213,6 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
             continue;
         }
 
-        magicnet_log("%s program_name=%s\n", __FUNCTION__, cli->program_name);
         // Same program name as the sending client? Then add it to the packet queue of the connected client
         if (strncmp(cli->program_name, magicnet_signed_data(packet)->payload.user_defined.program_name, sizeof(cli->program_name)) == 0)
         {
@@ -3980,7 +3979,7 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         goto out;
     }
-    
+
     char tmp_program_name[MAGICNET_PROGRAM_NAME_SIZE] = {0};
     strncpy(tmp_program_name, program_name, sizeof(tmp_program_name));
     res = magicnet_write_bytes(client, tmp_program_name, sizeof(tmp_program_name), NULL);

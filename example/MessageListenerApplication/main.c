@@ -13,7 +13,7 @@ struct chat_packet
 
 int main()
 {
-    magicnet_init();
+    magicnet_init(MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING | MAGICNET_INIT_FLAG_NO_STDOUT_GENERAL_LOGGING);
     struct magicnet_program *decentralized_program = magicnet_program("chat-app");
     if (!decentralized_program)
     {

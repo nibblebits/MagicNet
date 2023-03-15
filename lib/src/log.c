@@ -12,6 +12,11 @@ void magicnet_log_initialize()
 
 int magicnet_important(const char* message, ...)
 {
+    if (magicnet_flags() & MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING)
+    {
+        return -1;
+    }
+    
     #ifdef MAGICNET_SHOW_IMPORTANT_LOGS
     pthread_mutex_lock(&log_lock);
     va_list args;
@@ -28,6 +33,11 @@ int magicnet_important(const char* message, ...)
 
 int magicnet_error(const char* message, ...)
 {
+    if (magicnet_flags() & MAGICNET_INIT_FLAG_NO_STDOUT_ERROR_LOGGING)
+    {
+        return -1;
+    }
+    
     #ifdef MAGICNET_SHOW_ERROR_LOGS
     pthread_mutex_lock(&log_lock);
     va_list args;
@@ -44,6 +54,11 @@ int magicnet_error(const char* message, ...)
 
 int magicnet_log(const char* message, ...)
 {
+    if (magicnet_flags() & MAGICNET_INIT_FLAG_NO_STDOUT_GENERAL_LOGGING)
+    {
+        return -1;
+    }
+
     #ifdef MAGICNET_SHOW_INFO_LOGS
     pthread_mutex_lock(&log_lock);
     va_list args;

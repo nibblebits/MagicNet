@@ -82,6 +82,8 @@ int main(int argc, char **argv)
     int res = 0;
     printf("Starting MagicNet server\n");
 
+    magicnet_init(0);
+    
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGINT);
