@@ -97,10 +97,15 @@ struct signed_data *magicnet_signed_data(struct magicnet_packet *packet)
     return &packet->signed_data;
 }
 
+void magicnet_packet_make_new_id(struct magicnet_packet* packet)
+{
+    magicnet_signed_data(packet)->id = rand() % 999999999;
+}
+
 struct magicnet_packet *magicnet_packet_new()
 {
     struct magicnet_packet *packet = calloc(1, sizeof(struct magicnet_packet));
-    magicnet_signed_data(packet)->id = rand() % 999999999;
+    magicnet_packet_make_new_id(packet);
     return packet;
 }
 
@@ -1833,17 +1838,17 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     if (client->server)
     {
-        magicnet_server_read_lock(client->server);
-        if (magicnet_server_has_seen_packet_with_id(client->server, packet_id))
+        magicnet_server_lock(client->server);
+        bool seen_packet = magicnet_server_has_seen_packet_with_id(client->server, packet_id);
+        magicnet_server_unlock(client->server);
+        if (seen_packet)
         {
             magicnet_signed_data(packet_out)->id = packet_id;
             magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
-            // magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
+            magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
             res = magicnet_write_int(client, MAGICNET_ERROR_RECEIVED_PACKET_BEFORE, packet_out->not_sent.tmp_buf);
-            magicnet_server_unlock(client->server);
             goto out;
         }
-        magicnet_server_unlock(client->server);
     }
 
     // Since we are okay to proceed with reading the packet we should make that clear.
@@ -3143,7 +3148,7 @@ void magicnet_client_mark_packet_processed(struct magicnet_client *client, struc
     {
         if (magicnet_signed_data(&client->awaiting_packets[i])->id == magicnet_signed_data(packet)->id)
         {
-            magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
+            magicnet_signed_data(&client->awaiting_packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
             break;
         }
     }
@@ -3155,7 +3160,7 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
     magicnet_log("%s polling packet request\n", __FUNCTION__);
     struct magicnet_packet *packet_to_process = NULL;
     struct magicnet_packet *packet_to_send = NULL;
-    magicnet_server_read_lock(client->server);
+    magicnet_server_lock(client->server);
     packet_to_process = magicnet_client_get_next_packet_to_process(client);
     magicnet_server_unlock(client->server);
 
@@ -3165,7 +3170,6 @@ int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, 
         magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
         res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
         magicnet_log("%s Not found\n", __FUNCTION__);
-
         goto out;
     }
 
@@ -3196,6 +3200,7 @@ out:
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
+
     // We got to lock this server
     magicnet_server_lock(client->server);
 
@@ -3208,13 +3213,21 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
             continue;
         }
 
+        magicnet_log("%s program_name=%s\n", __FUNCTION__, cli->program_name);
         // Same program name as the sending client? Then add it to the packet queue of the connected client
         if (strncmp(cli->program_name, magicnet_signed_data(packet)->payload.user_defined.program_name, sizeof(cli->program_name)) == 0)
         {
-            magicnet_client_add_awaiting_packet(cli, packet);
+            res = magicnet_client_add_awaiting_packet(cli, packet);
+            if (res < 0)
+            {
+                magicnet_log("%s error adding the packet to the awaiting packet queue.\n", __FUNCTION__);
+                goto out;
+            }
         }
     }
     magicnet_server_add_packet_to_relay(client->server, packet);
+
+out:
     magicnet_server_unlock(client->server);
     return res;
 }
@@ -3962,17 +3975,20 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
         goto out;
     }
 
-    res = magicnet_write_bytes(client, (void *)program_name, MAGICNET_PROGRAM_NAME_SIZE, NULL);
-    if (res < 0)
-    {
-        goto out;
-    }
-
     res = magicnet_write_int(client, communication_flags, NULL);
     if (res < 0)
     {
         goto out;
     }
+    
+    char tmp_program_name[MAGICNET_PROGRAM_NAME_SIZE] = {0};
+    strncpy(tmp_program_name, program_name, sizeof(tmp_program_name));
+    res = magicnet_write_bytes(client, tmp_program_name, sizeof(tmp_program_name), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
 
     // Now lets see if we got the signature back
     int sig = 0;

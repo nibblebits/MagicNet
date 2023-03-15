@@ -348,6 +348,8 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out, b
     bool packet_found = false;
     while (!packet_found)
     {
+        // We want a new packet ID as we cant send the same packet twice.
+        magicnet_packet_make_new_id(packet_to_send);
         res = magicnet_client_write_packet(client, packet_to_send, 0);
         if (res < 0)
         {
@@ -365,10 +367,7 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out, b
             // Do cleanup.
             packet_found = false;
         }
-        if (magicnet_signed_data(packet)->type == MAGICNET_PACKET_TYPE_NOT_FOUND)
-        {
-            packet_found = false;
-        }
+        sleep(2);
     }
 
     int payload_packet_type = magicnet_signed_data(packet)->payload.user_defined.type;

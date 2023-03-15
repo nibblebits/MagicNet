@@ -939,6 +939,7 @@ int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
 void magicnet_free_packet_pointers(struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new();
+void magicnet_packet_make_new_id(struct magicnet_packet* packet);
 int magicnet_init();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
