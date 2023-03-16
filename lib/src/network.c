@@ -1555,6 +1555,7 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         block_transaction_add(transaction_group, transaction);
     }
     block_transaction_group_hash_create(transaction_group, transaction_group->hash);
+    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = transaction_group;
     magicnet_signed_data(packet_out)->payload.block_send.blocks = vector_create(sizeof(struct block *));
 
     int total_blocks = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
