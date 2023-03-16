@@ -97,7 +97,7 @@ struct signed_data *magicnet_signed_data(struct magicnet_packet *packet)
     return &packet->signed_data;
 }
 
-void magicnet_packet_make_new_id(struct magicnet_packet* packet)
+void magicnet_packet_make_new_id(struct magicnet_packet *packet)
 {
     magicnet_signed_data(packet)->id = rand() % 999999999;
 }
@@ -1426,6 +1426,109 @@ out:
     return res;
 }
 
+int magicnet_client_read_block(struct magicnet_client *client, struct magicnet_packet *packet_out, struct block **block_out)
+{
+    int res = 0;
+    char hash[SHA256_STRING_LENGTH];
+    char prev_hash[SHA256_STRING_LENGTH];
+    char transaction_group_hash[SHA256_STRING_LENGTH];
+    time_t block_time;
+    struct key key;
+    struct signature signature;
+    struct block* block = NULL;
+    int total_transactions = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_transactions < 0)
+    {
+        res = total_transactions;
+        goto out;
+    }
+
+    struct block_transaction_group *transaction_group = block_transaction_group_new();
+    block->transaction_group = transaction_group;
+    for (int i = 0; i < total_transactions; i++)
+    {
+        struct block_transaction *transaction = block_transaction_new();
+        res = magicnet_read_transaction(client, transaction, packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            block_transaction_free(transaction);
+            goto out;
+        }
+
+        block_transaction_add(transaction_group, transaction);
+    }
+    block_transaction_group_hash_create(transaction_group, transaction_group->hash);
+
+    res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = magicnet_read_bytes(client, prev_hash, sizeof(prev_hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = magicnet_read_bytes(client, transaction_group_hash, sizeof(transaction_group_hash), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    block_time = magicnet_read_long(client, packet_out->not_sent.tmp_buf);
+    if (block_time < 0)
+    {
+        res = block_time;
+        goto out;
+    }
+
+    if (memcmp(transaction_group_hash, transaction_group->hash, sizeof(transaction_group_hash)) != 0)
+    {
+        magicnet_log("%s the transaction group hash does not match the one in the block sent to us\n", __FUNCTION__);
+        res = MAGICNET_ERROR_SECURITY_RISK;
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, &key, sizeof(key), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, &signature, sizeof(signature), packet_out->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    block = block_create_with_group(hash, prev_hash, block_transaction_group_clone(transaction_group));
+    if (!block)
+    {
+        res = MAGICNET_ERROR_UNKNOWN;
+        goto out;
+    }
+
+    block->key = key;
+    block->signature = signature;
+    block->time = block_time;
+
+    if (!(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
+    {
+        res = block_verify(block);
+        if (res < 0)
+        {
+            magicnet_log("%s issue verifying the received block\n", __FUNCTION__);
+            block_free(block);
+            block = NULL;
+            goto out;
+        }
+    }
+
+    *block_out = block;
+out:
+    return res;
+}
+
 int magicnet_client_read_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1463,76 +1566,15 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
 
     for (int i = 0; i < total_blocks; i++)
     {
-        char hash[SHA256_STRING_LENGTH];
-        char prev_hash[SHA256_STRING_LENGTH];
-        char transaction_group_hash[SHA256_STRING_LENGTH];
-        time_t block_time;
-        struct key key;
-        struct signature signature;
-        res = magicnet_read_bytes(client, hash, sizeof(hash), packet_out->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-        res = magicnet_read_bytes(client, prev_hash, sizeof(prev_hash), packet_out->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-        res = magicnet_read_bytes(client, transaction_group_hash, sizeof(transaction_group_hash), packet_out->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
-        block_time = magicnet_read_long(client, packet_out->not_sent.tmp_buf);
-        if (block_time < 0)
-        {
-            res = block_time;
-            break;
-        }
-
-        if (memcmp(transaction_group_hash, transaction_group->hash, sizeof(transaction_group_hash)) != 0)
-        {
-            magicnet_log("%s the transaction group hash does not match the one in the block sent to us\n", __FUNCTION__);
-            res = MAGICNET_ERROR_SECURITY_RISK;
-            break;
-        }
-
-        res = magicnet_read_bytes(client, &key, sizeof(key), packet_out->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
-        res = magicnet_read_bytes(client, &signature, sizeof(signature), packet_out->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
-        struct block *block = block_create_with_group(hash, prev_hash, block_transaction_group_clone(transaction_group));
-        if (!block)
-        {
-            res = MAGICNET_ERROR_UNKNOWN;
-            break;
-        }
-
-        block->key = key;
-        block->signature = signature;
-        block->time = block_time;
-
-        if (!(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
-        {
-            res = block_verify(block);
-            if (res < 0)
-            {
-                magicnet_log("%s issue verifying the received block\n", __FUNCTION__);
-                block_free(block);
-                break;
-            }
-        }
         // Add the block
+        struct block* block = NULL;
+        res = magicnet_client_read_block(client, packet_out, &block);
+        if (res < 0)
+        {
+            goto out;
+        }
+
+        // Add it to the block array
         vector_push(magicnet_signed_data(packet_out)->payload.block_send.blocks, &block);
     }
 out:
@@ -1822,41 +1864,41 @@ out:
     return res;
 }
 
-int magicnet_client_read_event_poll_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+int magicnet_client_read_event_poll_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     // Do nothing.
     return res;
 }
 
-int magicnet_client_read_event_packet_data_type_block(struct magicnet_client* client, struct magicnet_packet* packet_out)
-{   
+int magicnet_client_read_event_packet_data_type_block(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
     int res = 0;
     // TODO read the block.
     return res;
 }
 
-int magicnet_client_read_event_packet_data(struct magicnet_client* client, struct magicnet_packet* packet_out)
+int magicnet_client_read_event_packet_data(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     int packet_type = magicnet_signed_data(packet_out)->payload.event.data.type;
-    switch(packet_type)
+    switch (packet_type)
     {
-        case MAGICNET_EVENT_TYPE_NEW_BLOCK:
-            res = magicnet_client_read_event_packet_data_type_block(client, packet_out);
+    case MAGICNET_EVENT_TYPE_NEW_BLOCK:
+        res = magicnet_client_read_event_packet_data_type_block(client, packet_out);
         break;
 
-        default:
-        {
-            magicnet_log("%s Found a strange event type of %i, we don't support this perhaps its for another protocol.\n", __FUNCTION__, packet_type);
-            res = -1;
-        }
+    default:
+    {
+        magicnet_log("%s Found a strange event type of %i, we don't support this perhaps its for another protocol.\n", __FUNCTION__, packet_type);
+        res = -1;
+    }
     };
 
     return res;
 }
 
-int magicnet_client_read_event_packet(struct magicnet_client* client, struct magicnet_packet* packet_out)
+int magicnet_client_read_event_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     int event_type = 0;
@@ -1879,7 +1921,6 @@ int magicnet_client_read_event_packet(struct magicnet_client* client, struct mag
 out:
     return res;
 }
-
 
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
@@ -2333,10 +2374,71 @@ out:
     return res;
 }
 
+int magicnet_client_write_block(struct magicnet_client *client, struct magicnet_packet *packet, struct block *block)
+{
+    int res = 0;
+    struct block_transaction_group *transaction_group = block->transaction_group;
+    res = magicnet_write_int(client, transaction_group->total_transactions, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    for (int i = 0; i < transaction_group->total_transactions; i++)
+    {
+        res = magicnet_write_transaction(client, transaction_group->transactions[i], packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+    res = magicnet_write_bytes(client, block->hash, sizeof(block->hash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = magicnet_write_bytes(client, block->prev_hash, sizeof(block->prev_hash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, block->transaction_group->hash, sizeof(block->transaction_group->hash), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_long(client, block->time, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, &block->key, sizeof(block->key), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, &block->signature, sizeof(block->signature), packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
 int magicnet_client_write_packet_block_send(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     struct vector *blocks_to_send = magicnet_signed_data(packet)->payload.block_send.blocks;
+
+    // I may deprecate this at some point, originally the protocol was desigend to send multiple blocks at the same time
+    // either i will finish it or deprecate that. Since transactions are sent during write_block function.
     struct block_transaction_group *transaction_group = magicnet_signed_data(packet)->payload.block_send.transaction_group;
     res = magicnet_write_int(client, transaction_group->total_transactions, packet->not_sent.tmp_buf);
     if (res < 0)
@@ -2363,41 +2465,11 @@ int magicnet_client_write_packet_block_send(struct magicnet_client *client, stru
     struct block *block = vector_peek_ptr(blocks_to_send);
     while (block)
     {
-        res = magicnet_write_bytes(client, block->hash, sizeof(block->hash), packet->not_sent.tmp_buf);
+        res = magicnet_client_write_block(client, packet, block);
         if (res < 0)
         {
-            break;
+            goto out;
         }
-        res = magicnet_write_bytes(client, block->prev_hash, sizeof(block->prev_hash), packet->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
-        res = magicnet_write_bytes(client, block->transaction_group->hash, sizeof(block->transaction_group->hash), packet->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
-        res = magicnet_write_long(client, block->time, packet->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
-        res = magicnet_write_bytes(client, &block->key, sizeof(block->key), packet->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
-        res = magicnet_write_bytes(client, &block->signature, sizeof(block->signature), packet->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-
         block = vector_peek_ptr(blocks_to_send);
     }
 out:
@@ -2549,7 +2621,7 @@ out:
     return res;
 }
 
-int magicnet_client_write_packet_event_poll(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_write_packet_event_poll(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     // Do nothing.
@@ -4073,7 +4145,6 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     {
         goto out;
     }
-
 
     // Now lets see if we got the signature back
     int sig = 0;
