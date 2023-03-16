@@ -1444,7 +1444,6 @@ int magicnet_client_read_block(struct magicnet_client *client, struct magicnet_p
     }
 
     struct block_transaction_group *transaction_group = block_transaction_group_new();
-    block->transaction_group = transaction_group;
     for (int i = 0; i < total_transactions; i++)
     {
         struct block_transaction *transaction = block_transaction_new();
@@ -1511,6 +1510,8 @@ int magicnet_client_read_block(struct magicnet_client *client, struct magicnet_p
     block->key = key;
     block->signature = signature;
     block->time = block_time;
+    block->transaction_group = transaction_group;
+
 
     if (!(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
     {
