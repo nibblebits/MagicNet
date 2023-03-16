@@ -1541,22 +1541,6 @@ int magicnet_client_read_block_send_packet(struct magicnet_client *client, struc
         goto out;
     }
 
-    struct block_transaction_group *transaction_group = block_transaction_group_new();
-    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = transaction_group;
-    for (int i = 0; i < total_transactions; i++)
-    {
-        struct block_transaction *transaction = block_transaction_new();
-        res = magicnet_read_transaction(client, transaction, packet_out->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            block_transaction_free(transaction);
-            goto out;
-        }
-
-        block_transaction_add(transaction_group, transaction);
-    }
-    block_transaction_group_hash_create(transaction_group, transaction_group->hash);
-    magicnet_signed_data(packet_out)->payload.block_send.transaction_group = transaction_group;
     magicnet_signed_data(packet_out)->payload.block_send.blocks = vector_create(sizeof(struct block *));
 
     int total_blocks = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
@@ -1924,6 +1908,8 @@ out:
     return res;
 }
 
+// sum fnction
+
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -1947,7 +1933,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         {
             magicnet_signed_data(packet_out)->id = packet_id;
             magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
-            magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
+          //  magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
             res = magicnet_write_int(client, MAGICNET_ERROR_RECEIVED_PACKET_BEFORE, packet_out->not_sent.tmp_buf);
             goto out;
         }
@@ -2438,24 +2424,6 @@ int magicnet_client_write_packet_block_send(struct magicnet_client *client, stru
 {
     int res = 0;
     struct vector *blocks_to_send = magicnet_signed_data(packet)->payload.block_send.blocks;
-
-    // I may deprecate this at some point, originally the protocol was desigend to send multiple blocks at the same time
-    // either i will finish it or deprecate that. Since transactions are sent during write_block function.
-    struct block_transaction_group *transaction_group = magicnet_signed_data(packet)->payload.block_send.transaction_group;
-    res = magicnet_write_int(client, transaction_group->total_transactions, packet->not_sent.tmp_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    for (int i = 0; i < transaction_group->total_transactions; i++)
-    {
-        res = magicnet_write_transaction(client, transaction_group->transactions[i], packet->not_sent.tmp_buf);
-        if (res < 0)
-        {
-            break;
-        }
-    }
 
     res = magicnet_write_int(client, vector_count(blocks_to_send), packet->not_sent.tmp_buf);
     if (res < 0)
@@ -3114,7 +3082,6 @@ void magicnet_copy_packet_block_send(struct magicnet_packet *packet_out, struct 
         vector_push(block_vector_out, &cloned_block);
         block = vector_peek_ptr(block_send_packet_in->blocks);
     }
-    block_send_packet_out->transaction_group = block_transaction_group_clone(block_send_packet_in->transaction_group);
     block_send_packet_out->blocks = block_vector_out;
 }
 
@@ -4497,7 +4464,6 @@ int magicnet_client_send_single_block(struct magicnet_client *client, struct blo
 {
     int res = 0;
     magicnet_log("%s sending block %s\n", __FUNCTION__, block->hash);
-    struct block_transaction_group *transaction_group = block_transaction_group_new();
     struct magicnet_packet *packet = magicnet_packet_new();
     // The block vector holds the blocks to send
     struct vector *block_vector = vector_create(sizeof(struct block *));
@@ -4505,8 +4471,6 @@ int magicnet_client_send_single_block(struct magicnet_client *client, struct blo
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->payload.block_send.blocks = block_vector;
-    // We also must clone the transaction group.
-    magicnet_signed_data(packet)->payload.block_send.transaction_group = block_transaction_group_clone(block->transaction_group);
 
     // When a packet is freed it deletes the block, therefore a clone is required!
     struct block *cloned_block = block_clone(block);
@@ -5145,7 +5109,6 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_BLOCK_SEND;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet)->payload.block_send.blocks = block_vector;
-    magicnet_signed_data(packet)->payload.block_send.transaction_group = transaction_group;
 
     // Let's loop through all of the block transactions that we are aware of and add them to the block
     vector_set_peek_pointer(server->next_block.block_transactions, 0);

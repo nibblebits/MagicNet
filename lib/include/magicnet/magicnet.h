@@ -328,10 +328,8 @@ struct magicnet_packet
                 struct magicnet_block_send
                 {
                     // a vector of struct block* that holds the blocks we are sending.
-                    // A copy of the exact same block is expected for each blockchain known by the peer
                     struct vector *blocks;
-                    // The group of transactions associated with all blocks in the vector above.
-                    struct block_transaction_group *transaction_group;
+
                 } block_send;
 
                 struct magicnet_request_block
