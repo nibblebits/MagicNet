@@ -1510,7 +1510,6 @@ int magicnet_client_read_block(struct magicnet_client *client, struct magicnet_p
     block->key = key;
     block->signature = signature;
     block->time = block_time;
-    block->transaction_group = transaction_group;
 
 
     if (!(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
@@ -1533,13 +1532,6 @@ out:
 int magicnet_client_read_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
-
-    int total_transactions = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
-    if (total_transactions < 0)
-    {
-        res = total_transactions;
-        goto out;
-    }
 
     magicnet_signed_data(packet_out)->payload.block_send.blocks = vector_create(sizeof(struct block *));
 
