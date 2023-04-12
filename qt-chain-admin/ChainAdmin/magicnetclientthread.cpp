@@ -32,6 +32,8 @@ void MagicNetClientThread::loop()
 
     while(1)
     {
+         // ALright lets poll the server every so often for the GUI
+
         QThread::sleep(5);
     }
 }

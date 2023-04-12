@@ -32,18 +32,42 @@ struct magicnet_registered_structure
 };
 
 struct magicnet_client;
+
+enum
+{
+    MAGICNET_EVENT_TYPE_NEW_BLOCK
+};
+struct magicnet_event
+{
+    int type;
+    struct data
+    {
+        union 
+        {
+            struct magicnet_event_type_block
+            {
+                struct block* block;
+            } new_block_event;   
+        };
+    } data;
+};
+
+
 struct magicnet_program
 {
     char name[MAGICNET_PROGRAM_NAME_SIZE];
     struct magicnet_client *client;
+
+    // vector of magicnet_event*
+    struct vector* events;
 };
 
 enum
 {
     MAGICNET_PACKET_TYPE_EMPTY_PACKET,
     MAGICNET_PACKET_TYPE_USER_DEFINED,
-    MAGICNET_PACKET_TYPE_EVENT_POLL,
-    MAGICNET_PACKET_TYPE_EVENT,
+    MAGICNET_PACKET_TYPE_EVENTS_POLL,
+    MAGICNET_PACKET_TYPE_EVENTS_RES,
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
@@ -190,32 +214,6 @@ struct magicnet_transactions_request
     int page;
 };
 
-enum
-{
-    // Signifies a new block was made.
-    MAGICNET_EVENT_TYPE_NEW_BLOCK
-};
-
-struct magicnet_event_data
-{
-    int type;
-    union
-    {
-        struct
-        {
-            struct block *block;
-        } new_block_event;
-    };
-};
-
-struct magicnet_event
-{
-    // The packet that delivered this event
-    struct magicnet_packet* packet;
-
-    // The event its self.
-    struct magicnet_event_data* data;
-};
 
 struct magicnet_packet
 {
@@ -274,16 +272,21 @@ struct magicnet_packet
                     void *data;
                 } user_defined;
 
-                struct event_poll
+                struct events_poll
                 {
+                    // The total events to request
+                    size_t total;
+                } events_poll;
 
-                } event_poll;
-
-                struct event_packet
+                struct events_poll_res
                 {
-                    struct magicnet_event_data data;
-                } event;
+                    // The total events responded with
+                    size_t total;
+                    // A vector of struct magicnet_event*
+                    struct vector* events;
+                } events_poll_res;
 
+    
                 struct sync
                 {
                     int flags;
@@ -937,6 +940,15 @@ void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 void magicnet_close_and_free(struct magicnet_client *client);
+
+void magicnet_reconnect(struct magicnet_program *program);
+
+struct magicnet_event* magicnet_event_new(struct magicnet_event* event);
+struct magicnet_event* magicnet_copy_event(struct magicnet_event* original_event);
+struct vector* magicnet_copy_events(struct vector* events_vec_in);
+
+void magicnet_event_release(struct magicnet_event* event);
+
 int magicnet_client_connection_type(struct magicnet_client *client);
 struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
 struct magicnet_client *magicnet_connect_for_key(struct magicnet_server *server, struct key *key, const char *program_name);
@@ -992,17 +1004,6 @@ int magicnet_get_structure(int type, struct magicnet_registered_structure *struc
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
 
-
-/**
- * Frees the system event and any internal structures within such as blocks.
-*/
-void magicnet_event_free(struct magicnet_event* event);
-
-/**
- * Gets the next event from the MagicNet server, this could be a block created event to signify a block was created
- * or some other important event that should be known
-*/
-int magicnet_next_event(struct magicnet_program* program, struct magicnet_event** event_out);
 
 /**
  * Makes a money transfer to the recipient
