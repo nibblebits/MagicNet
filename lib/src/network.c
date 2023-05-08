@@ -771,6 +771,7 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     client->connection_began = time(NULL);
     client->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     client->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
+    client->events = vector_create(sizeof(struct magicnet_event*));
     memcpy(&client->client_info, addr_in, sizeof(&client->client_info));
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
@@ -960,6 +961,14 @@ void magicnet_close(struct magicnet_client *client)
         magicnet_free_packet_pointers(&client->packets_for_client.packets[i]);
         magicnet_free_packet_pointers(&client->awaiting_packets[i]);
     }
+    memset(&client->packets_for_client, 0, sizeof(client->packets_for_client));
+    memset(&client->awaiting_packets, 0, sizeof(client->awaiting_packets));
+
+    if (client->events)
+    {
+        magicnet_events_vector_free(client->events);
+        client->events = NULL;
+    }
 
     // If we closed the connection of a client who was last to send the block then we must set it to NULL
     // on the server, since the client is no longer accessible.
@@ -974,11 +983,7 @@ void magicnet_close(struct magicnet_client *client)
     }
 }
 
-void magicnet_close_and_free(struct magicnet_client *client)
-{
-    close(client->sock);
-    free(client);
-}
+
 
 void magicnet_client_readjust_download_speed(struct magicnet_client *client)
 {
@@ -2872,6 +2877,11 @@ bool magicnet_connected(struct magicnet_client *client)
     return client && client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
 }
 
+bool magicnet_is_localhost(struct magicnet_client *client)
+{
+    return client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
+}
+
 int magicnet_client_connection_type(struct magicnet_client *client)
 {
     if (client->flags & MAGICNET_CLIENT_FLAG_IS_OUTGOING_CONNECTION)
@@ -2923,6 +2933,7 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     mclient->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     mclient->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     mclient->communication_flags = communication_flags;
+    mclient->events = vector_create(sizeof(struct magicnet_event*));
 
     // Bit crappy, convert to integer then test...
     // CHECK FOR INTEGER HERE
@@ -2999,6 +3010,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
         return NULL;
     }
 
+    #warning "This code is duplicated all over the place, use a common function..."
     struct magicnet_client *mclient = magicnet_client_new();
     mclient->sock = sockfd;
     mclient->server = NULL;
@@ -3006,6 +3018,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     mclient->connection_began = time(NULL);
     mclient->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     mclient->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
+    mclient->events = vector_create(sizeof(struct magicnet_event*));
 
     // Bit crappy, convert to integer then test...
     if (strcmp(ip_address, "127.0.0.1") == 0)
@@ -3194,19 +3207,16 @@ void magicnet_copy_packet_transaction_list_response(struct magicnet_packet *pack
     }
 }
 
-int magicnet_copy_packet_events_poll(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+void magicnet_copy_packet_events_poll(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
 {
     // Nothing to do
-    return 0;
 }
 
 
-int magicnet_copy_packet_events_res(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+void magicnet_copy_packet_events_res(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
 {
-    int res = 0;
     struct vector* events_vec_in = magicnet_signed_data(packet_in)->payload.events_poll_res.events;
     magicnet_signed_data(packet_out)->payload.events_poll_res.events = magicnet_copy_events(events_vec_in);
-    return res;
 }
 
 /**
@@ -3238,12 +3248,14 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         break;
 
     case MAGICNET_PACKET_TYPE_EVENTS_RES:
+        magicnet_copy_packet_events_res(packet_out, packet_in);
         break;
     case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
         magicnet_copy_packet_transaction_list_response(packet_out, packet_in);
         break;
     }
 }
+
 bool magicnet_client_has_awaiting_packet_been_queued(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
@@ -3729,6 +3741,18 @@ out:
     return res;
 }
 
+int magicnet_client_process_packet_events_poll(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    // How many events does the requestor want?
+    size_t total_events = magicnet_signed_data(packet)->payload.events_poll.total;
+    
+    // Okay lets send any events they are waiting for
+
+    return res;
+}
+
+
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     assert(client->server);
@@ -3781,6 +3805,10 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
             res = magicnet_client_process_transaction_list_request_packet(client, packet);
             break;
+
+        case MAGICNET_PACKET_TYPE_EVENTS_POLL:
+            res = magicnet_client_process_packet_events_poll(client, packet);
+            break;
         case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
             // empty..
             res = 0;
@@ -3817,6 +3845,23 @@ out:
     }
     return res;
 }
+
+int magicnet_server_push_event(struct magicnet_server* server, struct magicnet_event* event)
+{
+    int res = 0;
+    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    {
+        struct magicnet_client *client = &server->outgoing_clients[i];
+        if (magicnet_connected(client) && magicnet_is_localhost(client))
+        {
+            // Alright lets push the event to this thing.
+            magicnet_client_push_event(client, event);
+        }
+    }
+
+    return res;
+}
+
 
 int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client)
 {

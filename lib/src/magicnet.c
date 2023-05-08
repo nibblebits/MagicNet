@@ -96,150 +96,6 @@ void magicnet_transactions_list_response_packet_free(struct magicnet_packet *pac
     block_transaction_vector_free(magicnet_signed_data(packet)->payload.transaction_list_response.transactions);
 }
 
-void magicnet_event_release_data_for_event_type_new_block(struct magicnet_event *event)
-{
-    if (event->data.new_block_event.block)
-    {
-        block_free(event->data.new_block_event.block);
-    }
-}
-
-void magicnet_event_release_data(struct magicnet_event *event)
-{
-    switch (event->type)
-    {
-    case MAGICNET_EVENT_TYPE_NEW_BLOCK:
-        magicnet_event_release_data_for_event_type_new_block(event);
-        break;
-    }
-}
-void magicnet_event_release(struct magicnet_event *event)
-{
-    magicnet_event_release_data(event);
-    free(event);
-}
-
-struct magicnet_event *magicnet_event_new(struct magicnet_event *event)
-{
-    struct magicnet_event *new_event = calloc(1, sizeof(struct magicnet_event));
-    if (event)
-    {
-        memcpy(new_event, event, sizeof(struct magicnet_event));
-    }
-    return new_event;
-}
-
-void magicnet_copy_event_data_new_block(struct magicnet_event *copy_to_event, struct magicnet_event *copy_from_event)
-{
-    copy_to_event->data.new_block_event.block = block_clone(copy_from_event->data.new_block_event.block);
-}
-
-void magicnet_copy_event_data(struct magicnet_event *copy_to_event, struct magicnet_event *copy_from_event)
-{
-    switch (copy_from_event->type)
-    {
-    case MAGICNET_EVENT_TYPE_NEW_BLOCK:
-        magicnet_copy_event_data_new_block(copy_to_event, copy_from_event);
-        break;
-    }
-}
-struct magicnet_event *magicnet_copy_event(struct magicnet_event *original_event)
-{
-    struct magicnet_event *new_event = magicnet_event_new(original_event);
-    if (!new_event)
-    {
-        return NULL;
-    }
-
-    magicnet_copy_event_data(new_event, original_event);
-}
-
-struct vector *magicnet_copy_events(struct vector *events_vec_in)
-{
-    struct vector *new_events_vec = vector_create(sizeof(struct magicnet_event *));
-    vector_set_peek_pointer(events_vec_in, 0);
-    struct magicnet_event *event = vector_peek_ptr(events_vec_in);
-    while (event)
-    {
-        struct magicnet_event *cloned_event = magicnet_copy_event(event);
-        vector_push(new_events_vec, &cloned_event);
-        event = vector_peek_ptr(events_vec_in);
-    }
-
-    return new_events_vec;
-}
-
-int _magicnet_events_poll(struct magicnet_program *program, bool reconnect_if_neccessary)
-{
-    int res = 0;
-
-    struct magicnet_packet *poll_packet = magicnet_packet_new();
-    magicnet_signed_data(poll_packet)->type = MAGICNET_PACKET_TYPE_EVENTS_POLL;
-    magicnet_signed_data(poll_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    // We will ask for 10 events for now. replace with definition later..
-    magicnet_signed_data(poll_packet)->payload.events_poll.total = 10;
-    res = magicnet_client_write_packet(program->client, poll_packet, 0);
-    if (res < 0)
-    {
-        goto out;
-    }
-out:
-    if (res < 0 && reconnect_if_neccessary)
-    {
-        magicnet_reconnect(program);
-        // Lets try again..
-        res = _magicnet_events_poll(program, false);
-    }
-    magicnet_free_packet(poll_packet);
-    return res;
-}
-int magicnet_events_poll(struct magicnet_program *program)
-{
-    int res = 0;
-
-    return res;
-}
-
-bool magicnet_has_queued_events(struct magicnet_program *program)
-{
-    return vector_count(program->events) > 0;
-}
-
-struct magicnet_event *magicnet_next_event(struct magicnet_program *program)
-{
-    int res = 0;
-    struct magicnet_event *event = NULL;
-
-    // No queued events? Lets poll and find new ones.
-    if (!magicnet_has_queued_events(program))
-    {
-        res = magicnet_events_poll(program);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
-
-    // Yeah we got queued events alright lets return one.
-    event = vector_peek_ptr_at(program->events, 0);
-    vector_pop_at(program->events, 0);
-
-out:
-    return event;
-}
-
-void magicnet_events_vector_free(struct vector *events_vec)
-{
-    vector_set_peek_pointer(events_vec, 0);
-    struct magicnet_event *event = vector_peek_ptr(events_vec);
-    while (event)
-    {
-        magicnet_event_release(event);
-        event = vector_peek_ptr(events_vec);
-    }
-
-    vector_free(events_vec);
-}
 
 void magicnet_events_res_packet_free(struct magicnet_packet *packet)
 {
@@ -333,7 +189,7 @@ void magicnet_reconnect(struct magicnet_program *program)
         return;
     }
     // Kill the old client..
-    magicnet_client_free(program->client);
+    magicnet_close(program->client);
     program->client = client;
 }
 
@@ -564,24 +420,16 @@ int magicnet_next_packet(struct magicnet_program *program, void **packet_out)
 struct magicnet_program *magicnet_program_new()
 {
     struct magicnet_program *program = calloc(1, sizeof(struct magicnet_program));
-    program->events = vector_create(sizeof(struct magicnet_event *));
     return program;
 }
 
-void magicnet_program_free_events(struct magicnet_program *program)
-{
-    vector_set_peek_pointer(program->events, 0);
-    struct magicnet_event *event = vector_peek_ptr(program->events);
-    while (event)
-    {
-        magicnet_event_release(event);
-        event = vector_peek_ptr(program->events);
-    }
-}
+
 void magicnet_program_free(struct magicnet_program *program)
 {
-    magicnet_program_free_events(program);
-    vector_free(program->events);
+    if (program->client)
+    {
+        magicnet_close(program->client);
+    }
     free(program);
 }
 

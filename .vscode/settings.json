@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.embeddedhtml": "html",
         "string.h": "c",
         "log.h": "c",
         "stdlib.h": "c",
@@ -14,7 +15,12 @@
         "magicnet.h": "c",
         "pthread.h": "c",
         "semaphore.h": "c",
-        "errno.h": "c"
+        "errno.h": "c",
+        "cmath": "c",
+        "compare": "c",
+        "concepts": "c",
+        "limits": "c",
+        "*.tcc": "c"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/qt-chain-admin/ChainAdmin"
 }

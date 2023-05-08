@@ -57,9 +57,6 @@ struct magicnet_program
 {
     char name[MAGICNET_PROGRAM_NAME_SIZE];
     struct magicnet_client *client;
-
-    // vector of magicnet_event*
-    struct vector* events;
 };
 
 enum
@@ -466,6 +463,13 @@ struct magicnet_client
         off_t pos_read;
         off_t pos_write;
     } packets_for_client;
+
+    // These are pending events for this client, events only apply to localhost clients and are a way for
+    // the server to inform a local listning client of a particular event that has happend such as a new block being created
+    // or a key being requested.
+    // Any events pushed to a remote client will never be received by the remote client and will clog the vector forever.
+    // This might change in the future.
+    struct vector* events;
 
     struct sockaddr_in client_info;
 
@@ -939,15 +943,29 @@ struct magicnet_client *magicnet_client_new();
 void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
-void magicnet_close_and_free(struct magicnet_client *client);
 
 void magicnet_reconnect(struct magicnet_program *program);
 
-struct magicnet_event* magicnet_event_new(struct magicnet_event* event);
-struct magicnet_event* magicnet_copy_event(struct magicnet_event* original_event);
-struct vector* magicnet_copy_events(struct vector* events_vec_in);
 
-void magicnet_event_release(struct magicnet_event* event);
+void magicnet_event_release_data_for_event_type_new_block(struct magicnet_event *event);
+void magicnet_event_release_data(struct magicnet_event *event);
+void magicnet_event_release(struct magicnet_event *event);
+struct magicnet_event *magicnet_event_new(struct magicnet_event *event);
+void magicnet_copy_event_data_new_block(struct magicnet_event *copy_to_event, struct magicnet_event *copy_from_event);
+void magicnet_copy_event_data(struct magicnet_event *copy_to_event, struct magicnet_event *copy_from_event);
+struct magicnet_event *magicnet_copy_event(struct magicnet_event *original_event);
+struct vector *magicnet_copy_events(struct vector *events_vec_in);
+int _magicnet_events_poll(struct magicnet_program *program, bool reconnect_if_neccessary);
+int magicnet_event_make_for_block(struct magicnet_event** event_out, struct block* block);
+int magicnet_events_poll(struct magicnet_program *program);
+size_t magicnet_client_total_known_events(struct magicnet_client* client);
+bool magicnet_client_has_known_events(struct magicnet_client* client);
+int magicnet_client_pop_event(struct magicnet_client* client, struct magicnet_event** event);
+int magicnet_client_push_event(struct magicnet_client* client, struct magicnet_event* event);
+bool magicnet_has_queued_events(struct magicnet_program *program);
+struct magicnet_event *magicnet_next_event(struct magicnet_program *program);
+void magicnet_events_vector_free(struct vector *events_vec);
+
 
 int magicnet_client_connection_type(struct magicnet_client *client);
 struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
