@@ -99,6 +99,12 @@ void magicnet_transactions_list_response_packet_free(struct magicnet_packet *pac
 
 void magicnet_events_res_packet_free(struct magicnet_packet *packet)
 {
+    if (!magicnet_signed_data(packet)->payload.events_poll_res.events)
+    {
+        // Events already freed or not available since its NULL? then nothing to do
+        return;
+    }
+    
     magicnet_events_vector_free(magicnet_signed_data(packet)->payload.events_poll_res.events);
 }
 

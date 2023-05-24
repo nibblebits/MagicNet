@@ -33,7 +33,12 @@ void MagicNetClientThread::loop()
     while(1)
     {
          // ALright lets poll the server every so often for the GUI
+        struct magicnet_event* event = magicnet_next_event(decentralized_program);
+        if (event)
+        {
+            // Alrighty we got another event cool..
 
+        }
         QThread::sleep(5);
     }
 }

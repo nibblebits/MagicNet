@@ -40,6 +40,7 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
 void magicnet_server_set_created_block(struct magicnet_server *server, struct block *block);
 void *magicnet_client_thread(void *_client);
 void magicnet_server_update_our_transaction_states(struct magicnet_server *server, struct block *block);
+int magicnet_server_push_event(struct magicnet_server* server, struct magicnet_event* event);
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
@@ -2650,7 +2651,6 @@ int magicnet_client_write_event(struct magicnet_client *client, struct magicnet_
         goto out;
     }
 
-    event->type = res;
     switch (event->type)
     {
     case MAGICNET_EVENT_TYPE_NEW_BLOCK:
@@ -3207,11 +3207,13 @@ void magicnet_copy_packet_transaction_list_response(struct magicnet_packet *pack
     }
 }
 
+
+
+
 void magicnet_copy_packet_events_poll(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
 {
-    // Nothing to do
+    // Nothing to do..
 }
-
 
 void magicnet_copy_packet_events_res(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
 {
@@ -3744,11 +3746,44 @@ out:
 int magicnet_client_process_packet_events_poll(struct magicnet_client* client, struct magicnet_packet* packet)
 {
     int res = 0;
+    struct vector* events_vec = vector_create(sizeof(struct magicnet_event*));
+    struct magicnet_packet* packet_out = magicnet_packet_new();
     // How many events does the requestor want?
     size_t total_events = magicnet_signed_data(packet)->payload.events_poll.total;
-    
-    // Okay lets send any events they are waiting for
+    size_t total_events_to_send = magicnet_client_total_known_events(client);
+    if (total_events_to_send > total_events)
+    {
+        total_events_to_send = total_events;
+    }
 
+  
+    // Okay lets send any events they are waiting for
+    for (size_t i = 0; i < total_events_to_send; i++)
+    {   
+        struct magicnet_event* event_to_send = NULL;
+        res = magicnet_client_pop_event(client, &event_to_send);
+        if (res < 0)
+        {
+            goto out;
+        }
+        vector_push(events_vec, &event_to_send);
+    }
+
+    // Craft the packet ;) 
+    magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EVENTS_RES;
+    magicnet_signed_data(packet_out)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(packet_out)->payload.events_poll_res.total = total_events_to_send;
+    magicnet_signed_data(packet_out)->payload.events_poll_res.events = events_vec;
+    res = magicnet_client_write_packet(client, packet_out, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
+    magicnet_events_vector_free(events_vec);
+    // So it doesnt get deleted again.. when we free the packet.
+    magicnet_signed_data(packet_out)->payload.events_poll_res.events = NULL;
+    magicnet_free_packet(packet_out);
     return res;
 }
 

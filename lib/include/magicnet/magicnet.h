@@ -965,7 +965,7 @@ int magicnet_client_push_event(struct magicnet_client* client, struct magicnet_e
 bool magicnet_has_queued_events(struct magicnet_program *program);
 struct magicnet_event *magicnet_next_event(struct magicnet_program *program);
 void magicnet_events_vector_free(struct vector *events_vec);
-
+void magicnet_events_vector_clone_events_and_push(struct vector* events_from, struct vector* events_to);
 
 int magicnet_client_connection_type(struct magicnet_client *client);
 struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
