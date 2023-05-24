@@ -4568,6 +4568,9 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
             break;
         }
 
+        // Lets pusha new event to all clients.
+        magicnet_server_push_event(client->server, &(struct magicnet_event){.type=MAGICNET_EVENT_TYPE_NEW_BLOCK, .data.new_block_event.block=block});
+
         // All okay the block was saved? Great lets update the hashes and verified blocks.
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);
         magicnet_database_blockchain_increment_proven_verified_blocks(block->blockchain_id);
