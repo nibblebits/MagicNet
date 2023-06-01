@@ -90,6 +90,7 @@ struct magicnet_event *magicnet_copy_event(struct magicnet_event *original_event
     }
 
     magicnet_copy_event_data(new_event, original_event);
+    return new_event;
 }
 
 struct vector *magicnet_copy_events(struct vector *events_vec_in)

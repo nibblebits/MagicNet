@@ -3756,6 +3756,11 @@ int magicnet_client_process_packet_events_poll(struct magicnet_client* client, s
         total_events_to_send = total_events;
     }
 
+
+    if (total_events_to_send > 0)
+    {
+        magicnet_log("%s TEST PEEK\n", __FUNCTION__);
+    }
   
     // Okay lets send any events they are waiting for
     for (size_t i = 0; i < total_events_to_send; i++)
@@ -3884,10 +3889,10 @@ out:
 int magicnet_server_push_event(struct magicnet_server* server, struct magicnet_event* event)
 {
     int res = 0;
-    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        struct magicnet_client *client = &server->outgoing_clients[i];
-        if (magicnet_connected(client) && magicnet_is_localhost(client))
+        struct magicnet_client *client = &server->clients[i];
+        if (magicnet_connected(client) && magicnet_is_localhost(client) && strncmp(client->program_name, "magicnet", strlen("magicnet")) != 0)
         {
             // Alright lets push the event to this thing.
             magicnet_client_push_event(client, event);
@@ -4568,7 +4573,7 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
             break;
         }
 
-        // Lets pusha new event to all clients.
+        // Lets push a new event to all clients.
         magicnet_server_push_event(client->server, &(struct magicnet_event){.type=MAGICNET_EVENT_TYPE_NEW_BLOCK, .data.new_block_event.block=block});
 
         // All okay the block was saved? Great lets update the hashes and verified blocks.
