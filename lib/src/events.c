@@ -114,7 +114,8 @@ void magicnet_events_vector_clone_events_and_push(struct vector* events_from, st
     struct magicnet_event* event_to_copy = vector_peek_ptr(events_from);
     while(event_to_copy)
     {
-        vector_push(events_to, magicnet_copy_event(event_to_copy));
+        struct magicnet_event* cloned_event = magicnet_copy_event(event_to_copy);
+        vector_push(events_to, &cloned_event);
         event_to_copy = vector_peek_ptr(events_from);
     }
 }
@@ -190,7 +191,7 @@ int magicnet_client_pop_event(struct magicnet_client* client, struct magicnet_ev
         goto out;
     }
 
-    struct magicnet_event* client_event = vector_peek_at(client->events, 0);
+    struct magicnet_event* client_event = vector_peek_ptr_at(client->events, 0);
     vector_pop_at(client->events, 0);
     *event = magicnet_copy_event(client_event);
     // Lets free the event in the vector now.

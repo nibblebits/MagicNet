@@ -22,6 +22,10 @@ int main()
         if (event)
         {
             printf("Found an event\n");
+            if (event->type == MAGICNET_EVENT_TYPE_NEW_BLOCK)
+            {
+                printf("%s block created\n", event->data.new_block_event.block->hash);
+            }
         }
         else
         {

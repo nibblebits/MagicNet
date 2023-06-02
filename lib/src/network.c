@@ -944,6 +944,8 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
         // This is a localhost connection, therefore packets that are not signed are allowed.
         mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
     }
+
+    magicnet_client_push_event(mclient, &(struct magicnet_event){.type=MAGICNET_EVENT_TYPE_TEST});
     magicnet_server_unlock(server);
 
     return mclient;
@@ -1878,6 +1880,10 @@ int magicnet_client_read_event(struct magicnet_client *client, struct magicnet_e
         res = magicnet_client_read_event_new_block(client, event, write_buf);
         break;
 
+    case MAGICNET_EVENT_TYPE_TEST:
+        // Test events do nothing special..
+        break;
+
     default:
         res = -1;
         magicnet_log("%s Unexpected event type of %i I dont know what that is.\n", __FUNCTION__, event->type);
@@ -2657,6 +2663,9 @@ int magicnet_client_write_event(struct magicnet_client *client, struct magicnet_
         res = magicnet_client_write_event_new_block(client, event, write_buf);
         break;
 
+    case MAGICNET_EVENT_TYPE_TEST:
+        // Nothing to write
+        break;
     default:
         res = -1;
         magicnet_log("%s Unexpected event type of %i I dont know what that is.\n", __FUNCTION__, event->type);
@@ -3750,27 +3759,28 @@ int magicnet_client_process_packet_events_poll(struct magicnet_client* client, s
     struct magicnet_packet* packet_out = magicnet_packet_new();
     // How many events does the requestor want?
     size_t total_events = magicnet_signed_data(packet)->payload.events_poll.total;
+    magicnet_server_lock(client->server);
     size_t total_events_to_send = magicnet_client_total_known_events(client);
     if (total_events_to_send > total_events)
     {
         total_events_to_send = total_events;
     }
+    magicnet_server_unlock(client->server);
 
-
-    if (total_events_to_send > 0)
-    {
-        magicnet_log("%s TEST PEEK\n", __FUNCTION__);
-    }
   
     // Okay lets send any events they are waiting for
     for (size_t i = 0; i < total_events_to_send; i++)
     {   
         struct magicnet_event* event_to_send = NULL;
+        magicnet_server_lock(client->server);
         res = magicnet_client_pop_event(client, &event_to_send);
         if (res < 0)
         {
+            magicnet_server_unlock(client->server);
             goto out;
         }
+        magicnet_server_unlock(client->server);
+
         vector_push(events_vec, &event_to_send);
     }
 
@@ -3892,7 +3902,8 @@ int magicnet_server_push_event(struct magicnet_server* server, struct magicnet_e
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
         struct magicnet_client *client = &server->clients[i];
-        if (magicnet_connected(client) && magicnet_is_localhost(client) && strncmp(client->program_name, "magicnet", strlen("magicnet")) != 0)
+        if (magicnet_connected(client) && magicnet_is_localhost(client) && 
+                strncmp(client->program_name, "magicnet", strlen("magicnet")) != 0)
         {
             // Alright lets push the event to this thing.
             magicnet_client_push_event(client, event);
@@ -4574,7 +4585,9 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         }
 
         // Lets push a new event to all clients.
+        magicnet_server_lock(client->server);
         magicnet_server_push_event(client->server, &(struct magicnet_event){.type=MAGICNET_EVENT_TYPE_NEW_BLOCK, .data.new_block_event.block=block});
+        magicnet_server_unlock(client->server);
 
         // All okay the block was saved? Great lets update the hashes and verified blocks.
         magicnet_database_blockchain_update_last_hash(block->blockchain_id, block->hash);

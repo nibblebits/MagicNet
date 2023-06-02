@@ -35,7 +35,10 @@ struct magicnet_client;
 
 enum
 {
-    MAGICNET_EVENT_TYPE_NEW_BLOCK
+    MAGICNET_EVENT_TYPE_NOT_USED,
+    // Sent to test the event system does nothing at all. for debugging only.
+    MAGICNET_EVENT_TYPE_TEST,
+    MAGICNET_EVENT_TYPE_NEW_BLOCK,
 };
 struct magicnet_event
 {
