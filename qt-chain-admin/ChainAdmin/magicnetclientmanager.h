@@ -5,7 +5,11 @@
 #include <QMutex>
 #include <QMutexLocker>
 #include <QThread>
+#include <QSharedPointer>
 #include "magicnetclientthread.h"
+extern "C" {
+#include "magicnet/magicnet.h"
+}
 enum LocalServerState
 {
     MAGICNET_CLIENT_MANAGER_SERVER_OFFLINE,
@@ -26,8 +30,11 @@ public:
 public slots:
         void connected();
         void disconnected();
+        void newNetworkEventSlot(QSharedPointer<struct magicnet_event> event);
 signals:
         void localServerConnectionStateUpdated(LocalServerState state);
+        void newNetworkEvent(QSharedPointer<struct magicnet_event> event);
+
 
 protected:
         void setConnectionState(LocalServerState state);

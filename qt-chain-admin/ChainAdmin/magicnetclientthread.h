@@ -3,6 +3,10 @@
 
 #include <QObject>
 #include <QThread>
+#include <QSharedPointer>
+extern "C" {
+#include "magicnet/magicnet.h"
+}
 class MagicNetClientThread : public QObject
 {
     Q_OBJECT
@@ -13,6 +17,8 @@ public:
 public slots:
     void loop();
 signals:
+
+    void newNetworkEvent(QSharedPointer<struct magicnet_event> event);
     void connected();
     void disconnected();
 };

@@ -9,7 +9,7 @@ extern "C" {
 MagicNetClientThread::MagicNetClientThread(QObject *parent)
     : QObject{parent}
 {
-    magicnet_init();
+    magicnet_init(0);
 
 }
 
@@ -36,8 +36,11 @@ void MagicNetClientThread::loop()
         struct magicnet_event* event = magicnet_next_event(decentralized_program);
         if (event)
         {
-            // Alrighty we got another event cool..
-
+            // Alrighty we got another event cool.. Make a smart pointer and emit it
+            QSharedPointer<struct magicnet_event> event_ptr(event, [](struct magicnet_event* event) {
+                magicnet_event_release(event);
+            });
+            emit newNetworkEvent(event_ptr);
         }
         QThread::sleep(5);
     }

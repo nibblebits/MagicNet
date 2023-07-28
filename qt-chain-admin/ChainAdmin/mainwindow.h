@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 #include <QTreeWidgetItem>
+#include <QSharedPointer>
+#include "magicnet/magicnet.h"
 #include "magicnetclientmanager.h"
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -18,7 +20,7 @@ public:
 
 public slots:
        void localServerConnectionStateUpdated(LocalServerState state);
-
+       void newNetworkEvent(QSharedPointer<struct magicnet_event> event);
 private:
     void addTreeRoot(QString name, QString description);
     void addTreeChild(QTreeWidgetItem *parent,

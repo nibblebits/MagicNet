@@ -7,6 +7,8 @@ MagicNetClientManager::MagicNetClientManager() : QObject(nullptr)
     QObject::connect(&this->threadObj, &QThread::started, &this->clientThread, &MagicNetClientThread::loop);
     QObject::connect(&this->clientThread, &MagicNetClientThread::connected, this, &MagicNetClientManager::connected);
     QObject::connect(&this->clientThread, &MagicNetClientThread::disconnected, this, &MagicNetClientManager::disconnected);
+    QObject::connect(&this->clientThread, &MagicNetClientThread::newNetworkEvent, this, &MagicNetClientManager::newNetworkEventSlot);
+
 
 }
 
@@ -37,7 +39,12 @@ void MagicNetClientManager::connected()
 void MagicNetClientManager::disconnected()
 {
     this->setConnectionState(MAGICNET_CLIENT_MANAGER_SERVER_OFFLINE);
+}
 
+void MagicNetClientManager::newNetworkEventSlot(QSharedPointer<struct magicnet_event> event)
+{
+    // Just reemit it to listeners..
+     emit newNetworkEvent(event);
 }
 
 void MagicNetClientManager::start()

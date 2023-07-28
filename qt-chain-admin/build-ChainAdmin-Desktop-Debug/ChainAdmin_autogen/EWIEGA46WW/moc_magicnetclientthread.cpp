@@ -9,6 +9,7 @@
 #include <memory>
 #include "../../../ChainAdmin/magicnetclientthread.h"
 #include <QtCore/qmetatype.h>
+#include <QtCore/QSharedPointer>
 #if !defined(Q_MOC_OUTPUT_REVISION)
 #error "The header file 'magicnetclientthread.h' doesn't include <QObject>."
 #elif Q_MOC_OUTPUT_REVISION != 68
@@ -26,26 +27,35 @@ QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 namespace {
 struct qt_meta_stringdata_MagicNetClientThread_t {
-    uint offsetsAndSizes[10];
+    uint offsetsAndSizes[16];
     char stringdata0[21];
-    char stringdata1[10];
+    char stringdata1[16];
     char stringdata2[1];
-    char stringdata3[13];
-    char stringdata4[5];
+    char stringdata3[31];
+    char stringdata4[6];
+    char stringdata5[10];
+    char stringdata6[13];
+    char stringdata7[5];
 };
 #define QT_MOC_LITERAL(ofs, len) \
     uint(sizeof(qt_meta_stringdata_MagicNetClientThread_t::offsetsAndSizes) + ofs), len 
 Q_CONSTINIT static const qt_meta_stringdata_MagicNetClientThread_t qt_meta_stringdata_MagicNetClientThread = {
     {
         QT_MOC_LITERAL(0, 20),  // "MagicNetClientThread"
-        QT_MOC_LITERAL(21, 9),  // "connected"
-        QT_MOC_LITERAL(31, 0),  // ""
-        QT_MOC_LITERAL(32, 12),  // "disconnected"
-        QT_MOC_LITERAL(45, 4)   // "loop"
+        QT_MOC_LITERAL(21, 15),  // "newNetworkEvent"
+        QT_MOC_LITERAL(37, 0),  // ""
+        QT_MOC_LITERAL(38, 30),  // "QSharedPointer<magicnet_event>"
+        QT_MOC_LITERAL(69, 5),  // "event"
+        QT_MOC_LITERAL(75, 9),  // "connected"
+        QT_MOC_LITERAL(85, 12),  // "disconnected"
+        QT_MOC_LITERAL(98, 4)   // "loop"
     },
     "MagicNetClientThread",
-    "connected",
+    "newNetworkEvent",
     "",
+    "QSharedPointer<magicnet_event>",
+    "event",
+    "connected",
     "disconnected",
     "loop"
 };
@@ -58,21 +68,23 @@ Q_CONSTINIT static const uint qt_meta_data_MagicNetClientThread[] = {
       10,       // revision
        0,       // classname
        0,    0, // classinfo
-       3,   14, // methods
+       4,   14, // methods
        0,    0, // properties
        0,    0, // enums/sets
        0,    0, // constructors
        0,       // flags
-       2,       // signalCount
+       3,       // signalCount
 
  // signals: name, argc, parameters, tag, flags, initial metatype offsets
-       1,    0,   32,    2, 0x06,    1 /* Public */,
-       3,    0,   33,    2, 0x06,    2 /* Public */,
+       1,    1,   38,    2, 0x06,    1 /* Public */,
+       5,    0,   41,    2, 0x06,    3 /* Public */,
+       6,    0,   42,    2, 0x06,    4 /* Public */,
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-       4,    0,   34,    2, 0x0a,    3 /* Public */,
+       7,    0,   43,    2, 0x0a,    5 /* Public */,
 
  // signals: parameters
+    QMetaType::Void, 0x80000000 | 3,    4,
     QMetaType::Void,
     QMetaType::Void,
 
@@ -91,6 +103,9 @@ Q_CONSTINIT const QMetaObject MagicNetClientThread::staticMetaObject = { {
     qt_incomplete_metaTypeArray<qt_meta_stringdata_MagicNetClientThread_t,
         // Q_OBJECT / Q_GADGET
         QtPrivate::TypeAndForceComplete<MagicNetClientThread, std::true_type>,
+        // method 'newNetworkEvent'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<QSharedPointer<struct magicnet_event>, std::false_type>,
         // method 'connected'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
         // method 'disconnected'
@@ -107,29 +122,36 @@ void MagicNetClientThread::qt_static_metacall(QObject *_o, QMetaObject::Call _c,
         auto *_t = static_cast<MagicNetClientThread *>(_o);
         (void)_t;
         switch (_id) {
-        case 0: _t->connected(); break;
-        case 1: _t->disconnected(); break;
-        case 2: _t->loop(); break;
+        case 0: _t->newNetworkEvent((*reinterpret_cast< std::add_pointer_t<QSharedPointer<magicnet_event>>>(_a[1]))); break;
+        case 1: _t->connected(); break;
+        case 2: _t->disconnected(); break;
+        case 3: _t->loop(); break;
         default: ;
         }
     } else if (_c == QMetaObject::IndexOfMethod) {
         int *result = reinterpret_cast<int *>(_a[0]);
         {
-            using _t = void (MagicNetClientThread::*)();
-            if (_t _q_method = &MagicNetClientThread::connected; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
+            using _t = void (MagicNetClientThread::*)(QSharedPointer<struct magicnet_event> );
+            if (_t _q_method = &MagicNetClientThread::newNetworkEvent; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
                 *result = 0;
                 return;
             }
         }
         {
             using _t = void (MagicNetClientThread::*)();
-            if (_t _q_method = &MagicNetClientThread::disconnected; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
+            if (_t _q_method = &MagicNetClientThread::connected; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
                 *result = 1;
                 return;
             }
         }
+        {
+            using _t = void (MagicNetClientThread::*)();
+            if (_t _q_method = &MagicNetClientThread::disconnected; *reinterpret_cast<_t *>(_a[1]) == _q_method) {
+                *result = 2;
+                return;
+            }
+        }
     }
-    (void)_a;
 }
 
 const QMetaObject *MagicNetClientThread::metaObject() const
@@ -151,27 +173,34 @@ int MagicNetClientThread::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
     if (_id < 0)
         return _id;
     if (_c == QMetaObject::InvokeMetaMethod) {
-        if (_id < 3)
+        if (_id < 4)
             qt_static_metacall(this, _c, _id, _a);
-        _id -= 3;
+        _id -= 4;
     } else if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
-        if (_id < 3)
+        if (_id < 4)
             *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
-        _id -= 3;
+        _id -= 4;
     }
     return _id;
 }
 
 // SIGNAL 0
-void MagicNetClientThread::connected()
+void MagicNetClientThread::newNetworkEvent(QSharedPointer<struct magicnet_event> _t1)
 {
-    QMetaObject::activate(this, &staticMetaObject, 0, nullptr);
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(std::addressof(_t1))) };
+    QMetaObject::activate(this, &staticMetaObject, 0, _a);
 }
 
 // SIGNAL 1
-void MagicNetClientThread::disconnected()
+void MagicNetClientThread::connected()
 {
     QMetaObject::activate(this, &staticMetaObject, 1, nullptr);
+}
+
+// SIGNAL 2
+void MagicNetClientThread::disconnected()
+{
+    QMetaObject::activate(this, &staticMetaObject, 2, nullptr);
 }
 QT_WARNING_POP
 QT_END_MOC_NAMESPACE

@@ -2,6 +2,10 @@
 #include "./ui_mainwindow.h"
 
 
+void MainWindow::newNetworkEvent(QSharedPointer<struct magicnet_event> event)
+{
+    this->ui->serverStateLabel->setText("Received a new network event");
+}
 void MainWindow::localServerConnectionStateUpdated(LocalServerState state)
 {
     if (state == MAGICNET_CLIENT_MANAGER_SERVER_ONLINE)
@@ -40,6 +44,8 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     this->clientManager = MagicNetClientManager::instance();
     QObject::connect(this->clientManager, &MagicNetClientManager::localServerConnectionStateUpdated, this, &MainWindow::localServerConnectionStateUpdated);
+    QObject::connect(this->clientManager, &MagicNetClientManager::newNetworkEvent, this, &MainWindow::newNetworkEvent);
+
     emit this->localServerConnectionStateUpdated(this->clientManager->getConnectionState());
     // Set the number of columns in the tree
      ui->blockchainsTreeWidget->setColumnCount(2);

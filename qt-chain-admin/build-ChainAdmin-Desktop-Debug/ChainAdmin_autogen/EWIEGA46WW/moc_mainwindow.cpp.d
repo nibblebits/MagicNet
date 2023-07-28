@@ -1,10 +1,17 @@
 /home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/EWIEGA46WW/moc_mainwindow.cpp: /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/mainwindow.h \
   /home/daniel/MagicNet/qt-chain-admin/build-ChainAdmin-Desktop-Debug/ChainAdmin_autogen/moc_predefs.h \
+  /home/daniel/MagicNet/lib/include/magicnet/buffer.h \
+  /home/daniel/MagicNet/lib/include/magicnet/config.h \
+  /home/daniel/MagicNet/lib/include/magicnet/key.h \
+  /home/daniel/MagicNet/lib/include/magicnet/magicnet.h \
+  /home/daniel/MagicNet/lib/include/magicnet/sha256.h \
+  /home/daniel/MagicNet/lib/include/magicnet/vector.h \
   /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientmanager.h \
   /home/daniel/MagicNet/qt-chain-admin/ChainAdmin/magicnetclientthread.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QMutex \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QMutexLocker \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QObject \
+  /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QSharedPointer \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/QThread \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qabstractitemmodel.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtCore/qalgorithms.h \
@@ -147,8 +154,13 @@
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qtwidgetsglobal.h \
   /home/daniel/Qt/6.4.1/gcc_64/include/QtWidgets/qwidget.h \
   /usr/include/alloca.h \
+  /usr/include/arpa/inet.h \
+  /usr/include/asm-generic/bitsperlong.h \
   /usr/include/asm-generic/errno-base.h \
   /usr/include/asm-generic/errno.h \
+  /usr/include/asm-generic/posix_types.h \
+  /usr/include/asm-generic/socket.h \
+  /usr/include/asm-generic/sockios.h \
   /usr/include/assert.h \
   /usr/include/c++/11/algorithm \
   /usr/include/c++/11/array \
@@ -323,9 +335,14 @@
   /usr/include/limits.h \
   /usr/include/linux/errno.h \
   /usr/include/linux/limits.h \
+  /usr/include/linux/posix_types.h \
+  /usr/include/linux/stddef.h \
   /usr/include/locale.h \
+  /usr/include/netinet/in.h \
+  /usr/include/netinet/tcp.h \
   /usr/include/pthread.h \
   /usr/include/sched.h \
+  /usr/include/semaphore.h \
   /usr/include/stdc-predef.h \
   /usr/include/stdint.h \
   /usr/include/stdio.h \
@@ -337,7 +354,12 @@
   /usr/include/unistd.h \
   /usr/include/wchar.h \
   /usr/include/wctype.h \
+  /usr/include/x86_64-linux-gnu/asm/bitsperlong.h \
   /usr/include/x86_64-linux-gnu/asm/errno.h \
+  /usr/include/x86_64-linux-gnu/asm/posix_types.h \
+  /usr/include/x86_64-linux-gnu/asm/posix_types_64.h \
+  /usr/include/x86_64-linux-gnu/asm/socket.h \
+  /usr/include/x86_64-linux-gnu/asm/sockios.h \
   /usr/include/x86_64-linux-gnu/asm/unistd.h \
   /usr/include/x86_64-linux-gnu/asm/unistd_64.h \
   /usr/include/x86_64-linux-gnu/bits/atomic_wide_counter.h \
@@ -352,6 +374,7 @@
   /usr/include/x86_64-linux-gnu/bits/floatn.h \
   /usr/include/x86_64-linux-gnu/bits/getopt_core.h \
   /usr/include/x86_64-linux-gnu/bits/getopt_posix.h \
+  /usr/include/x86_64-linux-gnu/bits/in.h \
   /usr/include/x86_64-linux-gnu/bits/libc-header-start.h \
   /usr/include/x86_64-linux-gnu/bits/local_lim.h \
   /usr/include/x86_64-linux-gnu/bits/locale.h \
@@ -364,7 +387,11 @@
   /usr/include/x86_64-linux-gnu/bits/pthreadtypes.h \
   /usr/include/x86_64-linux-gnu/bits/sched.h \
   /usr/include/x86_64-linux-gnu/bits/select.h \
+  /usr/include/x86_64-linux-gnu/bits/semaphore.h \
   /usr/include/x86_64-linux-gnu/bits/setjmp.h \
+  /usr/include/x86_64-linux-gnu/bits/sockaddr.h \
+  /usr/include/x86_64-linux-gnu/bits/socket.h \
+  /usr/include/x86_64-linux-gnu/bits/socket_type.h \
   /usr/include/x86_64-linux-gnu/bits/stdint-intn.h \
   /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
   /usr/include/x86_64-linux-gnu/bits/stdio_lim.h \
@@ -394,7 +421,9 @@
   /usr/include/x86_64-linux-gnu/bits/types/sigset_t.h \
   /usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h \
   /usr/include/x86_64-linux-gnu/bits/types/struct___jmp_buf_tag.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_iovec.h \
   /usr/include/x86_64-linux-gnu/bits/types/struct_itimerspec.h \
+  /usr/include/x86_64-linux-gnu/bits/types/struct_osockaddr.h \
   /usr/include/x86_64-linux-gnu/bits/types/struct_sched_param.h \
   /usr/include/x86_64-linux-gnu/bits/types/struct_timespec.h \
   /usr/include/x86_64-linux-gnu/bits/types/struct_timeval.h \
@@ -426,6 +455,7 @@
   /usr/include/x86_64-linux-gnu/gnu/stubs.h \
   /usr/include/x86_64-linux-gnu/sys/cdefs.h \
   /usr/include/x86_64-linux-gnu/sys/select.h \
+  /usr/include/x86_64-linux-gnu/sys/socket.h \
   /usr/include/x86_64-linux-gnu/sys/syscall.h \
   /usr/include/x86_64-linux-gnu/sys/types.h \
   /usr/lib/gcc/x86_64-linux-gnu/11/include/stdarg.h \
