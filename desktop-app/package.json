@@ -1,0 +1,40 @@
+{
+  "name": "Magic stopwatch",
+  "version": "1.0.3",
+  "description": "A simple easy to use stopwatch",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@electron-forge/cli": "^6.2.1",
+    "@electron-forge/maker-deb": "^6.2.1",
+    "@electron-forge/maker-rpm": "^6.2.1",
+    "@electron-forge/maker-squirrel": "^6.2.1",
+    "@electron-forge/maker-zip": "^6.2.1",
+    "@electron-forge/plugin-auto-unpack-natives": "^6.2.1",
+    "electron": "^25.3.2"
+  },
+  "build": {
+    "appId": "com.dragonzap.magicstopwatch",
+    "win": {
+      "icon": "images/icon/app.ico"
+    },
+    "linux": {
+      "icon": "images/icon/app.ico"
+    }
+  },
+  "dependencies": {
+    "bindings": "^1.5.0",
+    "electron-squirrel-startup": "^1.0.0",
+    "electron-store": "^8.1.0",
+    "jquery": "^3.7.0",
+    "nan": "^2.17.0",
+    "node-gyp": "^9.4.0"
+  }
+}
