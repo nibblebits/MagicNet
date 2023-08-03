@@ -21,10 +21,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   const { ipcRenderer } = require('electron');
 
-  ipcRenderer.on('incremented-value', (event, arg) => {
-    const element = document.getElementById('incremented-value');
-    if (element) element.innerText = arg;
-  });
 
   const replaceText = (selector, text) => {
     const element = document.getElementById(selector)

@@ -1,40 +1,36 @@
-window.addEventListener('DOMContentLoaded', () => {
+// Inside Renderer Process
 
-  const timerElement = document.getElementById('myTimer');
+window.addEventListener("DOMContentLoaded", () => {
 
-  window.api.receive("myCounterUpdated", (seconds) => {
-    let hours = Math.floor(seconds / 3600).toString().padStart(2, '0');
-    let minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-    let real_seconds = Math.floor(seconds % 60).toString().padStart(2, '0');
-    timerElement.textContent = `${hours}:${minutes}:${real_seconds}`;
+  window.api.receive("magicnet-event-received", (event_data) => {
+    // Create a new bootstrap card
+    const card = document.createElement('div');
+    card.classList.add('card');
+
+    // Create card body
+    const cardBody = document.createElement('div');
+    cardBody.classList.add('card-body');
+
+    // Create card text
+    const cardText = document.createElement('p');
+    cardText.classList.add('card-text');
+    cardText.textContent = 'Event Type: ' + event_data.type;
+
+    // Append card text to card body
+    cardBody.appendChild(cardText);
+
+    // Append card body to card
+    card.appendChild(cardBody);
+
+    // Find the "magicnet-events" element and append the new card to it
+    const magicNetEvents = document.querySelector('.magicnet-events');
+    if (magicNetEvents) {
+      magicNetEvents.appendChild(card);
+    }
   });
-  
-  const toggleBtn = document.getElementById("toggleBtn");
 
-  toggleBtn.addEventListener("click", (event) => {
-      var toggle = 'on';
-      const button = event.target;
-
-      if (button.classList.contains('btn-start')) {
-          toggle = 'on';
-          button.classList.remove('btn-start');
-          button.classList.remove('btn-success');
-          button.classList.add('btn-stop');
-          button.classList.add('btn-danger');
-          button.textContent = 'Stop';
-      } else {
-          toggle = 'off';
-          button.classList.remove('btn-stop');
-          button.classList.remove('btn-danger');
-          button.classList.add('btn-start');
-          button.classList.add('btn-success');
-          button.textContent = 'Start';
-      }
-      window.api.send("toggle-stopwatch", toggle);
+  window.api.receive("set-connection-status-label", (message) => {
+    console.log("received msg: " + message);
+    $(".server-connected-status-label").text(message);
   });
-});
-
-const resetBtn = document.getElementById('resetButton');
-resetBtn.addEventListener('click', (event) => {
-  window.api.send("reset-stopwatch");
 });

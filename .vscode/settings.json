@@ -20,7 +20,15 @@
         "compare": "c",
         "concepts": "c",
         "limits": "c",
-        "*.tcc": "c"
+        "*.tcc": "c",
+        "array": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp",
+        "string_view": "cpp",
+        "initializer_list": "cpp"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/qt-chain-admin/ChainAdmin"
 }

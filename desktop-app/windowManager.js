@@ -17,7 +17,6 @@ function createMainWindow() {
   });
   
   mainWindow.loadFile("forms/index.html");
-  mainWindow.setMenu(null);
   indexHandler(createAboutWindow);
 
 
