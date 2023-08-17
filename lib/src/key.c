@@ -60,6 +60,18 @@ struct key MAGICNET_key_from_string(const char* key)
     return k;
 }
 
+const char* MAGICNET_key_to_string(struct key* key, char* key_str_out, size_t size)
+{
+    int res = 0;        
+    if (size < sizeof(key->key))
+    {
+        return NULL;
+    }
+
+    strncpy(key_str_out, key->key, size);
+    return key_str_out;
+}
+
 bool key_loaded(struct key *key)
 {
     struct key blank_key;

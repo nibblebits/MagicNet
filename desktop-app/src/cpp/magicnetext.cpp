@@ -88,33 +88,17 @@ void LibMagicNet_Init(const Nan::FunctionCallbackInfo<v8::Value> &info)
   info.GetReturnValue().Set(res_num);
 }
 
-void LibMagicNetEventType(const Nan::FunctionCallbackInfo<v8::Value> &info)
+v8::Local<v8::Object> LibMagicNetBlockToJs(struct block *block)
 {
-  // Validate and convert arguments from JavaScript...
-  if (info.Length() < 1)
-  {
-    Nan::ThrowTypeError("Arity mismatch");
-    return;
-  }
+  v8::Local<v8::Object> block_obj = Nan::New<v8::Object>();
 
-  // Validate the type of the first argument.
-  if (!info[0]->IsNumber())
-  {
-    Nan::ThrowTypeError("Argument must be a number");
-    return;
-  }
+  // Set the hash
+  Nan::Set(block_obj, Nan::New("hash").ToLocalChecked(), Nan::New(std::string(block->hash, strnlen(block->hash, sizeof(block->hash)))).ToLocalChecked());
+  Nan::Set(block_obj, Nan::New("prev_hash").ToLocalChecked(), Nan::New(std::string(block->prev_hash, strnlen(block->prev_hash, sizeof(block->prev_hash)))).ToLocalChecked());
+  Nan::Set(block_obj, Nan::New("time").ToLocalChecked(), Nan::New<v8::Number>(block->time));
+  Nan::Set(block_obj, Nan::New("key").ToLocalChecked(), Nan::New(std::string(block->key.key, strnlen(block->key.key, sizeof(block->key.key)))).ToLocalChecked());
 
-  int index = info[0]->NumberValue(Nan::GetCurrentContext()).FromJust();
-
-  // Get the program pointer from the map
-  struct magicnet_event *event = static_cast<struct magicnet_event *>(LibMagicNetGetPointer(index));
-  if (!event)
-  {
-      Nan::ThrowTypeError("The event has expired and no longer accessible");
-      return;
-  }
-
-  info.GetReturnValue().Set(Nan::New(event->type));
+  return block_obj;
 }
 
 void LibMagicNetNextEvent(const Nan::FunctionCallbackInfo<v8::Value> &info)
@@ -142,19 +126,35 @@ void LibMagicNetNextEvent(const Nan::FunctionCallbackInfo<v8::Value> &info)
   // Get the next event
   struct magicnet_event *event = magicnet_next_event(program);
 
-  // If the event is null, then theirs no event.
+  // If the event is null, then there's no event.
   if (!event)
   {
-    info.GetReturnValue().Set(Nan::New(0));
+    info.GetReturnValue().Set(Nan::Null());
     return;
   }
 
-  // Store the event pointer and get its index
   int eventIndex = LibMagicNetPushPointer(event);
 
-  // return the index to JavaScript...
-  v8::Local<v8::Number> res_num = Nan::New(eventIndex);
-  info.GetReturnValue().Set(res_num);
+  // Create a JS object to hold the event data
+  v8::Local<v8::Object> jsEvent = Nan::New<v8::Object>();
+  Nan::Set(jsEvent, Nan::New("ptr_id").ToLocalChecked(), Nan::New(eventIndex));
+  Nan::Set(jsEvent, Nan::New("type").ToLocalChecked(), Nan::New(event->type));
+
+  v8::Local<v8::Object> js_event_data = Nan::New<v8::Object>();
+  switch (event->type)
+  {
+  case MAGICNET_EVENT_TYPE_NEW_BLOCK:
+    v8::Local<v8::Object> js_new_block_event = Nan::New<v8::Object>();
+    v8::Local<v8::Object> js_block_obj = LibMagicNetBlockToJs(event->data.new_block_event.block);
+    Nan::Set(js_new_block_event, Nan::New("block").ToLocalChecked(),js_block_obj);
+    Nan::Set(js_event_data, Nan::New("new_block_event").ToLocalChecked(), js_new_block_event);
+    break;
+  }
+
+  Nan::Set(jsEvent, Nan::New("data").ToLocalChecked(), js_event_data);
+
+  // Return the JS object
+  info.GetReturnValue().Set(jsEvent);
 }
 
 void Init(v8::Local<v8::Object> exports)
@@ -170,11 +170,6 @@ void Init(v8::Local<v8::Object> exports)
   v8::Local<v8::FunctionTemplate> magicNetNextEventFunction = Nan::New<v8::FunctionTemplate>(LibMagicNetNextEvent);
   Nan::Set(exports, Nan::New("magicnet_next_event").ToLocalChecked(),
            Nan::GetFunction(magicNetNextEventFunction).ToLocalChecked());
-
-  v8::Local<v8::FunctionTemplate> magicNetEventTypeFunction = Nan::New<v8::FunctionTemplate>(LibMagicNetEventType);
-  Nan::Set(exports, Nan::New("magicnet_event_type").ToLocalChecked(),
-        Nan::GetFunction(magicNetEventTypeFunction).ToLocalChecked());
-      
 }
 
 NODE_MODULE(magicnet, Init)

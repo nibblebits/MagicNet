@@ -584,7 +584,7 @@ const char *block_hash_create(struct block *block, char *hash_out)
     }
     sha256_data(buffer_ptr(tmp_buf), hash_out, buffer_len(tmp_buf));
     buffer_free(tmp_buf);
-    return block->hash;
+    return hash_out;
 }
 
 bool block_prev_hash_exists(struct block *block)

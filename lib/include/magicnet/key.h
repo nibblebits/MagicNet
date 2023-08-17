@@ -53,6 +53,7 @@ bool key_cmp(struct key *key, struct key *key2);
 bool key_loaded(struct key *key);
 bool MAGICNET_is_genesis_key(struct key *key);
 
+const char* MAGICNET_key_to_string(struct key* key, char* key_str_out, size_t size);
 struct key MAGICNET_key_from_string(const char* key);
 bool MAGICNET_key_valid(struct key *key);
 
