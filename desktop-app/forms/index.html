@@ -1,35 +1,218 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <script src="./js/jquery/jquery-3.2.1.slim.min.js.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
-  <script src="./js/jquery/popper.min.js"></script>
-  <link rel="stylesheet" href="./css/bootstrap.css">
-  <style>
-    body {
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
-      background-color: #f8f9fa;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-  </style>
-  <meta charset="UTF-8">
-  <title>MagicNet Debugging Client</title>
-</head>
-<body>
-  <div class="container">
-    <div class="row">
-      <div class="col-md-6">
-        <div class="magicnet-events">
+  <head>
+    <script
+      src="./js/jquery/jquery-3.5.1.min.js.js"
+      crossorigin="anonymous"
+    ></script>
+    <script src="./js/jquery/popper.min.js.js"></script>
+    <script src="./js/bootstrap/bootstrap.min.js.js"></script>
 
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <link rel="stylesheet" href="./css/fontawesome-all.min.css" />
+
+    <style>
+
+body {
+  padding-left: 220px; /* Offset for fixed sidebar */
+}
+
+/* Override Bootstrap Colors */
+
+/* Primary Color */
+.bg-primary, .btn-primary {
+    background-color: #0f221c !important;
+    border-color: #0f221c !important;
+    color: #ffffff !important;  /* Use white text for better contrast */
+}
+
+/* Secondary Color */
+.bg-secondary, .btn-secondary {
+    background-color: #a8933f !important;
+    border-color: #a8933f !important;
+    color: #ffffff !important;  /* Use white text for better contrast */
+}
+
+/* Success Color */
+.bg-success, .btn-success {
+    background-color: #f3bf47 !important;
+    border-color: #f3bf47 !important;
+    color: #000000 !important;  /* Use black text for better contrast */
+}
+
+/* Info Color */
+.bg-info, .btn-info {
+    background-color: #616131 !important;
+    border-color: #616131 !important;
+    color: #ffffff !important;  /* Use white text for better contrast */
+}
+
+/* Warning Color */
+.bg-warning, .btn-warning {
+    background-color: #0c4630 !important;
+    border-color: #0c4630 !important;
+    color: #ffffff !important;  /* Use white text for better contrast */
+}
+
+nav svg {
+  fill: white;
+  width: 25px;
+  height: 25px;
+}
+/* Customized Sidebar */
+
+
+.sidebar .nav-link i {
+  color: #f3bf47;  /* SVG icon color */
+  margin-right: 8px;
+}
+
+/* Overall Page Styles */
+
+body {
+  background-color: #f0f0d0;  /* Lighter shade of #616131 */
+  color: #333;  /* General font color for the body */
+}
+
+/* Customized Sidebar */
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 200px;
+  background-color: #0f221c;  /* Updated */
+  color: #a8933f;  /* Font color for sidebar */
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .nav-link {
+  color: inherit;  /* Inherits color from .sidebar */
+  font-size: 18px;
+  padding: 15px;
+  display: block;
+  white-space: nowrap;
+}
+
+.sidebar .nav-link.active {
+  background-color: #f3bf47;  /* Updated */
+  color: #000000;  /* Use black text for better contrast */
+}
+
+.sidebar .nav-link i {
+  margin-right: 8px;
+}
+
+.sidebar .nav-link:hover {
+  background-color: rgba(255, 255, 255, 0.1);  /* Kept unchanged */
+}
+
+.sidebar .mt-auto {
+  margin-top: auto;
+}
+
+
+    </style>
+
+    <meta charset="UTF-8" />
+    <title>MagicNet Debugging Client</title>
+  </head>
+
+  <body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <ul class="nav nav-tabs flex-column " id="myTab" role="tablist">
+        <li class="nav-item">
+          <a
+            class="nav-link active"
+            id="dashboard-tab"
+            data-toggle="tab"
+            href="#dashboard"
+            role="tab"
+            aria-controls="dashboard"
+            aria-selected="true"
+          >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!-- Font Awesome Free 5.15.4 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) --><path d="M0 405.3V448c0 35.3 86 64 192 64s192-28.7 192-64v-42.7C342.7 434.4 267.2 448 192 448S41.3 434.4 0 405.3zM320 128c106 0 192-28.7 192-64S426 0 320 0 128 28.7 128 64s86 64 192 64zM0 300.4V352c0 35.3 86 64 192 64s192-28.7 192-64v-51.6c-41.3 34-116.9 51.6-192 51.6S41.3 334.4 0 300.4zm416 11c57.3-11.1 96-31.7 96-55.4v-42.7c-23.2 16.4-57.3 27.6-96 34.5v63.6zM192 160C86 160 0 195.8 0 240s86 80 192 80 192-35.8 192-80-86-80-192-80zm219.3 56.3c60-10.8 100.7-32 100.7-56.3v-42.7c-35.5 25.1-96.5 38.6-160.7 41.8 29.5 14.3 51.2 33.5 60 57.2z"/></svg>
+            Dashboard
+        </a>
+        </li>
+
+        <li class="nav-item">
+            <a
+              class="nav-link"
+              id="events-tab"
+              data-toggle="tab"
+              href="#events"
+              role="tab"
+              aria-controls="events"
+              aria-selected="true"
+            >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!-- Font Awesome Free 5.15.4 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) --><path d="M224 512c35.32 0 63.97-28.65 63.97-64H160.03c0 35.35 28.65 64 63.97 64zm215.39-149.71c-19.32-20.76-55.47-51.99-55.47-154.29 0-77.7-54.48-139.9-127.94-155.16V32c0-17.67-14.32-32-31.98-32s-31.98 14.33-31.98 32v20.84C118.56 68.1 64.08 130.3 64.08 208c0 102.3-36.15 133.53-55.47 154.29-6 6.45-8.66 14.16-8.61 21.71.11 16.4 12.98 32 32.1 32h383.8c19.12 0 32-15.6 32.1-32 .05-7.55-2.61-15.27-8.61-21.71z"/></svg>
+            Notifications
+          </a>
+          </li>
+          
+
+  
+        <li class="nav-item">
+          <a
+            class="nav-link"
+            id="settings-tab"
+            data-toggle="tab"
+            href="#settings"
+            role="tab"
+            aria-controls="settings"
+            aria-selected="false"
+          >
+            <i class="fas fa-cogs"></i> Settings
+          </a>
+        </li>
+
+    </ul>
+
+    <div class="mt-auto">
+        <img src="../images/logo.png" style="width:100%" />
+      </div>
+
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container">
+      <div class="tab-content" id="myTabContent">
+        <div
+          class="tab-pane fade show active"
+          id="dashboard"
+          role="tabpanel"
+          aria-labelledby="dashboard-tab"
+        >
+          <h4>Dashboard</h4>
+        </div>
+        <div
+          class="tab-pane fade"
+          id="events"
+          role="tabpanel"
+          aria-labelledby="events-tab"
+        >
+          <h4>Notifications</h4>
+          <div class="row">
+            <div class="magicnet-events col-md-12"></div>
+          </div>
+        </div>
+        <div
+          class="tab-pane fade"
+          id="settings"
+          role="tabpanel"
+          aria-labelledby="settings-tab"
+        >
+          <h4>Settings</h4>
         </div>
       </div>
-      <div class="col-md-6">
-        <p class="text-muted server-connected-status-label">Connecting to server...</p>
-      </div>
     </div>
-  </div>
-  <script src="js/index.js"></script>
-</body>
+
+    <script src="./js/index.js"></script>
+  </body>
 </html>
