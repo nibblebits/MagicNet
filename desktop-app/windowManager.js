@@ -7,8 +7,8 @@ const aboutHandler = require("./handlers/about");
 //...
 function createMainWindow() {
   const mainWindow = new BrowserWindow({
-    width: 400,
-    height: 200,
+    width: 1000,
+    height: 600,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: true,

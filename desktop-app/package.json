@@ -1,7 +1,7 @@
 {
-  "name": "Magic stopwatch",
-  "version": "1.0.3",
-  "description": "A simple easy to use stopwatch",
+  "name": "Magic Net Debugging Client",
+  "version": "1.0.0",
+  "description": "A debugging client to debug the Magic Net decentralized network",
   "main": "index.js",
   "scripts": {
     "start": "electron-forge start",

@@ -1,6 +1,7 @@
 // preload.js
 
 const { contextBridge, ipcRenderer, dialog } = require('electron')
+const { MagicNetEventTypeInformation} = require('./magicnetTypes');
 
 
 contextBridge.exposeInMainWorld(
@@ -14,6 +15,9 @@ contextBridge.exposeInMainWorld(
 
   }
 )
+
+
+contextBridge.exposeInMainWorld('MagicNetEventTypeInformation', MagicNetEventTypeInformation);
 
 // All the Node.js APIs are available in the preload process.
 // It has the same sandbox as a Chrome extension.

@@ -40,7 +40,7 @@ int magicnet_server_awaiting_transaction_add(struct magicnet_server *server, str
 void magicnet_server_set_created_block(struct magicnet_server *server, struct block *block);
 void *magicnet_client_thread(void *_client);
 void magicnet_server_update_our_transaction_states(struct magicnet_server *server, struct block *block);
-int magicnet_server_push_event(struct magicnet_server* server, struct magicnet_event* event);
+int magicnet_server_push_event(struct magicnet_server *server, struct magicnet_event *event);
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
@@ -772,7 +772,7 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     client->connection_began = time(NULL);
     client->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     client->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
-    client->events = vector_create(sizeof(struct magicnet_event*));
+    client->events = vector_create(sizeof(struct magicnet_event *));
     memcpy(&client->client_info, addr_in, sizeof(&client->client_info));
 
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
@@ -945,7 +945,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
         mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
     }
 
-    magicnet_client_push_event(mclient, &(struct magicnet_event){.type=MAGICNET_EVENT_TYPE_TEST});
+    magicnet_client_push_event(mclient, &(struct magicnet_event){.type = MAGICNET_EVENT_TYPE_TEST});
     magicnet_server_unlock(server);
 
     return mclient;
@@ -985,8 +985,6 @@ void magicnet_close(struct magicnet_client *client)
         free(client);
     }
 }
-
-
 
 void magicnet_client_readjust_download_speed(struct magicnet_client *client)
 {
@@ -1919,8 +1917,7 @@ int magicnet_client_read_events_res_packet(struct magicnet_client *client, struc
     }
 
     magicnet_signed_data(packet_out)->payload.events_poll_res.total = total_events;
-    magicnet_signed_data(packet_out)->payload.events_poll_res.events = vector_create(sizeof(struct magicnet_event*));
-
+    magicnet_signed_data(packet_out)->payload.events_poll_res.events = vector_create(sizeof(struct magicnet_event *));
 
     for (size_t i = 0; i < total_events; i++)
     {
@@ -2395,7 +2392,7 @@ int magicnet_client_write_block(struct magicnet_client *client, struct buffer *b
 {
     int res = 0;
     struct block_transaction_group *transaction_group = block->transaction_group;
-    res = magicnet_write_int(client, transaction_group->total_transactions,buffer);
+    res = magicnet_write_int(client, transaction_group->total_transactions, buffer);
     if (res < 0)
     {
         goto out;
@@ -2674,10 +2671,10 @@ out:
     return res;
 }
 
-int magicnet_client_write_packet_events_res(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_write_packet_events_res(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    struct signed_data * signed_data = magicnet_signed_data(packet);
+    struct signed_data *signed_data = magicnet_signed_data(packet);
     res = magicnet_write_long(client, signed_data->payload.events_poll_res.total, packet->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -2691,15 +2688,15 @@ int magicnet_client_write_packet_events_res(struct magicnet_client* client, stru
     }
 
     vector_set_peek_pointer(signed_data->payload.events_poll_res.events, 0);
-    struct magicnet_event* event = vector_peek_ptr(signed_data->payload.events_poll_res.events);
-    while(event)
+    struct magicnet_event *event = vector_peek_ptr(signed_data->payload.events_poll_res.events);
+    while (event)
     {
         res = magicnet_client_write_event(client, event, packet->not_sent.tmp_buf);
         if (res < 0)
         {
             goto out;
         }
-        event =  vector_peek_ptr(signed_data->payload.events_poll_res.events);
+        event = vector_peek_ptr(signed_data->payload.events_poll_res.events);
     }
 out:
     return res;
@@ -2942,7 +2939,7 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     mclient->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     mclient->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     mclient->communication_flags = communication_flags;
-    mclient->events = vector_create(sizeof(struct magicnet_event*));
+    mclient->events = vector_create(sizeof(struct magicnet_event *));
 
     // Bit crappy, convert to integer then test...
     // CHECK FOR INTEGER HERE
@@ -3019,7 +3016,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
         return NULL;
     }
 
-    #warning "This code is duplicated all over the place, use a common function..."
+#warning "This code is duplicated all over the place, use a common function..."
     struct magicnet_client *mclient = magicnet_client_new();
     mclient->sock = sockfd;
     mclient->server = NULL;
@@ -3027,7 +3024,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     mclient->connection_began = time(NULL);
     mclient->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     mclient->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
-    mclient->events = vector_create(sizeof(struct magicnet_event*));
+    mclient->events = vector_create(sizeof(struct magicnet_event *));
 
     // Bit crappy, convert to integer then test...
     if (strcmp(ip_address, "127.0.0.1") == 0)
@@ -3216,17 +3213,14 @@ void magicnet_copy_packet_transaction_list_response(struct magicnet_packet *pack
     }
 }
 
-
-
-
-void magicnet_copy_packet_events_poll(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+void magicnet_copy_packet_events_poll(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
     // Nothing to do..
 }
 
-void magicnet_copy_packet_events_res(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+void magicnet_copy_packet_events_res(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
-    struct vector* events_vec_in = magicnet_signed_data(packet_in)->payload.events_poll_res.events;
+    struct vector *events_vec_in = magicnet_signed_data(packet_in)->payload.events_poll_res.events;
     magicnet_signed_data(packet_out)->payload.events_poll_res.events = magicnet_copy_events(events_vec_in);
 }
 
@@ -3752,11 +3746,11 @@ out:
     return res;
 }
 
-int magicnet_client_process_packet_events_poll(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_process_packet_events_poll(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    struct vector* events_vec = vector_create(sizeof(struct magicnet_event*));
-    struct magicnet_packet* packet_out = magicnet_packet_new();
+    struct vector *events_vec = vector_create(sizeof(struct magicnet_event *));
+    struct magicnet_packet *packet_out = magicnet_packet_new();
     // How many events does the requestor want?
     size_t total_events = magicnet_signed_data(packet)->payload.events_poll.total;
     magicnet_server_lock(client->server);
@@ -3767,11 +3761,10 @@ int magicnet_client_process_packet_events_poll(struct magicnet_client* client, s
     }
     magicnet_server_unlock(client->server);
 
-  
     // Okay lets send any events they are waiting for
     for (size_t i = 0; i < total_events_to_send; i++)
-    {   
-        struct magicnet_event* event_to_send = NULL;
+    {
+        struct magicnet_event *event_to_send = NULL;
         magicnet_server_lock(client->server);
         res = magicnet_client_pop_event(client, &event_to_send);
         if (res < 0)
@@ -3784,7 +3777,7 @@ int magicnet_client_process_packet_events_poll(struct magicnet_client* client, s
         vector_push(events_vec, &event_to_send);
     }
 
-    // Craft the packet ;) 
+    // Craft the packet ;)
     magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EVENTS_RES;
     magicnet_signed_data(packet_out)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     magicnet_signed_data(packet_out)->payload.events_poll_res.total = total_events_to_send;
@@ -3801,7 +3794,6 @@ out:
     magicnet_free_packet(packet_out);
     return res;
 }
-
 
 int magicnet_client_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -3896,14 +3888,14 @@ out:
     return res;
 }
 
-int magicnet_server_push_event(struct magicnet_server* server, struct magicnet_event* event)
+int magicnet_server_push_event(struct magicnet_server *server, struct magicnet_event *event)
 {
     int res = 0;
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
         struct magicnet_client *client = &server->clients[i];
-        if (magicnet_connected(client) && magicnet_is_localhost(client) && 
-                strncmp(client->program_name, "magicnet", strlen("magicnet")) != 0)
+        if (magicnet_connected(client) && magicnet_is_localhost(client) &&
+            strncmp(client->program_name, "magicnet", strlen("magicnet")) != 0)
         {
             // Alright lets push the event to this thing.
             magicnet_client_push_event(client, event);
@@ -3912,7 +3904,6 @@ int magicnet_server_push_event(struct magicnet_server* server, struct magicnet_e
 
     return res;
 }
-
 
 int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client)
 {
@@ -4586,7 +4577,7 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
 
         // Lets push a new event to all clients.
         magicnet_server_lock(client->server);
-        magicnet_server_push_event(client->server, &(struct magicnet_event){.type=MAGICNET_EVENT_TYPE_NEW_BLOCK, .data.new_block_event.block=block});
+        magicnet_server_push_event(client->server, &(struct magicnet_event){.type = MAGICNET_EVENT_TYPE_NEW_BLOCK, .data.new_block_event.block = block});
         magicnet_server_unlock(client->server);
 
         // All okay the block was saved? Great lets update the hashes and verified blocks.
@@ -5360,6 +5351,10 @@ void magicnet_server_create_and_send_block(struct magicnet_server *server)
             vector_push(block_vector, &block);
         }
     }
+
+    // Push the new block event.
+    magicnet_server_push_event(server, &(struct magicnet_event){.type = MAGICNET_EVENT_TYPE_NEW_BLOCK, .data.new_block_event.block = block});
+
     magicnet_server_add_packet_to_relay(server, packet);
     // Set the created block so other parts of the sequences are aware of it.
     magicnet_server_set_created_block(server, block);

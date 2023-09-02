@@ -189,7 +189,14 @@ body {
           role="tabpanel"
           aria-labelledby="dashboard-tab"
         >
-          <h4>Dashboard</h4>
+          <div class="jumbotron">
+            <h1 class="display-4">Dashboard!</h1>
+            <p class="lead">Welcome to the MagicNet debugging application, use this application to see the local chain state</p>
+            <hr class="my-4">
+            <p>Manage newly created blocks, see raw hex data, understand how chains split.</p>
+            <a class="btn btn-primary btn-lg" href="#" role="button">Learn more</a>
+          </div>
+
         </div>
         <div
           class="tab-pane fade"
@@ -197,9 +204,11 @@ body {
           role="tabpanel"
           aria-labelledby="events-tab"
         >
-          <h4>Notifications</h4>
           <div class="row">
-            <div class="magicnet-events col-md-12"></div>
+              
+            <div class="magicnet-events overflow-auto col-md-12">
+                
+            </div>
           </div>
         </div>
         <div
@@ -213,6 +222,6 @@ body {
       </div>
     </div>
 
-    <script src="./js/index.js"></script>
+    <script type="module" src="./js/index.js"></script>
   </body>
 </html>

@@ -1,29 +1,30 @@
 // Inside Renderer Process
 
+import eventsCardBuilder from "./magicnet/events.js"
+
 window.addEventListener("DOMContentLoaded", () => {
 
-  function appendCardBodyForEvent(event, cardBody) {
-    const cardText = document.createElement("p");
-    cardText.classList.add("card-text");
-    cardText.textContent = `Event Type: ${event.type}`;
-    cardBody.appendChild(cardText);
-  }
+//   <div class="card">
+//   <div class="card-header">
+//     <div class="d-flex justify-content-between">
+//       <span>Notification</span>
+//       <small class="text-muted">5 mins ago</small>
+//     </div>
+//   </div>
+//   <div class="card-body">
+//     <h5 class="card-title">New Block Created</h5>
+//     <p class="card-text">A new block has been added to the blockchain. This block contains 500 transactions and was mined by Node #42.</p>
+//   </div>
+//   <div class="card-footer">
+//     <a href="#" class="btn btn-primary">View Details</a>
+//   </div>
+// </div>
 
-  function makeCardForEvent(event) {
-    const card = document.createElement("div");
-    card.classList.add("card");
-
-    const cardBody = document.createElement("div");
-    cardBody.classList.add("card-body");
-
-    appendCardBodyForEvent(event, cardBody);
-    card.appendChild(cardBody);
-
-    return card;
-  }
+  
 
   window.api.receive("magicnet-event-received", (event_data) => {
-    const card = makeCardForEvent(event_data);
+    const card = eventsCardBuilder.makeCardForEvent(event_data);
+    console.log(card);
     const magicNetEvents = document.querySelector(".magicnet-events");
     
     if (magicNetEvents) {
