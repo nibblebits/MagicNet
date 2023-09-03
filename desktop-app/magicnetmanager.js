@@ -13,7 +13,7 @@ function initMagicnet() {
   let program;
   try {
     program = magicnet.magicnet_program("electron-app");
-    // Test
+    // Test 2
     Broadcaster.broadcast("set-connection-status-label", 'Server is connected');
     setInterval(function () {
       let event = magicnet.magicnet_next_event(program);
