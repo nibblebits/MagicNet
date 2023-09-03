@@ -25,10 +25,10 @@ window.addEventListener("DOMContentLoaded", () => {
   window.api.receive("magicnet-event-received", (event_data) => {
     const card = eventsCardBuilder.makeCardForEvent(event_data);
     console.log(card);
-    const magicNetEvents = document.querySelector(".magicnet-events");
+    const magicNetEvents = $(".magicnet-events");
     
     if (magicNetEvents) {
-      magicNetEvents.appendChild(card);
+      magicNetEvents.append(card);
     }
   });
 

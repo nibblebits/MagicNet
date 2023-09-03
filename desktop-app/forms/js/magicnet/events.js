@@ -1,64 +1,59 @@
-
 const eventsCardBuilder = {
   appendCardHeader(event, cardHeader) {
-    const dflexDiv = document.createElement("div");
-    dflexDiv.classList.add("d-flex");
-    dflexDiv.classList.add("justify-content-between");
-    var dflexSpan = document.createElement("span");
-    dflexSpan.innerHTML = "Notification";
-    var dflexSmallTime = document.createElement("small");
-    dflexSmallTime.classList.add("text-muted");
-    dflexSmallTime.innerHTML = "5 mins ago";
+    const dflexDiv = $("<div></div>").addClass(
+      "d-flex justify-content-between"
+    );
+    const dflexSpan = $("<span></span>").html("Notification");
+    const dflexSmallTime = $("<small></small>")
+      .addClass("text-muted")
+      .html("5 mins ago");
 
-    dflexDiv.appendChild(dflexSpan);
-    dflexDiv.appendChild(dflexSmallTime);
-    cardHeader.appendChild(dflexDiv);
+    dflexDiv.append(dflexSpan, dflexSmallTime);
+    $(cardHeader).append(dflexDiv);
   },
   appendCardBodyForEvent(event, cardBody) {
-    const cardTitle = document.createElement("h5");
-    cardTitle.innerHTML = window.MagicNetEventTypeInformation[event.type].title;
-    
-    cardTitle.classList.add("card-title");
-    const cardText = document.createElement("p");
-    cardText.classList.add("card-text");
-    cardText.innerHTML = window.MagicNetEventTypeInformation[event.type].description;
-    cardBody.appendChild(cardTitle);
-    cardBody.appendChild(cardText);
-  },
+    const cardTitle = $("<h5></h5>")
+      .addClass("card-title")
+      .html(window.MagicNetEventTypeInformation[event.type].title);
 
+    const cardText = $("<p></p>")
+      .addClass("card-text")
+      .html(window.MagicNetEventTypeInformation[event.type].description);
+
+    $(cardBody).append(cardTitle, cardText);
+  },
   appendCardFooterForEvent(event, cardFooter) {
-    const viewDetailsBtn = document.createElement("a");
-    viewDetailsBtn.classList.add("btn");
-    viewDetailsBtn.classList.add("btn-primary");
-    viewDetailsBtn.classList.add("events-view-details-btn");
-    viewDetailsBtn.setAttribute("data-event-id", event.ptr_id);
-    viewDetailsBtn.innerHTML = "View Details";
-    cardFooter.appendChild(viewDetailsBtn);
+    const viewDetailsBtn = $("<a></a>")
+      .addClass("btn btn-primary events-view-details-btn")
+      .attr("data-event", JSON.stringify(event))
+      .html("View Details");
+
+    $(cardFooter).append(viewDetailsBtn);
   },
 
   makeCardForEvent(event) {
-    const card = document.createElement("div");
-    card.classList.add("card");
-    card.classList.add("mt-3");
+    const card = $("<div></div>").addClass("card mt-3");
+    const cardHeader = $("<div></div>").addClass("card-header");
+    this.appendCardHeader(event, cardHeader[0]);  // Passing the DOM element
+    
+    const cardBody = $("<div></div>").addClass("card-body");
+    this.appendCardBodyForEvent(event, cardBody[0]);  // Passing the DOM element
+    
+    const cardFooter = $("<div></div>").addClass("card-footer");
+    this.appendCardFooterForEvent(event, cardFooter[0]);  // Passing the DOM element
+    
+    card.append(cardHeader, cardBody, cardFooter);
+    
+    card.on("click", ".events-view-details-btn", function() {
+        let viewDetailsBtn = $(this);
+        // Extract the event
+        let event = JSON.parse(viewDetailsBtn.attr("data-event"));
+        window.api.send('eventShowDialog', event);
+    });
+    
+    return card[0];  // Returning the DOM element
+},
 
-    const cardHeader = document.createElement("div");
-    cardHeader.classList.add("card-header");
-    this.appendCardHeader(event, cardHeader);
-
-    const cardBody = document.createElement("div");
-    cardBody.classList.add("card-body");
-
-    this.appendCardBodyForEvent(event, cardBody);
-
-    const cardFooter = document.createElement("div");
-    cardFooter.classList.add("card-footer");
-    this.appendCardFooterForEvent(event, cardFooter);
-    card.appendChild(cardHeader);
-    card.appendChild(cardBody);
-    card.appendChild(cardFooter);
-
-    return card;
-  },
 };
 
 export default eventsCardBuilder;
