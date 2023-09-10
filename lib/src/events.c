@@ -64,6 +64,8 @@ struct magicnet_event *magicnet_event_new(struct magicnet_event *event)
     {
         memcpy(new_event, event, sizeof(struct magicnet_event));
     }
+
+    new_event->id = rand() % 999999999999;
     return new_event;
 }
 

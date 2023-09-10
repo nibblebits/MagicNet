@@ -42,6 +42,7 @@ enum
 };
 struct magicnet_event
 {
+    int id;
     int type;
     struct data
     {

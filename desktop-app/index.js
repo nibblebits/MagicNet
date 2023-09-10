@@ -1,4 +1,5 @@
 const { app, BrowserWindow } = require('electron');
+const initializeIPC = require('./ipc.js');
 const { initMagicnet } = require('./magicnetmanager');
 const { createMainWindow } = require('./windowManager');
 
@@ -17,7 +18,10 @@ app.whenReady().then(() => {
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
   });
-  
+
+  // Initialize ipc
+  initializeIPC();
+
   // Initialize Magicnet
   initMagicnet();
 });

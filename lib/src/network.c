@@ -1872,6 +1872,15 @@ int magicnet_client_read_event(struct magicnet_client *client, struct magicnet_e
     }
 
     event->type = res;
+
+    // Read the event ID
+    event->id = magicnet_read_int(client, write_buf);
+    if (event->id < 0)
+    {
+        res = event->id;
+        goto out;
+    }
+
     switch (event->type)
     {
     case MAGICNET_EVENT_TYPE_NEW_BLOCK:
@@ -2649,6 +2658,13 @@ int magicnet_client_write_event(struct magicnet_client *client, struct magicnet_
 {
     int res = 0;
     res = magicnet_write_int(client, event->type, write_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the event ID
+    res = magicnet_write_int(client, event->id, write_buf);
     if (res < 0)
     {
         goto out;

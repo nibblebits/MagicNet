@@ -1,7 +1,6 @@
 const { BrowserWindow } = require("electron");
 const path = require("path");
-const indexHandler = require("./handlers/index");
-const aboutHandler = require("./handlers/about");
+
 
 
 //...
@@ -17,11 +16,33 @@ function createMainWindow() {
   });
   
   mainWindow.loadFile("forms/index.html");
-  indexHandler(createAboutWindow);
 
 
   return mainWindow;
 }
+
+function createEventDialogWindow(parentWindow, data) {
+  const eventDialogWindow = new BrowserWindow({
+    width: 400,
+    height: 400,
+    parent:parentWindow,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      nodeIntegration: true,
+      nodeIntegrationInWorker: true,
+    },
+  });
+  
+  eventDialogWindow.webContents.on('did-finish-load', () => {
+    eventDialogWindow.webContents.send('initialize-data', data);
+  });
+
+  eventDialogWindow.loadFile("forms/event.html");
+
+
+  return eventDialogWindow;
+}
+
 
 function createAboutWindow() {
   const aboutWindow = new BrowserWindow({
@@ -35,12 +56,11 @@ function createAboutWindow() {
   });
   
   aboutWindow.loadFile("forms/about.html");
-  aboutHandler();
-
   return aboutWindow;
 }
 
 module.exports = {
   createMainWindow,
-  createAboutWindow
+  createAboutWindow,
+  createEventDialogWindow
 };

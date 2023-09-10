@@ -138,6 +138,7 @@ void LibMagicNetNextEvent(const Nan::FunctionCallbackInfo<v8::Value> &info)
   // Create a JS object to hold the event data
   v8::Local<v8::Object> jsEvent = Nan::New<v8::Object>();
   Nan::Set(jsEvent, Nan::New("ptr_id").ToLocalChecked(), Nan::New(eventIndex));
+  Nan::Set(jsEvent, Nan::New("id").ToLocalChecked(), Nan::New(event->id));
   Nan::Set(jsEvent, Nan::New("type").ToLocalChecked(), Nan::New(event->type));
 
   v8::Local<v8::Object> js_event_data = Nan::New<v8::Object>();
