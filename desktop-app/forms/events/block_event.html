@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script
+      src="../js/jquery/jquery-3.5.1.min.js.js"
+      crossorigin="anonymous"
+    ></script>
+    <script src="../js/jquery/popper.min.js.js"></script>
+    <script src="../js/bootstrap/bootstrap.min.js.js"></script>
+
+    <link rel="stylesheet" href="../css/bootstrap.min.css" />
+    <link rel="stylesheet" href="../css/fontawesome-all.min.css" />
+    <link rel="stylesheet" href="../css/custom.css" />
+
+    <style></style>
+
+    <meta charset="UTF-8" />
+    <title class="event-title">Loading...</title>
+  </head>
+
+  <body>
+    <!-- Main Content -->
+    <div class=""></div>
+    <div class="container">
+      <div class="event-info mt-5">
+        <div class="card block-card">
+          <div class="card-header">Event Details</div>
+          <div class="card-body">
+            <p>
+              <strong>Event ID:</strong>
+              <span id="event_id" class="event-id"></span>
+            </p>
+            <p>
+              <strong>Event Type:</strong>
+              <span id="event_type" class="event-type"></span>
+            </p>
+
+            <p>
+              <strong>Event Description:</strong>
+              <span id="event_description" class="event-description"></span>
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="block-container mt-5">
+        <div class="card block-card">
+          <div class="card-header">Block Details</div>
+          <div class="card-body">
+            <p>
+              <strong>Block Hash:</strong>
+              <span id="hash" class="block-hash"></span>
+            </p>
+            <p>
+              <strong>Previous Block Hash:</strong>
+              <span id="prev_hash" class="block-prev-hash">[Previous Hash Data Here]</span>
+            </p>
+            <p>
+              <strong>Signature:</strong>
+              <span id="signature" class="block-signature">[Signature Data Here]</span>
+            </p>
+            <p>
+              <strong>Public Key:</strong>
+              <span id="key" class="block-public-key">[Public Key Data Here]</span>
+            </p>
+            <p>
+              <strong>Transaction Group:</strong>
+              <span id="transaction_group" class="block-transaction-group">[Transaction Group Data Here]</span>
+            </p>
+            <p>
+              <strong>Timestamp:</strong>
+              <span id="time" class="block-timestamp">[Timestamp Data Here]</span>
+            </p>
+            <p>
+              <strong>Blockchain ID (Local Data Only):</strong>
+              <span id="blockchain_id" class="block-blockchain-id">[Blockchain ID Data Here]</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="../js/events/event_generic.js"></script>
+    <script type="module" src="../js/events/block_event.js"></script>
+  </body>
+</html>

@@ -1,7 +1,6 @@
 const { BrowserWindow } = require("electron");
+const { MagicNetEventTypeInformation } = require("./magicnetTypes");
 const path = require("path");
-
-
 
 //...
 function createMainWindow() {
@@ -14,9 +13,8 @@ function createMainWindow() {
       nodeIntegrationInWorker: true,
     },
   });
-  
-  mainWindow.loadFile("forms/index.html");
 
+  mainWindow.loadFile("forms/index.html");
 
   return mainWindow;
 }
@@ -25,24 +23,31 @@ function createEventDialogWindow(parentWindow, data) {
   const eventDialogWindow = new BrowserWindow({
     width: 400,
     height: 400,
-    parent:parentWindow,
+    parent: parentWindow,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       nodeIntegration: true,
       nodeIntegrationInWorker: true,
     },
   });
-  
-  eventDialogWindow.webContents.on('did-finish-load', () => {
-    eventDialogWindow.webContents.send('initialize-data', data);
+
+  eventDialogWindow.webContents.on("did-finish-load", () => {
+    eventDialogWindow.webContents.send("initialize-data", data);
   });
 
-  eventDialogWindow.loadFile("forms/event.html");
+  const isValidIndex = (index, array) => index >= 0 && index < array.length;
 
+  if (isValidIndex(data.type, MagicNetEventTypeInformation)) {
+    const { event_file } = MagicNetEventTypeInformation[data.type];
+    eventDialogWindow.loadFile(event_file);
+  } else {
+    console.error(`Invalid index: ${data.type}`);
+    // Handle error as needed
+  }
+  
 
   return eventDialogWindow;
 }
-
 
 function createAboutWindow() {
   const aboutWindow = new BrowserWindow({
@@ -54,7 +59,7 @@ function createAboutWindow() {
       nodeIntegrationInWorker: true,
     },
   });
-  
+
   aboutWindow.loadFile("forms/about.html");
   return aboutWindow;
 }
@@ -62,5 +67,5 @@ function createAboutWindow() {
 module.exports = {
   createMainWindow,
   createAboutWindow,
-  createEventDialogWindow
+  createEventDialogWindow,
 };
