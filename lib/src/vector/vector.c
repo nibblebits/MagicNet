@@ -23,7 +23,7 @@ static void vector_assert_bounds_for_pop(struct vector *vector, int index)
 
 struct vector *vector_create_no_saves(size_t esize)
 {
-    struct vector *vector = calloc(sizeof(struct vector), 1);
+    struct vector *vector = calloc(1, sizeof(struct vector));
     vector->data = malloc(esize * VECTOR_ELEMENT_INCREMENT);
     vector->mindex = VECTOR_ELEMENT_INCREMENT;
     vector->rindex = 0;
@@ -45,9 +45,9 @@ size_t vector_element_size(struct vector *vector)
 
 struct vector *vector_clone(struct vector *vector)
 {
-    void *new_data_address = calloc(vector->esize, vector->count + VECTOR_ELEMENT_INCREMENT);
+    void *new_data_address = calloc(vector->count + VECTOR_ELEMENT_INCREMENT, vector->esize);
     memcpy(new_data_address, vector->data, vector_total_size(vector));
-    struct vector *new_vec = calloc(sizeof(struct vector), 1);
+    struct vector *new_vec = calloc(1, sizeof(struct vector));
     memcpy(new_vec, vector, sizeof(struct vector));
     new_vec->data = new_data_address;
 

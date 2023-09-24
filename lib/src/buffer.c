@@ -6,8 +6,8 @@
 
 struct buffer* buffer_create()
 {
-    struct buffer* buf = calloc(sizeof(struct buffer), 1);
-    buf->data = calloc(BUFFER_REALLOC_AMOUNT, 1);
+    struct buffer* buf = calloc(1, sizeof(struct buffer));
+    buf->data = calloc(1, BUFFER_REALLOC_AMOUNT);
     buf->len = 0;
     buf->msize = BUFFER_REALLOC_AMOUNT;
     return buf;
@@ -15,7 +15,7 @@ struct buffer* buffer_create()
 
 struct buffer* buffer_wrap(void* data, size_t size)
 {
-    struct buffer* buf = calloc(sizeof(struct buffer), 1);
+    struct buffer* buf = calloc(1, sizeof(struct buffer));
     buf->data = data;
     buf->len = size;
     buf->msize = size;
