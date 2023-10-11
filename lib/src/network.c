@@ -352,6 +352,19 @@ bool magicnet_client_in_use(struct magicnet_client *client)
     return client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
 }
 
+size_t magicnet_client_seconds_since_last_contact(struct magicnet_client* client)
+{
+    return time(NULL) - client->last_contact;
+}
+
+/**
+ * Returns true if we haven't received any data from this client in a while
+*/
+bool magicnet_client_inactive(struct magicnet_client* client)
+{
+    return magicnet_client_seconds_since_last_contact(client) > MAGICNET_CLIENT_TIMEOUT_SECONDS;
+}
+
 struct magicnet_client *magicnet_find_free_client(struct magicnet_server *server)
 {
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
@@ -1014,7 +1027,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
     size_t amount_read = 0;
     while (amount_read < amount)
     {
-        res = recv(client->sock, ptr_out + amount_read, amount - amount_read, MSG_WAITALL);
+        res = recv(client->sock, ptr_out + amount_read, amount - amount_read, 0);
         if (res <= 0)
         {
             res = -1;
@@ -1958,6 +1971,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     packet_id = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_id < 0)
     {
+        res = packet_id;
         goto out;
     }
 
@@ -3889,6 +3903,7 @@ int magicnet_client_manage_next_packet(struct magicnet_client *client)
     if (!packet)
     {
         magicnet_log("%s failed to receive new packet from client\n", __FUNCTION__);
+        res = MAGICNET_ERROR_CRITICAL_ERROR;
         goto out;
     }
 
@@ -4779,6 +4794,9 @@ out:
     return res;
 }
 
+/**
+ * Only called by clients that connected to a server, not called by server at all.
+*/
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -4828,6 +4846,10 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 
     return res;
 }
+
+/**
+ * Called if your a client that connected to another peer, you call it to sync with it.
+*/
 int magicnet_server_poll(struct magicnet_client *client)
 {
     int res = 0;
@@ -5386,7 +5408,7 @@ out:
 
 size_t magicnet_server_total_waiting_transactions_to_send(struct magicnet_server* server)
 {
-    
+
 }
 bool magicnet_server_should_sign_and_send_self_transaction(struct self_block_transaction *self_transaction)
 {
@@ -5598,9 +5620,11 @@ bool magicnet_server_alive_for_at_least_one_block_cycle(struct magicnet_server *
     return time(NULL) >= server->first_block_cycle;
 }
 
+
 int magicnet_server_process(struct magicnet_server *server)
 {
     int res = 0;
+    
     if (magicnet_server_should_make_new_connections(server))
     {
         magicnet_server_attempt_new_connections(server);
