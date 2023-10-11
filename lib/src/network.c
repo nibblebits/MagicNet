@@ -516,6 +516,7 @@ int magicnet_server_next_block_transaction_add(struct magicnet_server *server, s
     if (magicnet_server_next_block_transaction_exists(server, transaction))
     {
         res = MAGICNET_ERROR_ALREADY_EXISTANT;
+        magicnet_log("%s already existant, possibly a loop back via localhost might not have to worry\n", __FUNCTION__);
         goto out;
     }
 
@@ -523,6 +524,7 @@ int magicnet_server_next_block_transaction_add(struct magicnet_server *server, s
     // the clone will be deleted when the block sequence completes
     struct block_transaction *cloned_transaction = block_transaction_clone(transaction);
     vector_push(server->next_block.block_transactions, &cloned_transaction);
+    magicnet_log("%s added to transaction queue\n", __FUNCTION__);
 out:
     return res;
 }
@@ -5382,6 +5384,10 @@ out:
     magicnet_free_packet(packet);
 }
 
+size_t magicnet_server_total_waiting_transactions_to_send(struct magicnet_server* server)
+{
+    
+}
 bool magicnet_server_should_sign_and_send_self_transaction(struct self_block_transaction *self_transaction)
 {
     // We do still allow you to resend even if its been sent before.
