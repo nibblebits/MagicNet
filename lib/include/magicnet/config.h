@@ -20,6 +20,8 @@
 
 #define MAGICNET_MAX_BLOCK_SUPER_DOWNLOAD_REQUEST_BLOCK_COUNT 100
 
+#define MAGICNET_COUNCIL_NAME_LENGTH 64
+
 // At least 10 seconds must pass for the server to attempt to connect to other peers
 #define MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS 10
 

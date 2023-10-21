@@ -46,16 +46,15 @@ struct magicnet_event
     int type;
     struct data
     {
-        union 
+        union
         {
             struct magicnet_event_type_block
             {
-                struct block* block;
-            } new_block_event;   
+                struct block *block;
+            } new_block_event;
         };
     } data;
 };
-
 
 struct magicnet_program
 {
@@ -215,7 +214,6 @@ struct magicnet_transactions_request
     int page;
 };
 
-
 struct magicnet_packet
 {
 
@@ -284,10 +282,9 @@ struct magicnet_packet
                     // The total events responded with
                     size_t total;
                     // A vector of struct magicnet_event*
-                    struct vector* events;
+                    struct vector *events;
                 } events_poll_res;
 
-    
                 struct sync
                 {
                     int flags;
@@ -403,6 +400,7 @@ struct magicnet_peer_blockchain_info
     int blockchain_id;
 };
 
+
 struct magicnet_client
 {
     int sock;
@@ -473,7 +471,7 @@ struct magicnet_client
     // or a key being requested.
     // Any events pushed to a remote client will never be received by the remote client and will clog the vector forever.
     // This might change in the future.
-    struct vector* events;
+    struct vector *events;
 
     struct sockaddr_in client_info;
 
@@ -747,85 +745,73 @@ struct blockchain
     size_t proved_verified_blocks;
 };
 
-struct council_certificate_transfer_vote
-{
-    struct council_certificate_transfer_vote_signed_data
-    {
-        char vote_hash[SHA256_STRING_LENGTH];
-        struct council_certificate_transfer_vote_signed_data_payload
-        {
-            char previous_vote_hash[SHA256_STRING_LENGTH];
-            struct key voter_key;
-            struct key vote_for_key;
-        } payload;
-    } signed_data;
-
-    // The signature signed by the voter key.
-    struct signature signature;
-};
-
-struct council_certificate_transfer
-{
-    struct council_certificate_transfer_signed_data
-    {
-        // The key of the old owner.
-        struct key old_owner;
-
-        // The key who this certificate will be transfeered too
-        // The new owner will be the most voted key in the transfer votes.
-        struct key new_owner;
-
-        time_t valid_from;
-        time_t expires_at;
-
-        // Theres obviously voters who vote on the new owner.
-        size_t total_voters;
-
-        // Voters are stored here each voter must be a valid council certificate. We ill check this before approving a transfer
-        // that we receive.
-        struct council_certificate_transfer_vote *voters;
-    } signed_data;
-
-    // This is the signing key that will confirm this transfer. It is best that the old owner signs this, that is the cherry on top
-    // If the old owner refuses then any one of the voters can sign that but it is always possible someone could conspire
-    // with a known signer, and ask them to sign. For this reason certificates that are broadcast around the network will be fact checked
-    // and if their is found to be a liar then rights can be removed.
-    char hash[SHA256_STRING_LENGTH];
-    struct key signing_key;
-    struct signature signature;
-};
 
 /**
- * To preform council actions you need a council license, each license is valid for 24 hours only
- * This is so we have a natural way of people losing power in the event an attack is made on newer clients who do not know
- * the true state of the blockchain yet.
- */
-struct council_license
+ * The network can have many councils registered
+ * applications that created a council are responsible for managing it.
+*/
+struct magicnet_council_certificate;
+struct magicnet_council
 {
-    struct council_license_signed_data
+    struct magicnet_council_signed_data
     {
-        // Certificate hash is signed. Licenses can only be issued to valid certificates. This is the certificate that owns the license
-        struct council_certificate *certificate;
-        // This is the certificate that signed this license, allowing it to exist.
-        struct council_certificate *signing_certificate;
-        time_t valid_from;
-        time_t expires_at;
+        struct magicnet_council_id_signed_data
+        {
+            char name[MAGICNET_COUNCIL_NAME_LENGTH];
+            // You can never create more certificates for a council
+            // one certificate grants one council vote on decisions.
+            // Certificates once expired will be transfeered to a new person to join the council.
+            size_t total_certificates;
+
+            // The timestamp of when the council was created.
+            time_t creation_time;
+        } id_signed_data;
+
+        // The ID hash is used to identify the council 
+        char id_hash[SHA256_STRING_LENGTH];
+
+        // This is an array of total_certificates and is the state the certificates
+        // first began existance in. It does not include transfer information from where certificates
+        // got transfeered to other peers.
+        // It contians only the very first initial state of the certificate.
+        struct magicnet_council_certificate* certificates;
     } signed_data;
 
+    // THe hash of the council signed data. Not to be used for identification.
+    // Seek id_hash for identification.
     char hash[SHA256_STRING_LENGTH];
 
-    // The key of the owner of the signing certificate.
-    struct key signing_key;
-    struct signature signature;
+    /**
+     * All certificates created by this council must start with the creator 
+     * as the first owner
+    */
+    struct magicnet_council_creator
+    {
+        // Signed signature of the creator of the council.
+        struct signature signature;
+        // The public key of the creator of the council
+        struct key key;
+    } creator;
 };
 
-struct council_certificate
+
+
+
+struct magicnet_council_certificate
 {
     // We have all the transfer history of the certificate here.
     struct council_certificate_signed_data
     {
-        size_t total_transfers;
-        struct council_certificate_transfer *transfers;
+        // The Unique numerical certificate ID that is unique to the council only.
+        int id;
+
+        // The ID of the council this certificate belongs to.
+        char council_id_hash[SHA256_STRING_LENGTH];
+        // The timestamp of when this certificate will expires
+        time_t expires_at;
+        
+        // The timestamp of when this certificate becomes valid.
+        time_t valid_from;
     } signed_data;
 
     // Should be the signing key of the last transfer who signed this certificate.
@@ -833,6 +819,7 @@ struct council_certificate
     struct key signing_key;
     struct signature signature;
 };
+
 
 struct block
 {
@@ -950,7 +937,6 @@ void magicnet_close(struct magicnet_client *client);
 
 void magicnet_reconnect(struct magicnet_program *program);
 
-
 void magicnet_event_release_data_for_event_type_new_block(struct magicnet_event *event);
 void magicnet_event_release_data(struct magicnet_event *event);
 void magicnet_event_release(struct magicnet_event *event);
@@ -960,16 +946,16 @@ void magicnet_copy_event_data(struct magicnet_event *copy_to_event, struct magic
 struct magicnet_event *magicnet_copy_event(struct magicnet_event *original_event);
 struct vector *magicnet_copy_events(struct vector *events_vec_in);
 int _magicnet_events_poll(struct magicnet_program *program, bool reconnect_if_neccessary);
-int magicnet_event_make_for_block(struct magicnet_event** event_out, struct block* block);
+int magicnet_event_make_for_block(struct magicnet_event **event_out, struct block *block);
 int magicnet_events_poll(struct magicnet_program *program);
-size_t magicnet_client_total_known_events(struct magicnet_client* client);
-bool magicnet_client_has_known_events(struct magicnet_client* client);
-int magicnet_client_pop_event(struct magicnet_client* client, struct magicnet_event** event);
-int magicnet_client_push_event(struct magicnet_client* client, struct magicnet_event* event);
+size_t magicnet_client_total_known_events(struct magicnet_client *client);
+bool magicnet_client_has_known_events(struct magicnet_client *client);
+int magicnet_client_pop_event(struct magicnet_client *client, struct magicnet_event **event);
+int magicnet_client_push_event(struct magicnet_client *client, struct magicnet_event *event);
 bool magicnet_has_queued_events(struct magicnet_program *program);
 struct magicnet_event *magicnet_next_event(struct magicnet_program *program);
 void magicnet_events_vector_free(struct vector *events_vec);
-void magicnet_events_vector_clone_events_and_push(struct vector* events_from, struct vector* events_to);
+void magicnet_events_vector_clone_events_and_push(struct vector *events_from, struct vector *events_to);
 
 int magicnet_client_connection_type(struct magicnet_client *client);
 struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
@@ -1025,7 +1011,6 @@ int magicnet_flags();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
-
 
 /**
  * Makes a money transfer to the recipient
