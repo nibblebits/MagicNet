@@ -14,6 +14,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+static struct magicnet_council* central_council = NULL;
+int magicnet_council_init()
+{
+    int res = 0;
+
+
+    return res;
+}
 struct magicnet_council_certificate *magicnet_council_certificate_create()
 {
     return calloc(1, sizeof(struct magicnet_council_certificate));
@@ -39,7 +47,7 @@ int magicnet_council_certificate_sign(struct magicnet_council_certificate *certi
         goto out;
     }
 
-    certificate->signing_key = *MAGICNET_public_key();
+    certificate->owner_key = *MAGICNET_public_key();
 
 out:
     return res;
@@ -72,7 +80,7 @@ void magicnet_council_hash(struct magicnet_council* council, char* out_hash)
         // Hash will work since signed data was signed.
         buffer_write_bytes(council_hash_buf, council->signed_data.certificates[i].hash, sizeof(council->signed_data.certificates[i].hash));
         buffer_write_bytes(council_hash_buf, &council->signed_data.certificates[i].signature, sizeof(council->signed_data.certificates[i].signature));
-        buffer_write_bytes(council_hash_buf, &council->signed_data.certificates[i].signing_key, sizeof(council->signed_data.certificates[i].signature));
+        buffer_write_bytes(council_hash_buf, &council->signed_data.certificates[i].owner_key, sizeof(council->signed_data.certificates[i].owner_key));
     }
     sha256_data(buffer_ptr(council_hash_buf), out_hash, buffer_len(council_hash_buf));
     buffer_free(council_hash_buf);
@@ -112,6 +120,7 @@ void magicnet_council_free(struct magicnet_council *council)
 {
     // Implement free funtionaliuty...
 }
+
 struct magicnet_council *magicnet_council_create(const char *name, size_t total_certificates, time_t creation_time)
 {
     // Must have at least one certificate.
