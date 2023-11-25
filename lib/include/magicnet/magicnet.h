@@ -847,7 +847,11 @@ struct council_certificate_transfer
     struct magicnet_council_certificate* signing_certificate;
 };
 
-
+enum
+{
+    // Set for a given certificate if it has never been transfeered before.
+    MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS = 0b00000001
+};
 struct magicnet_council_certificate
 {
     // We have all the transfer history of the certificate here.
@@ -855,6 +859,9 @@ struct magicnet_council_certificate
     {
         // The Unique numerical certificate ID that is unique to the council only.
         int id;
+
+        // Certificate flags.
+        int flags;
 
         // The ID of the council this certificate belongs to.
         char council_id_hash[SHA256_STRING_LENGTH];
@@ -885,10 +892,11 @@ struct block
     // Hash of the previous block
     char prev_hash[SHA256_STRING_LENGTH];
 
-    // Signed signature of the creator of the block
+    // Certificate used to sign the block
+    struct magicnet_council_certificate * certificate;
+
+    // The sigend signature of the block hash, signed with the certificate
     struct signature signature;
-    // The public key of the creator of the block.
-    struct key key;
 
     struct block_transaction_group *transaction_group;
 
@@ -1171,6 +1179,20 @@ struct block *magicnet_block_load(const char *hash);
 int magicnet_council_init();
 struct magicnet_council *magicnet_council_create(const char *name, size_t total_certificates, time_t creation_time);
 void magicnet_council_free(struct magicnet_council *council);
+
+void magicnet_council_certificate_free(struct magicnet_council_certificate *certificate);
+int magicnet_council_certificate_verify_signature(struct magicnet_council_certificate *certificate);
+void magicnet_council_certificate_hash(struct magicnet_council_certificate *certificate, char *out_hash);
+
+/**
+ * Will attempt to give you a certificate belonging to the provided public key and the council,
+ * if multiple certificates belonging to the public key that are heldby the council 
+ * are found then the most valid certificate will be returned. Valid being the one that is in date and not expired.
+*/
+struct magicnet_council_certificate* magicnet_council_certificate_load(const char* pub_key, const char* council_id_hash);
+
+struct magicnet_council_certificate *magicnet_council_certificate_clone(struct magicnet_council_certificate *certificate);
+int magicnet_council_certificate_verify(struct magicnet_council_certificate* certificate);
 
 
 // End of council

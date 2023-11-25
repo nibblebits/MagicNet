@@ -104,6 +104,7 @@ int main(int argc, char **argv)
         return res;
     }
 
+
     server = magicnet_server_start(MAGICNET_SERVER_PORT);
     if (!server)
     {
@@ -138,13 +139,6 @@ int main(int argc, char **argv)
         printf("Wallet balance=%f\n", test_wallet->balance);
     }
 
-    struct magicnet_council* council = magicnet_council_create("central-council", 2, time(NULL));
-    if (council == NULL)
-    {
-        printf("council creation problem");
-    }
-
-    return 0;
 
 
     // Accept the clients

@@ -542,8 +542,7 @@ struct block *block_clone(struct block *block)
 {
 
     struct block *block_cloned = block_create_with_group(block->hash, block->prev_hash, block_transaction_group_clone(block->transaction_group));
-    block_cloned->key = block->key;
-    block_cloned->signature = block->signature;
+    block_cloned->certificate = magicnet_council_certificate_clone(block->certificate);
     block_cloned->blockchain_id = block->blockchain_id;
     block_cloned->time = block->time;
     return block_cloned;
@@ -574,8 +573,9 @@ const char *block_hash_create(struct block *block, char *hash_out)
 {
     struct buffer *tmp_buf = buffer_create();
 
-    buffer_write_bytes(tmp_buf, &block->key.key, sizeof(block->key.key));
-    buffer_write_bytes(tmp_buf, block->prev_hash, strlen(block->prev_hash));
+    char certificate_hash[SHA256_STRING_LENGTH];
+    magicnet_council_certificate_hash(block->certificate, certificate_hash);
+    buffer_write_bytes(tmp_buf, certificate_hash, sizeof(certificate_hash));
     buffer_write_long(tmp_buf, block->time);
     char transaction_group_hash[SHA256_STRING_LENGTH];
     if (block_transaction_group_hash_create(block->transaction_group, transaction_group_hash))
@@ -597,8 +597,7 @@ bool block_prev_hash_exists(struct block *block)
 int block_hash_sign_verify(struct block *block)
 {
     int res = 0;
-    block->key = *MAGICNET_public_key();
-
+    block->certificate = magicnet_council_certificate_load(MAGICNET_public_key()->key, "1234-simulated-change-me");
     block_hash_create(block, block->hash);
     block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
 
@@ -616,11 +615,7 @@ int block_sign(struct block *block)
 {
     int res = 0;
     struct key blank_key = {0};
-    if (memcmp(&block->key, &blank_key, sizeof(block->key)) == 0)
-    {
-        magicnet_log("%s no key attached to the block to sign with\n", __FUNCTION__);
-        return -1;
-    }
+
     res = private_sign(block->hash, sizeof(block->hash), &block->signature);
     if (res < 0)
     {
@@ -664,7 +659,15 @@ int block_verify_specified(struct block *block, int flags)
     // Okay the hashes are correct but was this block signed by the key in the block?
     if (flags & MAGICNET_BLOCK_VERIFICATION_VERIFY_SIGNATURE)
     {
-        if (public_verify(&block->key, block->hash, sizeof(block->hash), &block->signature) < 0)
+        // Verify the certificate
+        if (magicnet_council_certificate_verify(block->certificate) < 0)
+        {
+            magicnet_log("%s the council certificate could not be verified for the given block\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+
+        if (public_verify(&block->certificate->owner_key, block->hash, sizeof(block->hash), &block->signature) < 0)
         {
             magicnet_log("%s block is invalid, signature did not sign this data\n", __FUNCTION__);
             res = -1;
@@ -959,7 +962,8 @@ struct block *block_load(const char *hash)
     memcpy(group->hash, transaction_group_hash, sizeof(group->hash));
     block = block_create_with_group(hash, prev_hash, group);
     block->blockchain_id = blockchain_id;
-    block->key = key;
+    #warning "TODO UPDATE BLOCK LOADING TO ACCOMODATE FOR COUNCIL CERTIFICATES"
+   // block->key = key;
     block->signature = signature;
     block->time = created_time;
 

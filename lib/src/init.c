@@ -58,6 +58,14 @@ int magicnet_server_init()
     }
 
 
+    // Initialize the council
+    res = magicnet_council_init();
+    if (res < 0)
+    {
+        goto out;
+    }
+
+
 out:
     return res;
 }
