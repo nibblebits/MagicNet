@@ -50,6 +50,10 @@ int magicnet_database_get_active_blockchain_id();
 
 int magincet_database_save_transaction_group(struct block_transaction_group *transaction_group);
 
+// Certificates
+int magicnet_database_load_transfer_no_locks(struct council_certificate_transfer *certificate_transfer_out, int local_id);
+int magicnet_database_load_certificate_no_locks(struct magicnet_council_certificate *certificate_out, const char *certificate_hash);
+
 
 void magicnet_database_close();
 

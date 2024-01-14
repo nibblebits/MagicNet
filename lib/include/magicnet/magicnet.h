@@ -809,20 +809,27 @@ struct magicnet_council
 
 struct council_certificate_transfer_vote_signed_data
 {
-    // THe hash of the certificate that we want to transfer.
+    // The hash of the certificate that we want to transfer.
     char certificate_to_transfer_hash[SHA256_STRING_LENGTH];
-    
+
     // The total voters who voted in the the transfer
     size_t total_voters;
     // The total voters who voted the same key as us
     size_t total_for_vote;
     // The total voters who voted against the key we voted for
     size_t total_against_vote;
+
+    // The timestamp of when the new certificate will expire
+    time_t certificate_expires_at;
+
+    // The timestamp of when this certificate becomes valid.
+    time_t certificate_valid_from;
+
     // The key you wish to vote to have the certificate transferred too.
-    struct key *new_owner_key;
+    struct key new_owner_key;
 
     // The winning key is who we believed won the transfer
-    struct key *winning_key;
+    struct key winning_key;
 };
 
 struct council_certificate_transfer_vote
@@ -830,10 +837,15 @@ struct council_certificate_transfer_vote
 
     // Data signed with the voter_key
     struct council_certificate_transfer_vote_signed_data signed_data;
+    
+    // The hash of the signed data
+    char hash[SHA256_STRING_LENGTH];
 
-    // The signature signed by the voter key.
+    // The signature of the hash signed by the voter certificate key.
     struct signature signature;
-    struct key voter_key;
+
+    // The certificate who voted
+    struct magicnet_council_certificate *voter_certificate;
 };
 
 /**
@@ -1196,6 +1208,7 @@ int magicnet_council_init();
 struct magicnet_council *magicnet_council_create(const char *name, size_t total_certificates, time_t creation_time);
 void magicnet_council_free(struct magicnet_council *council);
 
+struct magicnet_council_certificate *magicnet_council_certificate_create();
 void magicnet_council_certificate_free(struct magicnet_council_certificate *certificate);
 int magicnet_council_certificate_verify_signature(struct magicnet_council_certificate *certificate);
 void magicnet_council_certificate_hash(struct magicnet_council_certificate *certificate, char *out_hash);
@@ -1205,7 +1218,7 @@ void magicnet_council_certificate_hash(struct magicnet_council_certificate *cert
  * if multiple certificates belonging to the public key that are heldby the council
  * are found then the most valid certificate will be returned. Valid being the one that is in date and not expired.
  */
-struct magicnet_council_certificate *magicnet_council_certificate_load(const char *pub_key, const char *council_id_hash);
+struct magicnet_council_certificate *magicnet_council_certificate_load(const char *certificate_hash);
 
 struct magicnet_council_certificate *magicnet_council_certificate_clone(struct magicnet_council_certificate *certificate);
 int magicnet_council_certificate_verify(struct magicnet_council_certificate *certificate);

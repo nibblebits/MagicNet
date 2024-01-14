@@ -34,26 +34,19 @@ void magicnet_council_certificate_free(struct magicnet_council_certificate *cert
 
 void magincet_council_certificate_vote_free_data(struct council_certificate_transfer_vote *certificate_vote)
 {
-    if (certificate_vote->signed_data.certificate_to_transfer)
-    {
-        magicnet_council_certificate_free(certificate_vote->signed_data.certificate_to_transfer);
-    }
+
 }
 
 void magicnet_council_certificate_transfer_free_data(struct council_certificate_transfer *certificate_transfer)
 {
-    if (certificate_transfer->signed_data.certificate)
-    {
-        magicnet_council_certificate_free(certificate_transfer->signed_data.certificate);
-    }
 
-    if (certificate_transfer->signed_data.voters)
+    if (certificate_transfer->voters)
     {
-        for (int i = 0; i < certificate_transfer->signed_data.total_voters; i++)
+        for (int i = 0; i < certificate_transfer->total_voters; i++)
         {
-            magincet_council_certificate_vote_free_data(&certificate_transfer->signed_data.voters[i]);
+            magincet_council_certificate_vote_free_data(&certificate_transfer->voters[i]);
         }
-        free(certificate_transfer->signed_data.voters);
+        free(certificate_transfer->voters);
     }
 }
 void magicnet_council_certificate_free_data(struct magicnet_council_certificate *certificate)
@@ -81,7 +74,7 @@ out:
     return res;
 }
 
-struct magicnet_council_certificate* magicnet_council_certificate_load(const char* pub_key, const char* council_id_hash)
+struct magicnet_council_certificate* magicnet_council_certificate_load(const char* certificate_hash)
 {
     // Pretend to load from the database for noww... At the moment we aren't loading anything. Just
     // simulate it

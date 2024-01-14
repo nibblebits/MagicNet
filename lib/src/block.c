@@ -597,7 +597,6 @@ bool block_prev_hash_exists(struct block *block)
 int block_hash_sign_verify(struct block *block)
 {
     int res = 0;
-    block->certificate = magicnet_council_certificate_load(MAGICNET_public_key()->key, "1234-simulated-change-me");
     block_hash_create(block, block->hash);
     block_transaction_group_hash_create(block->transaction_group, block->transaction_group->hash);
 
@@ -774,6 +773,11 @@ void block_free(struct block *block)
     if (!block)
     {
         return;
+    }
+
+    if (block->certificate)
+    {
+        magicnet_council_certificate_free(block->certificate);
     }
 
     if (block->transaction_group)

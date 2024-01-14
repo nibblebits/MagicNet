@@ -10,30 +10,72 @@
 sqlite3 *db = NULL;
 pthread_mutex_t db_lock;
 
-const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
+const char *create_tables[] = {
+
+    "CREATE TABLE \"councils\" ( \
+                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+                                \"signed_data_hash\"	TEXT,  \
+                                \"total_certificates\" INTEGER, \
+                                \"creation_time\"	INTEGER,  \
+                                \"id_hash\" TEXT, \
+                                \"key\"	TEXT);",
+
+    "CREATE TABLE \"council_certificate_transfer_votes\" ( \
+                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+                                \"transfer_id\" INTEGER, \
+                                \"certificate_to_transfer_hash\" TEXT, \
+                                \"total_voters\" INTEGER, \
+                                \"total_for_vote\"  INTEGER, \
+                                \"total_against_vote\" INTEGER, \
+                                \"certificate_expires_at\" INTEGER, \
+                                \"certificate_valid_from\" INTEGER, \
+                                \"new_owner_key\" TEXT, \
+                                \"winning_key\" TEXT, \
+                                \"hash\"    TEXT,   \
+                                \"signature\" TEXT, \
+                                \"voter_certificate_hash\" TEXT);",
+
+    "CREATE TABLE \"council_certificate_transfers\" ( \
+                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+                                \"old_certificate_hash\" TEXT, \
+                                \"new_owner_key\" TEXT, \
+                                \"total_voters\"  INTEGER);",
+    "CREATE TABLE \"council_certificates\" ( \
+                                \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+                                \"local_cert_id\" INTEGER, \
+                                \"flags\" INTEGER, \
+                                \"council_id_hash\"	TEXT,  \
+                                \"expires_at\" TEXT, \
+                                \"valid_from\" TEXT, \
+                                \"transfer_id\" INTEGER, \
+                                \"hash\"	TEXT,  \
+                                \"owner_key\"	TEXT,  \
+                                \"signature\"	TEXT);",
+
+    "CREATE TABLE \"blocks\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
                                                 \"hash\"	TEXT,\
                                                 \"prev_hash\"	TEXT,\
                                                 \"blockchain_id\" INTEGER, \
                                                 \"transaction_group_hash\" TEXT, \
-                                                \"key\"	TEXT, \
+                                                \"signing_certificate_hash\"	TEXT, \
                                                 \"signature\" TEXT, \
                                                 \"time_created\" INTEGER);",
 
-                               "CREATE TABLE \"blockchains\" ( \
+    "CREATE TABLE \"blockchains\" ( \
                                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT, \
                                                 \"type\" INTEGER , \
                                                 \"begin_hash\"	TEXT,\
                                                 \"last_hash\"	TEXT,\
                                                 \"proven_verified_blocks\"  INTEGER);",
 
-                               "CREATE TABLE \"transaction_groups\" ( \
+    "CREATE TABLE \"transaction_groups\" ( \
                                 \"hash\"	TEXT, \
                                 \"total_transactions\"	INTEGER DEFAULT 0, \
                                 PRIMARY KEY(\"hash\") \
                             );",
 
-                               "CREATE TABLE \"transactions\" ( \
+    "CREATE TABLE \"transactions\" ( \
                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
                                 \"hash\"	TEXT,  \
                                 \"transaction_group_hash\" TEXT, \
@@ -47,8 +89,8 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 \"data\"	BLOB,  \
                                 \"data_size\"	INTEGER);",
 
-                               // Create table on money transactions
-                               "CREATE TABLE \"money_transactions\" ( \
+    // Create table on money transactions
+    "CREATE TABLE \"money_transactions\" ( \
                                 \"transaction_hash\"	TEXT,  \
                                 \"from_key\"	BLOB,  \
                                 \"recipient_key\"	BLOB,  \
@@ -57,7 +99,7 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 PRIMARY KEY(\"transaction_hash\") \
                                 );",
 
-                               "CREATE TABLE \"keys\" ( \
+    "CREATE TABLE \"keys\" ( \
                                                         \"pub_key\"	BLOB, \
                                                         \"pri_key\"	BLOB, \
                                                         \"pub_key_size\" INTEGER,   \
@@ -65,7 +107,7 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                                          \"active\"	INTEGER,        \
                                                         PRIMARY KEY(\"pub_key\") \
                             );",
-                               "CREATE TABLE \"peers\" ( \
+    "CREATE TABLE \"peers\" ( \
                                 \"id\"	INTEGER,        \
                                 \"ip_address\"	TEXT,   \
                                 \"name\"	TEXT,       \
@@ -75,17 +117,17 @@ const char *create_tables[] = {"CREATE TABLE \"blocks\" ( \
                                 PRIMARY KEY(\"id\" AUTOINCREMENT) \
                             );",
 
-                               // This query creates a table of banned peers
-                               // that will be used to prevent the server from
-                               // connecting to them.
-                               "CREATE TABLE \"banned_peers\" ( \
+    // This query creates a table of banned peers
+    // that will be used to prevent the server from
+    // connecting to them.
+    "CREATE TABLE \"banned_peers\" ( \
                                 \"id\"	INTEGER,        \
                                 \"ip_address\"	TEXT,   \
                                 \"key\"	BLOB,           \
                                 \"added_at\"	INTEGER, \
                                 \"banned_until\"	INTEGER, \
                                 PRIMARY KEY(\"id\" AUTOINCREMENT)",
-                               NULL};
+    NULL};
 
 const char *magicnet_database_path()
 {
@@ -1031,7 +1073,7 @@ int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
     return res;
 }
 
-int magicnet_database_load_block_from_previous_hash(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, time_t* created_time)
+int magicnet_database_load_block_from_previous_hash(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, time_t *created_time)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);
@@ -1040,7 +1082,7 @@ int magicnet_database_load_block_from_previous_hash(const char *prev_hash, char 
     return res;
 }
 
-int magicnet_database_load_block_from_previous_hash_no_locks(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, time_t* created_time)
+int magicnet_database_load_block_from_previous_hash_no_locks(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, time_t *created_time)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -1329,7 +1371,7 @@ int magicnet_database_load_block_transactions(struct block *block)
     return res;
 }
 
-int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature, time_t* created_time)
+int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature, time_t *created_time)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);
@@ -1338,7 +1380,7 @@ int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blo
     return res;
 }
 
-int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature, time_t* created_time)
+int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature, time_t *created_time)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
@@ -1589,6 +1631,202 @@ out:
     pthread_mutex_unlock(&db_lock);
     return res;
 }
+
+int magicnet_database_load_transfer_votes_no_locks(int transfer_id, struct council_certificate_transfer_vote *certificate_transfer_votes_out, size_t max_elements)
+{
+    // "CREATE TABLE \"council_certificate_transfer_votes\" ( \
+        //                         \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+        //                         \"transfer_id\" INTEGER, \
+        //                         \"certificate_to_transfer_hash\" TEXT, \
+        //                         \"total_voters\" INTEGER, \
+        //                         \"total_for_vote\"  INTEGER, \
+        //                         \"total_against_vote\" INTEGER, \
+        //                         \"certificate_expires_at\" INTEGER, \
+        //                         \"certificate_valid_from\" INTEGER, \
+        //                         \"new_owner_key\" TEXT, \
+        //                         \"winning_key\" TEXT, \
+        //                         \"hash\"    TEXT,   \
+        //                         \"signature\" TEXT, \
+        //                         \"voter_certificate_hash\" TEXT);",
+
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+
+    const char *load_transfer_votes_sql = "SELECT id, transfer_id, certificate_to_transfer_hash, total_voters, total_for_vote, total_against_vote, certificate_expires_at, certificate_valid_from, new_owner_key, winning_key, hash, signature, voter_certificate_hash FROM council_certificate_transfer_votes WHERE transfer_id=? ";
+    res = sqlite3_prepare_v2(db, load_transfer_votes_sql, strlen(load_transfer_votes_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    int i = 0;
+    sqlite3_bind_int(stmt, 1, transfer_id);
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        memcpy(certificate_transfer_votes_out[i].signed_data.certificate_to_transfer_hash, sqlite3_column_text(stmt, 2), sizeof(certificate_transfer_votes_out[i].signed_data.certificate_to_transfer_hash));
+        certificate_transfer_votes_out[i].signed_data.total_voters = sqlite3_column_int(stmt, 3);
+        certificate_transfer_votes_out[i].signed_data.total_for_vote = sqlite3_column_int(stmt, 4);
+        certificate_transfer_votes_out[i].signed_data.total_against_vote = sqlite3_column_int(stmt, 5);
+        certificate_transfer_votes_out[i].signed_data.certificate_expires_at = (time_t)sqlite3_column_int64(stmt, 6);
+        certificate_transfer_votes_out[i].signed_data.certificate_valid_from = (time_t)sqlite3_column_int64(stmt, 7);
+
+        certificate_transfer_votes_out->signed_data.new_owner_key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 8));
+        certificate_transfer_votes_out->signed_data.winning_key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 9));
+        memcpy(certificate_transfer_votes_out[i].hash, sqlite3_column_text(stmt, 10), sizeof(certificate_transfer_votes_out[i].hash));
+        if (sqlite3_column_blob(stmt, 11))
+        {
+            memcpy(&certificate_transfer_votes_out[i].signature, sqlite3_column_blob(stmt, 11), sizeof(struct signature));
+        }
+
+        certificate_transfer_votes_out->voter_certificate = magicnet_council_certificate_create();
+        res = magicnet_database_load_certificate_no_locks(certificate_transfer_votes_out->voter_certificate, sqlite3_column_text(stmt, 12));
+        if (res < 0)
+        {
+            goto out;
+        }
+
+        i++;
+    }
+
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+
+    if (res < 0)
+    {
+        for (int j = 0; j < i; j++)
+        {
+            if (certificate_transfer_votes_out[j].voter_certificate)
+            {
+                magicnet_council_certificate_free(certificate_transfer_votes_out[j].voter_certificate);
+            }
+        }
+    }
+    return res;
+}
+
+int magicnet_database_load_transfer_no_locks(struct council_certificate_transfer *certificate_transfer_out, int local_id)
+{
+
+    //    "CREATE TABLE \"council_certificate_transfers\" ( \
+    //                             \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+    //                             \"old_certificate_hash\" TEXT, \
+    //                             \"new_owner_key\" TEXT, \
+    //                             \"total_voters\"	LONG);",
+    int res = 0;
+
+    const char *load_transfer_sql = "SELECT id, old_certificate_hash, new_owner_key, total_voters FROM council_certificate_transfers WHERE id = ?";
+    sqlite3_stmt *stmt = NULL;
+    res = sqlite3_prepare_v2(db, load_transfer_sql, strlen(load_transfer_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_int(stmt, 1, local_id);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+    certificate_transfer_out->certificate = magicnet_council_certificate_create();
+    res = magicnet_database_load_certificate_no_locks(certificate_transfer_out->certificate, sqlite3_column_text(stmt, 1));
+    if (res < 0)
+    {
+        goto out;
+    }
+    certificate_transfer_out->new_owner = MAGICNET_key_from_string(sqlite3_column_text(stmt, 2));
+    certificate_transfer_out->total_voters = sqlite3_column_int(stmt, 3);
+
+    certificate_transfer_out->voters = calloc(certificate_transfer_out->total_voters, sizeof(struct council_certificate_transfer_vote));
+    if (!certificate_transfer_out->voters)
+    {
+        res = -1;
+        goto out;
+    }
+
+    res = magicnet_database_load_transfer_votes_no_locks(local_id, certificate_transfer_out->voters, certificate_transfer_out->total_voters);
+
+out:
+    if (res < 0)
+    {
+        if (certificate_transfer_out->certificate)
+        {
+            magicnet_council_certificate_free(certificate_transfer_out->certificate);
+        }
+    }
+
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+
+    return res;
+}
+int magicnet_database_load_certificate_no_locks(struct magicnet_council_certificate *certificate_out, const char *certificate_hash)
+{
+    int res = 0;
+
+    //    "CREATE TABLE \"council_certificates\" ( \
+    //                             \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+    //                             \"local_cert_id\" INTEGER, \
+    //                             \"flags\" INTEGER, \
+    //                             \"council_id_hash\"	TEXT,  \
+    //                             \"expires_at\" TEXT, \
+    //                             \"valid_from\" TEXT, \
+    //                             \"valid_from\" TEXT, \
+    //                             \"transfer_id\" INTEGER, \
+    //                             \"hash\"	TEXT,  \
+    //                             \"owner_key\"	TEXT,  \
+    //                             \"signature\"	TEXT);",
+    const char *load_certificate_sql = "SELECT id, local_cert_id, flags, council_id_hash, expires_at, valid_from, transfer_id, hash, owner_key, signature FROM council_certificates WHERE hash = ?";
+    sqlite3_stmt *stmt = NULL;
+    res = sqlite3_prepare_v2(db, load_certificate_sql, strlen(load_certificate_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, certificate_hash, strlen(certificate_hash), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+    certificate_out->signed_data.id = sqlite3_column_int(stmt, 1);
+    certificate_out->signed_data.flags = sqlite3_column_int(stmt, 2);
+    memcpy(certificate_out->signed_data.council_id_hash, sqlite3_column_text(stmt, 3), sizeof(certificate_out->signed_data.council_id_hash));
+    certificate_out->signed_data.expires_at = (time_t)sqlite3_column_int64(stmt, 4);
+    certificate_out->signed_data.valid_from = (time_t)sqlite3_column_int64(stmt, 5);
+
+    magicnet_database_load_transfer_no_locks(&certificate_out->signed_data.transfer, sqlite3_column_int(stmt, 6));
+    certificate_out->owner_key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 8));
+
+    if (sqlite3_column_blob(stmt, 9))
+    {
+        memcpy(&certificate_out->signature, sqlite3_column_blob(stmt, 9), sizeof(struct signature));
+    }
+
+out:
+
+    if (res < 0)
+    {
+        if (certificate_out->signed_data.transfer.certificate)
+        {
+            magicnet_council_certificate_free(certificate_out->signed_data.transfer.certificate);
+        }
+    }
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+
+    return res;
+}
 int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
 {
     int res = 0;
@@ -1617,7 +1855,7 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
         char prev_hash[SHA256_STRING_LENGTH];
         int blockchain_id = 0;
         char transaction_group_hash[SHA256_STRING_LENGTH];
-        struct key key;
+        char signing_certificate_hash[SHA256_STRING_LENGTH];
         struct signature signature;
 
         bzero(hash, SHA256_STRING_LENGTH);
@@ -1636,7 +1874,7 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
 
         if (sqlite3_column_blob(stmt, 4))
         {
-            memcpy(&key, sqlite3_column_blob(stmt, 4), sizeof(struct key));
+            memcpy(signing_certificate_hash, sqlite3_column_blob(stmt, 4), sizeof(signing_certificate_hash));
         }
 
         if (sqlite3_column_blob(stmt, 5))
@@ -1645,7 +1883,8 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
         }
         struct block *block = block_create_with_group(hash, prev_hash, NULL);
         block->blockchain_id = blockchain_id;
-        block->key = key;
+
+        block->certificate = magicnet_council_certificate_load(signing_certificate_hash);
         block->signature = signature;
         vector_push(block_vec_out, &block);
         step = sqlite3_step(stmt);
@@ -1662,7 +1901,7 @@ int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, si
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    struct vector* hash_vec = vector_create(SHA256_STRING_LENGTH);
+    struct vector *hash_vec = vector_create(SHA256_STRING_LENGTH);
     pthread_mutex_lock(&db_lock);
 
     int pos = vector_count(block_vec_out);
@@ -1685,7 +1924,7 @@ int magicnet_database_load_blocks_with_no_chain(struct vector *block_vec_out, si
 
     while (step == SQLITE_ROW)
     {
-        if(sqlite3_column_text(stmt, 0))
+        if (sqlite3_column_text(stmt, 0))
         {
             char hash[SHA256_STRING_LENGTH] = {0};
             strncpy(hash, sqlite3_column_text(stmt, 0), sizeof(hash));
@@ -1702,10 +1941,10 @@ out:
 
     // Now we no longer have a database lock we must load all the blocks for the hashes we obtained.
     vector_set_peek_pointer(hash_vec, 0);
-    const char* hash = vector_peek(hash_vec);
-    while(hash)
+    const char *hash = vector_peek(hash_vec);
+    while (hash)
     {
-        struct block* block = block_load(hash);
+        struct block *block = block_load(hash);
         if (block)
         {
             block_load_fully(block);
@@ -1770,7 +2009,7 @@ int magicnet_database_save_block(struct block *block)
         goto out;
     }
 
-    const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash, blockchain_id, transaction_group_hash, key, signature, time_created) VALUES(?, ?, ?, ?, ?, ?, ?)";
+    const char *insert_block_sql = "INSERT INTO blocks (hash, prev_hash, blockchain_id, transaction_group_hash, signing_certificate_hash, signature, time_created) VALUES(?, ?, ?, ?, ?, ?, ?)";
     res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1791,7 +2030,7 @@ int magicnet_database_save_block(struct block *block)
         sqlite3_bind_null(stmt, 4);
     }
 
-    sqlite3_bind_blob(stmt, 5, &block->key, sizeof(block->key), NULL);
+    sqlite3_bind_blob(stmt, 5, &block->certificate->hash, sizeof(block->certificate->hash), NULL);
     sqlite3_bind_blob(stmt, 6, &block->signature, sizeof(block->signature), NULL);
 
     // Yes we bind an int I know its a long we change this later.
@@ -1816,7 +2055,7 @@ int magicnet_database_update_block(struct block *block)
 
     sqlite3_stmt *stmt = NULL;
 
-    const char *insert_block_sql = "UPDATE blocks SET prev_hash=?, blockchain_id=?, transaction_group_hash=?, key=?,signature=? WHERE hash=?";
+    const char *insert_block_sql = "UPDATE blocks SET prev_hash=?, blockchain_id=?, transaction_group_hash=?, signing_certificate_hash=?,signature=? WHERE hash=?";
     res = sqlite3_prepare_v2(db, insert_block_sql, strlen(insert_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1836,7 +2075,7 @@ int magicnet_database_update_block(struct block *block)
         sqlite3_bind_null(stmt, 3);
     }
 
-    sqlite3_bind_blob(stmt, 4, &block->key, sizeof(block->key), NULL);
+    sqlite3_bind_blob(stmt, 4, &block->certificate->hash, sizeof(block->certificate->hash), NULL);
     sqlite3_bind_blob(stmt, 5, &block->signature, sizeof(block->signature), NULL);
 
     sqlite3_bind_text(stmt, 6, block->hash, strlen(block->hash), NULL);
