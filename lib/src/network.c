@@ -1590,7 +1590,7 @@ int magicnet_client_read_council_certificate_transfer_vote(struct magicnet_clien
         goto out;
     }
 
-    res = magicnet_client_read_council_certificate(client, &transfer_vote->voter_certificate, write_buf);
+    res = magicnet_client_read_council_certificate(client, transfer_vote->voter_certificate, write_buf);
     if (res < 0)
     {
         goto out;

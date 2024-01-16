@@ -14,11 +14,13 @@ const char *create_tables[] = {
 
     "CREATE TABLE \"councils\" ( \
                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
-                                \"signed_data_hash\"	TEXT,  \
+                                \"name\"	TEXT,  \
                                 \"total_certificates\" INTEGER, \
                                 \"creation_time\"	INTEGER,  \
                                 \"id_hash\" TEXT, \
-                                \"key\"	TEXT);",
+                                \"hash\" TEXT, \
+                                \"creator_signature\" TEXT, \
+                                \"creator_key\" TEXT);",
 
     "CREATE TABLE \"council_certificate_transfer_votes\" ( \
                                 \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
@@ -1632,6 +1634,263 @@ out:
     return res;
 }
 
+int magicnet_database_load_certificate_no_locks(struct magicnet_council_certificate *certificate_out, const char *certificate_hash);
+
+int magicnet_database_load_council_certificates_no_locks(const char *council_id_hash, struct magicnet_council_certificate *certificates, size_t max_certificates)
+{
+
+    // "CREATE TABLE \"council_certificates\" ( \
+        //                         \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+        //                         \"local_cert_id\" INTEGER, \
+        //                         \"flags\" INTEGER, \
+        //                         \"council_id_hash\"	TEXT,  \
+        //                         \"expires_at\" TEXT, \
+        //                         \"valid_from\" TEXT, \
+        //                         \"transfer_id\" INTEGER, \
+        //                         \"hash\"	TEXT,  \
+        //                         \"owner_key\"	TEXT,  \
+        //                         \"signature\"	TEXT);",
+    int res = 0;
+
+    sqlite3_stmt *stmt = NULL;
+    const char *load_block_sql = "SELECT hash FROM council_certificates WHERE council_id_hash = ?";
+    res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_text(stmt, 1, council_id_hash, strlen(council_id_hash), NULL);
+    int step = sqlite3_step(stmt);
+    size_t i = 0;
+    while (step == SQLITE_ROW)
+    {
+        if (i >= max_certificates)
+        {
+            res = MAGICNET_ERROR_OUT_OF_BOUNDS;
+            goto out;
+        }
+
+        res = magicnet_database_load_certificate_no_locks(&certificates[i], sqlite3_column_text(stmt, 0));
+        if (res < 0)
+        {
+            goto out;
+        }
+        step = sqlite3_step(stmt);
+        i++;
+    }
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+int magicnet_database_load_council_no_locks(const char *id_hash, struct magicnet_council *council_out)
+{
+
+    // "CREATE TABLE \"councils\" ( \
+        //                         \"id\"	INTEGER PRIMARY KEY AUTOINCREMENT,  \
+        //                         \"name\"	TEXT,  \
+        //                         \"total_certificates\" INTEGER, \
+        //                         \"creation_time\"	INTEGER,  \
+        //                         \"id_hash\" TEXT, \
+        //                         \"hash\" TEXT, \
+        //                         \"creator_signature\" TEXT, \
+        //                         \"creator_key\" TEXT);",
+
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    res = sqlite3_prepare_v2(db, "SELECT id, name, total_certificates, creation_time, id_hash, hash, creator_signature, creator_key FROM councils WHERE id_hash = ?", -1, &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    res = sqlite3_bind_text(stmt, 1, id_hash, strlen(id_hash), NULL);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
+    memcpy(council_out->signed_data.id_signed_data.name, sqlite3_column_text(stmt, 1), sizeof(council_out->signed_data.id_signed_data.name));
+    council_out->signed_data.id_signed_data.total_certificates = sqlite3_column_int(stmt, 2);
+    council_out->signed_data.id_signed_data.creation_time = (time_t)sqlite3_column_int64(stmt, 3);
+    memcpy(council_out->signed_data.id_hash, sqlite3_column_text(stmt, 4), sizeof(council_out->signed_data.id_hash));
+    council_out->signed_data.certificates = magicnet_council_certificate_create_many(council_out->signed_data.id_signed_data.total_certificates);
+    res = magicnet_database_load_council_certificates_no_locks(council_out->signed_data.id_hash, council_out->signed_data.certificates, council_out->signed_data.id_signed_data.total_certificates);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Set all the council certificates to point to this council
+    for (size_t i = 0; i < council_out->signed_data.id_signed_data.total_certificates; i++)
+    {
+       council_out->signed_data.certificates[i].council = council_out;
+    }
+    
+    memcpy(council_out->hash, sqlite3_column_text(stmt, 5), sizeof(council_out->hash));
+    memcpy(&council_out->creator.signature, sqlite3_column_blob(stmt, 6), sizeof(council_out->creator.signature));
+    council_out->creator.key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 7));
+out:
+
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+
+    if (res < 0)
+    {
+        if (council_out->signed_data.certificates)
+        {
+            magicnet_council_certificate_many_free(council_out->signed_data.certificates, council_out->signed_data.id_signed_data.total_certificates);
+            council_out->signed_data.certificates = NULL;
+        }
+    }
+    return res;
+}
+int magicnet_database_load_council(const char *id_hash, struct magicnet_council *council_out)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_council_no_locks(id_hash, council_out);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_write_council_no_locks(const struct magicnet_council *council_in)
+{
+    int res = 0;
+    int council_id = 0;
+    sqlite3_stmt *stmt = NULL;
+
+    // Start a transaction
+    res = sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Prepare SQL statement for council insertion
+    const char *insert_council_sql = "INSERT INTO councils (name, total_certificates, creation_time, id_hash, hash, creator_signature, creator_key) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    res = sqlite3_prepare_v2(db, insert_council_sql, strlen(insert_council_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Bind values for the council
+    sqlite3_bind_text(stmt, 1, council_in->signed_data.id_signed_data.name, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, council_in->signed_data.id_signed_data.total_certificates);
+    sqlite3_bind_int64(stmt, 3, (sqlite3_int64)council_in->signed_data.id_signed_data.creation_time);
+    sqlite3_bind_text(stmt, 4, council_in->signed_data.id_hash, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 5, council_in->hash, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_blob(stmt, 6, &council_in->creator.signature, sizeof(council_in->creator.signature), SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 7, council_in->creator.key.key, -1, SQLITE_TRANSIENT);
+
+    // Execute the insert statement
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_DONE)
+    {
+        goto out;
+    }
+
+    // Get the ID of the newly inserted council
+    council_id = sqlite3_last_insert_rowid(db);
+
+    // Write the associated certificates
+    for (int i = 0; i < council_in->signed_data.id_signed_data.total_certificates; i++)
+    {
+        res = magicnet_database_write_certificate_no_locks(&council_in->signed_data.certificates[i]);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+
+    if (res < 0)
+    {
+        sqlite3_exec(db, "ROLLBACK TRANSACTION;", NULL, NULL, NULL); // Rollback on error
+    }
+    else
+    {
+        sqlite3_exec(db, "COMMIT TRANSACTION;", NULL, NULL, NULL); // Commit if successful
+    }
+
+    return res;
+}
+
+int magicnet_database_write_council(const struct magicnet_council *council_in)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_write_council_no_locks(council_in);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_write_transfer_votes_no_locks(int transfer_id, struct council_certificate_transfer_vote *certificate_transfer_votes_in, size_t num_elements)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+
+    // Prepare SQL statement for insertion
+    const char *insert_vote_sql = "INSERT INTO council_certificate_transfer_votes (transfer_id, certificate_to_transfer_hash, total_voters, total_for_vote, total_against_vote, certificate_expires_at, certificate_valid_from, new_owner_key, winning_key, hash, signature, voter_certificate_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    res = sqlite3_prepare_v2(db, insert_vote_sql, -1, &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    for (size_t i = 0; i < num_elements; i++)
+    {
+        // Bind values for each vote
+        sqlite3_bind_int(stmt, 1, transfer_id);
+        sqlite3_bind_text(stmt, 2, certificate_transfer_votes_in[i].signed_data.certificate_to_transfer_hash, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 3, certificate_transfer_votes_in[i].signed_data.total_voters);
+        sqlite3_bind_int(stmt, 4, certificate_transfer_votes_in[i].signed_data.total_for_vote);
+        sqlite3_bind_int(stmt, 5, certificate_transfer_votes_in[i].signed_data.total_against_vote);
+        sqlite3_bind_int64(stmt, 6, (sqlite3_int64)certificate_transfer_votes_in[i].signed_data.certificate_expires_at);
+        sqlite3_bind_int64(stmt, 7, (sqlite3_int64)certificate_transfer_votes_in[i].signed_data.certificate_valid_from);
+        sqlite3_bind_text(stmt, 8, certificate_transfer_votes_in[i].signed_data.new_owner_key.key, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 9, certificate_transfer_votes_in[i].signed_data.winning_key.key, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 10, certificate_transfer_votes_in[i].hash, -1, SQLITE_TRANSIENT);
+        sqlite3_bind_blob(stmt, 11, &certificate_transfer_votes_in[i].signature, sizeof(struct signature), SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 12, certificate_transfer_votes_in[i].voter_certificate->hash, -1, SQLITE_TRANSIENT);
+
+        // Execute the insert statement
+        res = sqlite3_step(stmt);
+        if (res != SQLITE_DONE)
+        {
+            goto out;
+        }
+
+        // Reset the statement for the next vote
+        sqlite3_reset(stmt);
+    }
+
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
 int magicnet_database_load_transfer_votes_no_locks(int transfer_id, struct council_certificate_transfer_vote *certificate_transfer_votes_out, size_t max_elements)
 {
     // "CREATE TABLE \"council_certificate_transfer_votes\" ( \
@@ -1707,6 +1966,57 @@ out:
     return res;
 }
 
+int magicnet_database_write_transfer_no_locks(struct council_certificate_transfer *certificate_transfer_in)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+
+    // Prepare SQL statement for insertion
+    const char *insert_transfer_sql = "INSERT INTO council_certificate_transfers (old_certificate_hash, new_owner_key, total_voters) VALUES (?, ?, ?)";
+    res = sqlite3_prepare_v2(db, insert_transfer_sql, -1, &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    sqlite3_bind_null(stmt, 1);
+    // Bind values for the transfer
+    if (certificate_transfer_in->certificate)
+    {
+        sqlite3_bind_text(stmt, 1, certificate_transfer_in->certificate->hash, -1, SQLITE_TRANSIENT);
+    }
+    sqlite3_bind_text(stmt, 2, certificate_transfer_in->new_owner.key, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 3, certificate_transfer_in->total_voters);
+
+    // Execute the insert statement
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_DONE)
+    {
+        goto out;
+    }
+
+    // Get the ID of the newly inserted transfer
+    int transfer_id = sqlite3_last_insert_rowid(db);
+
+    if (certificate_transfer_in->voters)
+    {
+        // Write the associated transfer votes
+        res = magicnet_database_write_transfer_votes_no_locks(transfer_id, certificate_transfer_in->voters, certificate_transfer_in->total_voters);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+    res = transfer_id;
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+
 int magicnet_database_load_transfer_no_locks(struct council_certificate_transfer *certificate_transfer_out, int local_id)
 {
 
@@ -1749,7 +2059,10 @@ int magicnet_database_load_transfer_no_locks(struct council_certificate_transfer
     }
 
     res = magicnet_database_load_transfer_votes_no_locks(local_id, certificate_transfer_out->voters, certificate_transfer_out->total_voters);
-
+    if (res < 0)
+    {
+        goto out;
+    }
 out:
     if (res < 0)
     {
@@ -1766,6 +2079,65 @@ out:
 
     return res;
 }
+
+int magicnet_database_write_certificate_no_locks(struct magicnet_council_certificate *certificate_in)
+{
+    int res = 0;
+    int transfer_id = 0;
+    sqlite3_stmt *stmt = NULL;
+
+    // Start by creating the transfer
+    res = magicnet_database_write_transfer_no_locks(&certificate_in->signed_data.transfer);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    transfer_id = res;
+
+    // Prepare SQL statement for insertion
+    const char *insert_certificate_sql = "INSERT INTO council_certificates (local_cert_id, flags, council_id_hash, expires_at, valid_from, transfer_id, hash, owner_key, signature) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    res = sqlite3_prepare_v2(db, insert_certificate_sql, -1, &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+
+    // Bind values for the certificate
+    sqlite3_bind_int(stmt, 1, certificate_in->signed_data.id);
+    sqlite3_bind_int(stmt, 2, certificate_in->signed_data.flags);
+    sqlite3_bind_text(stmt, 3, certificate_in->signed_data.council_id_hash, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 4, (sqlite3_int64)certificate_in->signed_data.expires_at);
+    sqlite3_bind_int64(stmt, 5, (sqlite3_int64)certificate_in->signed_data.valid_from);
+    sqlite3_bind_int(stmt, 6, transfer_id);
+    sqlite3_bind_text(stmt, 7, certificate_in->hash, -1, SQLITE_TRANSIENT); // Assuming hash is available
+    sqlite3_bind_text(stmt, 8, certificate_in->owner_key.key, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_blob(stmt, 9, &certificate_in->signature, sizeof(struct signature), SQLITE_TRANSIENT);
+
+    // Execute the insert statement
+    res = sqlite3_step(stmt);
+    if (res != SQLITE_DONE)
+    {
+        goto out;
+    }
+
+out:
+    if (stmt)
+    {
+        sqlite3_finalize(stmt);
+    }
+    return res;
+}
+
+int magicnet_database_write_certificate(struct magicnet_council_certificate *certificate_in)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_write_certificate_no_locks(certificate_in);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magicnet_database_load_certificate_no_locks(struct magicnet_council_certificate *certificate_out, const char *certificate_hash)
 {
     int res = 0;
@@ -1827,6 +2199,16 @@ out:
 
     return res;
 }
+
+int magicnet_database_load_certificate(struct magicnet_council_certificate *certificate_out, const char *certificate_hash)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_load_certificate_no_locks(certificate_out, certificate_hash);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
 {
     int res = 0;
