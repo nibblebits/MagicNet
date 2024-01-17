@@ -424,6 +424,22 @@ int magicnet_council_certificate_transfer_verify(struct magicnet_council_certifi
             magicnet_log("%s council certificate transfer verification failed for hash %s, certificate is invalid\n", __FUNCTION__, transfer->certificate->hash);
             goto out;
         }
+
+        // Additionally we need to ensure the certificate belongs to the same council as ourselves and has the same local id
+        // to prove a transfer did take place
+        if (strncmp(transfer->certificate->signed_data.council_id_hash, council_cert->signed_data.council_id_hash, sizeof(transfer->certificate->signed_data.council_id_hash)) != 0)
+        {
+            magicnet_log("%s council certificate transfer verification failed for hash %s, certificate is not for the same council\n", __FUNCTION__, transfer->certificate->hash);
+            res = -1;
+            goto out;
+        }
+
+        if (transfer->certificate->signed_data.id != council_cert->signed_data.id)
+        {
+            magicnet_log("%s council certificate transfer verification failed for hash %s, certificate is not for the previous certificate\n", __FUNCTION__, transfer->certificate->hash);
+            res = -1;
+            goto out;
+        }
     }
 
 
