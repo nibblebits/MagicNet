@@ -24,6 +24,7 @@
 
 // Council responsible for block managment.
 #define MAGICNET_MASTER_COUNCIL_NAME "central-council" 
+#define MAGICNET_MASTER_COUNCIL_TOTAL_CERTIFICATES 100
 
 // At least 10 seconds must pass for the server to attempt to connect to other peers
 #define MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS 10

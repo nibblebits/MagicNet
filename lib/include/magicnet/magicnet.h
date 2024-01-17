@@ -885,7 +885,15 @@ struct council_certificate_transfer
 enum
 {
     // Set for a given certificate if it has never been transfeered before.
-    MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS = 0b00000001
+    MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS = 0b00000001,
+
+    // In some cases council members may want the power to transfer certificates without the need for a vote
+    // this is possible if the certificate has the transferable without vote flag set.
+    // With this flag set the owner of the certificate can transfer it to anybody without the need for a vote.
+    // In practice for security reasons the flag should rarely be used, the only valid use case that I can think of 
+    // is in the case of a genesis certificate and in such cases we need to allocate certificates to many people quickly
+    // to avoid voting delays from parties who are not truly interested in maintaining the network this flag could be crucial.
+    MAGICNET_COUNCIL_CERTIFICATE_FLAG_TRANSFERABLE_WITHOUT_VOTE = 0b00000010,
 };
 
 /**
