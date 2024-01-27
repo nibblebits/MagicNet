@@ -3,6 +3,11 @@
 #include "magicnet.h"
 #include "key.h"
 #include <time.h>
+
+// Settings
+int magicnet_database_setting_get(const char *key, char *value_out);
+int magicnet_database_setting_set(const char *key, const char *value);
+
 int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key* key, struct signature* signature, time_t* created_at);
 int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key* key, struct signature* signature, time_t* created_at);
 int magicnet_database_load_block_from_previous_hash(const char* prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, time_t* created_time);
@@ -62,5 +67,6 @@ int magicnet_database_load_certificate_no_locks(struct magicnet_council_certific
 int magicnet_database_load_council_certificates_no_locks(const char* council_id_hash, struct magicnet_council_certificate* certificates, size_t max_certificates);
 
 void magicnet_database_close();
+
 
 #endif

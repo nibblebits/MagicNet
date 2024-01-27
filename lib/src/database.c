@@ -109,6 +109,7 @@ const char *create_tables[] = {
                                                          \"active\"	INTEGER,        \
                                                         PRIMARY KEY(\"pub_key\") \
                             );",
+
     "CREATE TABLE \"peers\" ( \
                                 \"id\"	INTEGER,        \
                                 \"ip_address\"	TEXT,   \
@@ -123,12 +124,20 @@ const char *create_tables[] = {
     // that will be used to prevent the server from
     // connecting to them.
     "CREATE TABLE \"banned_peers\" ( \
-                                \"id\"	INTEGER,        \
-                                \"ip_address\"	TEXT,   \
-                                \"key\"	BLOB,           \
-                                \"added_at\"	INTEGER, \
-                                \"banned_until\"	INTEGER, \
-                                PRIMARY KEY(\"id\" AUTOINCREMENT)",
+    \"id\"    INTEGER,        \
+    \"ip_address\" TEXT,   \
+    \"key\"   BLOB,           \
+    \"added_at\" INTEGER, \
+    \"banned_until\" INTEGER, \
+    PRIMARY KEY(\"id\" AUTOINCREMENT)\
+);",
+
+    "CREATE TABLE \"settings\" (    \
+	\"id\"	INTEGER,    \
+	\"key\"	TEXT,   \
+	\"value\"	TEXT,   \
+    PRIMARY KEY(\"id\") \
+    );",
     NULL};
 
 const char *magicnet_database_path()
@@ -136,6 +145,130 @@ const char *magicnet_database_path()
     static char filepath[PATH_MAX];
     sprintf(filepath, "%s/%s%s", getenv(MAGICNET_DATA_BASE_DIRECTORY_ENV), MAGICNET_DATA_BASE, MAGICNET_DATABASE_SQLITE_FILEPATH);
     return filepath;
+}
+
+int magicnet_database_setting_set_create_no_locks(const char *key, const char *value)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *insert_setting_sql = "INSERT INTO settings (key, value) VALUES (?, ?);";
+    res = sqlite3_prepare_v2(db, insert_setting_sql, strlen(insert_setting_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+    sqlite3_bind_text(stmt, 1, key, strlen(key), NULL);
+    sqlite3_bind_text(stmt, 2, value, strlen(value), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+out:
+    sqlite3_finalize(stmt);
+    return res;
+}
+
+
+int magicnet_database_setting_set_update_no_locks(const char *key, const char *value)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    const char *update_setting_sql = "UPDATE settings SET value=? WHERE key=?;";
+    res = sqlite3_prepare_v2(db, update_setting_sql, strlen(update_setting_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+    sqlite3_bind_text(stmt, 1, value, strlen(value), NULL);
+    sqlite3_bind_text(stmt, 2, key, strlen(key), NULL);
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_DONE)
+    {
+        res = -1;
+        goto out;
+    }
+out:
+    sqlite3_finalize(stmt);
+    return res;
+}
+
+int magicnet_database_setting_set(const char *key, const char *value)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+    if (strlen(value) > MAGICNET_MAX_SETTING_VALUE_SIZE)
+    {
+        magicnet_log("%s The setting value is too large\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Check if the key exists if it does update it otherwise create it
+    const char *get_setting_sql = "SELECT id FROM settings WHERE key=?;";
+    res = sqlite3_prepare_v2(db, get_setting_sql, strlen(get_setting_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+    sqlite3_bind_text(stmt, 1, key, strlen(key), NULL);
+
+    int step = sqlite3_step(stmt);
+    if (step == SQLITE_ROW)
+    {
+        res = magicnet_database_setting_set_update_no_locks(key, value);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+    else
+    {
+        res = magicnet_database_setting_set_create_no_locks(key, value);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+out:
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
+int magicnet_database_setting_get(const char *key, char *value_out)
+{
+    int res = 0;
+    sqlite3_stmt *stmt = NULL;
+    pthread_mutex_lock(&db_lock);
+
+    const char *get_setting_sql = "SELECT value FROM settings WHERE key=?;";
+    res = sqlite3_prepare_v2(db, get_setting_sql, strlen(get_setting_sql), &stmt, 0);
+    if (res != SQLITE_OK)
+    {
+        goto out;
+    }
+    sqlite3_bind_text(stmt, 1, key, strlen(key), NULL);
+
+    int step = sqlite3_step(stmt);
+    if (step != SQLITE_ROW)
+    {
+        res = -1;
+        goto out;
+    }
+
+    if (value_out)
+    {
+        strncpy(value_out, sqlite3_column_text(stmt, 0), MAGICNET_MAX_SETTING_VALUE_SIZE);
+    }
+
+out:
+    sqlite3_finalize(stmt);
+    pthread_mutex_unlock(&db_lock);
+    return res;
 }
 
 int magicnet_database_peer_add_no_locks(const char *ip_address, struct key *key, const char *name, const char *email)
@@ -458,6 +591,9 @@ int magicnet_database_load()
         {
             goto out;
         }
+
+        // Set the first ever runtime.
+        magicnet_setting_set_timestamp("first_run", time(NULL));
     }
 
     if (pthread_mutex_init(&db_lock, NULL) != 0)
@@ -1733,9 +1869,9 @@ int magicnet_database_load_council_no_locks(const char *id_hash, struct magicnet
     // Set all the council certificates to point to this council
     for (size_t i = 0; i < council_out->signed_data.id_signed_data.total_certificates; i++)
     {
-       council_out->signed_data.certificates[i].council = council_out;
+        council_out->signed_data.certificates[i].council = council_out;
     }
-    
+
     memcpy(council_out->hash, sqlite3_column_text(stmt, 5), sizeof(council_out->hash));
     memcpy(&council_out->creator.signature, sqlite3_column_blob(stmt, 6), sizeof(council_out->creator.signature));
     council_out->creator.key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 7));

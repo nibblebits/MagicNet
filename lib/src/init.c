@@ -51,6 +51,8 @@ int magicnet_server_init()
 
     MAGICNET_load_keypair();
 
+
+
     res = blockchain_init();
     if (res < 0)
     {

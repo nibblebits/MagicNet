@@ -1338,4 +1338,17 @@ void magicnet_transactions_request_set_target_key(struct magicnet_transactions_r
 struct magicnet_wallet *magicnet_wallet_find(struct key *key);
 int magicnet_wallet_calculate_balance(struct key *key, double *balance_out);
 int magicnet_wallet_calculate_balance_from_block(struct key *key, double *balance_out, const char *block_hash);
+
+// Settings
+
+int magicnet_setting_set(const char *key, const char *value);
+int magicnet_setting_set_timestamp(const char *key, time_t value);
+int magicnet_setting_set_int(const char *key, int value);
+
+int magicnet_setting_get_int(const char *key, int *value_out);
+int magicnet_setting_get_timestamp(const char *key, time_t *value_out);
+int magicnet_setting_get(const char *key, char *value_out);
+
+bool magicnet_setting_exists(const char *key);
+
 #endif
