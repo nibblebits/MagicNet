@@ -55,6 +55,8 @@ int magicnet_database_load_council(const char *id_hash, struct magicnet_council 
 int magicnet_database_write_council(const struct magicnet_council *council_in);
 // Certificates
 int magicnet_database_write_certificate_no_locks(struct magicnet_council_certificate *certificate_in);
+int magicnet_database_write_certificate(struct magicnet_council_certificate *certificate_in);
+
 int magicnet_database_load_transfer_no_locks(struct council_certificate_transfer *certificate_transfer_out, int local_id);
 int magicnet_database_load_certificate_no_locks(struct magicnet_council_certificate *certificate_out, const char *certificate_hash);
 int magicnet_database_load_council_certificates_no_locks(const char* council_id_hash, struct magicnet_council_certificate* certificates, size_t max_certificates);

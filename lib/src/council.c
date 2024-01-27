@@ -18,15 +18,13 @@ static struct magicnet_council *central_council = NULL;
 
 /**
  * A vector of loaded councils
-*/
+ */
 
 struct loaded_council_vector
 {
-    struct vector* vector;
+    struct vector *vector;
     pthread_mutex_t lock;
 } loaded_council;
-
-
 
 void magicnet_council_certificate_free(struct magicnet_council_certificate *certificate);
 void magicnet_council_certificate_free_data(struct magicnet_council_certificate *certificate);
@@ -48,7 +46,7 @@ out:
 int magicnet_council_vector_init()
 {
     int res = 0;
-    loaded_council.vector = vector_create(sizeof(struct magicnet_council*));
+    loaded_council.vector = vector_create(sizeof(struct magicnet_council *));
     if (!loaded_council.vector)
     {
         res = -1;
@@ -62,16 +60,16 @@ out:
 
 int magicnet_council_vector_deallocate()
 {
-    int res  = 0;
+    int res = 0;
     pthread_mutex_lock(&loaded_council.lock);
     vector_set_peek_pointer(loaded_council.vector, 0);
-    struct magicnet_council* council = vector_peek_ptr(loaded_council.vector);
-    while(council)
+    struct magicnet_council *council = vector_peek_ptr(loaded_council.vector);
+    while (council)
     {
         magicnet_council_free(council);
         council = vector_peek_ptr(loaded_council.vector);
     }
-    
+
     vector_free(loaded_council.vector);
     loaded_council.vector = NULL;
     pthread_mutex_unlock(&loaded_council.lock);
@@ -88,15 +86,15 @@ int magicnet_council_vector_add(struct magicnet_council *council)
     return res;
 }
 
-int magicnet_council_load(const char* council_id_hash, struct magicnet_council** council_out)
+int magicnet_council_load(const char *council_id_hash, struct magicnet_council **council_out)
 {
     int res = 0;
     pthread_mutex_lock(&loaded_council.lock);
 
     // Check if we already have this council loaded
     vector_set_peek_pointer(loaded_council.vector, 0);
-    struct magicnet_council* council = vector_peek_ptr(loaded_council.vector);
-    while(council)
+    struct magicnet_council *council = vector_peek_ptr(loaded_council.vector);
+    while (council)
     {
         if (strncmp(council->signed_data.id_hash, council_id_hash, sizeof(council->signed_data.id_hash)) == 0)
         {
@@ -107,7 +105,6 @@ int magicnet_council_load(const char* council_id_hash, struct magicnet_council**
         vector_set_peek_pointer(loaded_council.vector, 1);
         council = vector_peek_ptr(loaded_council.vector);
     }
-
 
     // Still no council? Then load from the database
     council = calloc(1, sizeof(struct magicnet_council));
@@ -128,7 +125,7 @@ int magicnet_council_load(const char* council_id_hash, struct magicnet_council**
     {
         goto out;
     }
-    
+
     // Lets add the council to the vector so it remains cached
     res = magicnet_council_vector_add(council);
     if (res < 0)
@@ -140,7 +137,7 @@ out:
     return res;
 }
 
-bool magicnet_council_is_genesis_certificate(struct magicnet_council* council, struct magicnet_council_certificate* certificate)
+bool magicnet_council_is_genesis_certificate(struct magicnet_council *council, struct magicnet_council_certificate *certificate)
 {
     bool res = false;
     if (!(certificate->signed_data.flags & MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS))
@@ -155,7 +152,7 @@ bool magicnet_council_is_genesis_certificate(struct magicnet_council* council, s
         goto out;
     }
 
-    struct magicnet_council_certificate* council_cert = &council->signed_data.certificates[certificate->signed_data.id];
+    struct magicnet_council_certificate *council_cert = &council->signed_data.certificates[certificate->signed_data.id];
     if (memcmp(council_cert->hash, certificate->hash, sizeof(council_cert->hash)) == 0)
     {
         res = true;
@@ -176,9 +173,10 @@ int magicnet_council_init()
         goto out;
     }
 
+    time_t council_creation_time = time(NULL);
     // Obviously we want to load the council from the database
     // we are simulating many actions here as we continue to build on the council funtionality
-    central_council = magicnet_council_create(MAGICNET_MASTER_COUNCIL_NAME, MAGICNET_MASTER_COUNCIL_TOTAL_CERTIFICATES, time(NULL));
+    central_council = magicnet_council_create(MAGICNET_MASTER_COUNCIL_NAME, MAGICNET_MASTER_COUNCIL_TOTAL_CERTIFICATES, council_creation_time);
     if (!central_council)
     {
         res = -1;
@@ -186,11 +184,36 @@ int magicnet_council_init()
     }
 
     res = magicnet_council_save(central_council);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    struct magicnet_council_certificate *new_certificate = NULL;
+    res = magicnet_council_certificate_self_transfer(&central_council->signed_data.certificates[0], &new_certificate, MAGICNET_public_key(), council_creation_time, council_creation_time+(86400*65));
+    if (res < 0)
+    {
+        magicnet_log("%s failed to self transfer certificate\n", __FUNCTION__);
+        goto out;
+    }
+
+    res = magicnet_council_certificate_self_transfer_claim(new_certificate);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to self transfer claim certificate\n", __FUNCTION__);
+        goto out;
+    }
+
+     res = magicnet_council_certificate_save(new_certificate);
+     if (res < 0)
+     {
+         magicnet_log("%s failed to save certificate\n", __FUNCTION__);
+         goto out;
+     }
 
 out:
     return res;
 }
-
 
 void magicnet_council_free(struct magicnet_council *council)
 {
@@ -217,6 +240,27 @@ out:
     return res;
 }
 
+int magicnet_council_certificate_save(struct magicnet_council_certificate *certificate)
+{
+    int res = 0;
+    res = magicnet_council_certificate_verify(certificate);
+    if (res < 0)
+    {
+        magicnet_log("%s council certificate verification failed for hash %s, certificate is invalid\n", __FUNCTION__, certificate->hash);
+        goto out;
+    }
+
+    res = magicnet_database_write_certificate(certificate);
+    if (res < 0)
+    {
+        magicnet_log("%s council certificate verification failed for hash %s, certificate is invalid\n", __FUNCTION__, certificate->hash);
+        goto out;
+    }
+
+out:
+    return res;
+}
+
 
 void magicnet_council_certificate_many_free(struct magicnet_council_certificate *certificates_ptr, size_t amount)
 {
@@ -239,6 +283,7 @@ struct magicnet_council_certificate *magicnet_council_certificate_create()
 
 void magincet_council_certificate_vote_free_data(struct council_certificate_transfer_vote *certificate_vote)
 {
+    magicnet_council_certificate_free(certificate_vote->voter_certificate);
 }
 
 void magicnet_council_certificate_transfer_free_data(struct council_certificate_transfer *certificate_transfer)
@@ -309,21 +354,19 @@ void magicnet_council_certificate_transfer_vote_hash(struct council_certificate_
 
 /**
  * Second pass ensures the voter signed the correct total against and for votes
-*/
-int magicnet_council_certificate_transfer_vote_verify_second_pass(struct magicnet_council_certificate* certificate, struct council_certificate_transfer_vote *vote, size_t total_for_votes_out, size_t total_against_votes_out)
+ */
+int magicnet_council_certificate_transfer_vote_verify_second_pass(struct magicnet_council_certificate *certificate, struct council_certificate_transfer_vote *vote, size_t total_for_votes_out, size_t total_against_votes_out)
 {
     int res = 0;
 
     if (total_for_votes_out != vote->signed_data.total_for_vote)
     {
-        magicnet_log("%s council certificate transfer vote verification failed for hash %s, total for votes does not match the total for votes in the vote\n", __FUNCTION__, hash);
         res = -1;
         goto out;
     }
 
     if (total_against_votes_out != vote->signed_data.total_against_vote)
     {
-        magicnet_log("%s council certificate transfer vote verification failed for hash %s, total against votes does not match the total against votes in the vote\n", __FUNCTION__, hash);
         res = -1;
         goto out;
     }
@@ -332,7 +375,7 @@ out:
     return res;
 }
 
-int magicnet_council_certificate_transfer_vote_verify(struct magicnet_council_certificate* certificate, struct council_certificate_transfer_vote *vote, size_t* total_for_votes_out, size_t* total_against_votes_out)
+int magicnet_council_certificate_transfer_vote_verify(struct magicnet_council_certificate *certificate, struct council_certificate_transfer_vote *vote, size_t *total_for_votes_out, size_t *total_against_votes_out)
 {
     int res = 0;
     char hash[SHA256_STRING_LENGTH];
@@ -351,13 +394,17 @@ int magicnet_council_certificate_transfer_vote_verify(struct magicnet_council_ce
         goto out;
     }
 
-
-
-
-    if (certificate->signed_data.expires_at != vote->signed_data.certificate_expires_at 
-        || certificate->signed_data.valid_from != vote->signed_data.certificate_valid_from)
+    if (certificate->signed_data.expires_at != vote->signed_data.certificate_expires_at || certificate->signed_data.valid_from != vote->signed_data.certificate_valid_from)
     {
         magicnet_log("%s council certificate transfer vote verification failed for hash %s, certificate expiry or valid from does not match the transfer\n", __FUNCTION__, hash);
+        res = -1;
+        goto out;
+    }
+
+    // Next we need to verify that the vote was made at the time the voting certificate was valid. I.e we cant vote for certificates whose valid_from exceed our own expiry and existed before we did
+    if (vote->signed_data.certificate_valid_from > vote->voter_certificate->signed_data.expires_at || vote->signed_data.certificate_valid_from < vote->voter_certificate->signed_data.valid_from)
+    {
+        magicnet_log("%s council certificate transfer vote verification failed for hash %s, you cannot vote for a valid from that exceeds your certificate expiration or whose certificate existed before you\n", __FUNCTION__, hash);
         res = -1;
         goto out;
     }
@@ -369,7 +416,6 @@ int magicnet_council_certificate_transfer_vote_verify(struct magicnet_council_ce
         res = -1;
         goto out;
     }
-
 
     magicnet_council_certificate_transfer_vote_hash(vote, hash);
     if (memcmp(hash, vote->hash, sizeof(hash)) != 0)
@@ -434,8 +480,8 @@ void magicnet_council_certificate_transfer_hash(struct council_certificate_trans
 int magicnet_council_certificate_transfer_verify(struct magicnet_council_certificate *council_cert)
 {
     int res = 0;
-    
-    struct council_certificate_transfer* transfer = &council_cert->signed_data.transfer;
+
+    struct council_certificate_transfer *transfer = &council_cert->signed_data.transfer;
     if (council_cert->signed_data.flags & MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS && transfer->certificate)
     {
         // This is marked as a genesis certificate but has a previous certificate
@@ -454,12 +500,7 @@ int magicnet_council_certificate_transfer_verify(struct magicnet_council_certifi
 
     if (!key_cmp(&council_cert->signed_data.transfer.new_owner, &council_cert->owner_key))
     {
-        magicnet_log("%s council certificate transfer verification failed for hash %s, new owner does not match the transfer\n", __FUNCTION__, hash);
-        res = -1;
-        goto out;
-    }
-    {
-        magicnet_log("%s council certificate transfer vote verification failed for hash %s, new owner does not match the transfer\n", __FUNCTION__, hash);
+        magicnet_log("%s council certificate transfer verification failed for hash %s, new owner does not match the transfer\n", __FUNCTION__, council_cert->hash);
         res = -1;
         goto out;
     }
@@ -474,7 +515,6 @@ int magicnet_council_certificate_transfer_verify(struct magicnet_council_certifi
             res = -1;
             goto out;
         }
-
     }
 
     // Verify the previous certificate is valid
@@ -503,7 +543,6 @@ int magicnet_council_certificate_transfer_verify(struct magicnet_council_certifi
             goto out;
         }
     }
-
 
     size_t total_found_for_votes = 0;
     size_t total_found_against_votes = 0;
@@ -584,7 +623,7 @@ int magicnet_council_certificate_verify(struct magicnet_council_certificate *cer
         goto out;
     }
 
-    struct magicnet_council* council = certificate->council;
+    struct magicnet_council *council = certificate->council;
     if (!council)
     {
         // Council is not loaded? Let's try to load the council, theres a chance it might not exist yet
@@ -593,7 +632,6 @@ int magicnet_council_certificate_verify(struct magicnet_council_certificate *cer
         council = certificate->council;
     }
 
-    
     // Check the certificate is expiry and valid from dates are valid.
     if (certificate->signed_data.expires_at < certificate->signed_data.valid_from)
     {
@@ -601,7 +639,7 @@ int magicnet_council_certificate_verify(struct magicnet_council_certificate *cer
         res = -1;
         goto out;
     }
-    
+
     if (council)
     {
         // Check the certificate is for this council
@@ -613,14 +651,13 @@ int magicnet_council_certificate_verify(struct magicnet_council_certificate *cer
         }
     }
 
-    
     res = magicnet_council_certificate_transfer_verify(certificate);
     if (res < 0)
     {
         magicnet_log("%s council certificate with hash %s is invalid or corrupted, certificate transfer is invalid.\n", __FUNCTION__, certificate->hash);
         goto out;
     }
-    
+
     res = magicnet_council_certificate_verify_signature(certificate);
     if (res < 0)
     {
@@ -665,7 +702,6 @@ void magicnet_council_id_hash(struct magicnet_council *council, char *out_hash)
     buffer_free(id_hash_buf);
 }
 
-
 void magicnet_council_hash(struct magicnet_council *council, char *out_hash)
 {
     char id_hash[SHA256_STRING_LENGTH] = {0};
@@ -705,9 +741,24 @@ int magicnet_council_verify(struct magicnet_council *council)
 out:
     return res;
 }
-void magicnet_council_certificate_clone_signed_data(struct council_certificate_transfer *transfer_out, struct council_certificate_transfer *transfer_in)
+
+void magicnet_council_certificate_transfer_votes_clone(struct magicnet_council_certificate *certificate_in, struct magicnet_council_certificate *certificate_out)
 {
-    // TODO
+    certificate_out->signed_data.transfer.total_voters = certificate_in->signed_data.transfer.total_voters;
+    certificate_out->signed_data.transfer.voters = calloc(certificate_out->signed_data.transfer.total_voters, sizeof(struct council_certificate_transfer_vote));
+    for (size_t i = 0; i < certificate_out->signed_data.transfer.total_voters; i++)
+    {
+        certificate_out->signed_data.transfer.voters[i] = certificate_in->signed_data.transfer.voters[i];
+        certificate_out->signed_data.transfer.voters[i].voter_certificate = magicnet_council_certificate_clone(certificate_in->signed_data.transfer.voters[i].voter_certificate);
+    }
+}
+void magicnet_council_certificate_clone_signed_data(struct magicnet_council_certificate *certificate_in, struct magicnet_council_certificate *certificate_out)
+{
+    if (certificate_in->signed_data.transfer.certificate)
+    {
+        certificate_out->signed_data.transfer.certificate = magicnet_council_certificate_clone(certificate_in->signed_data.transfer.certificate);
+    }
+    magicnet_council_certificate_transfer_votes_clone(certificate_in, certificate_out);
 }
 
 struct magicnet_council_certificate *magicnet_council_certificate_clone(struct magicnet_council_certificate *certificate)
@@ -719,7 +770,7 @@ struct magicnet_council_certificate *magicnet_council_certificate_clone(struct m
     }
 
     memcpy(certificate_out, certificate, sizeof(struct magicnet_council_certificate));
-    magicnet_council_certificate_clone_signed_data(&certificate_out->signed_data.transfer, &certificate->signed_data.transfer);
+    magicnet_council_certificate_clone_signed_data(certificate_out, certificate);
 
     // Verify the integrety of what we have copied
     int res = magicnet_council_certificate_verify_signature(certificate_out);
@@ -743,6 +794,7 @@ int magicnet_council_build_certificate(struct magicnet_council *council, int id_
     certificate_out->signed_data.expires_at = expires_at;
     certificate_out->signed_data.valid_from = valid_from;
     certificate_out->signed_data.transfer.new_owner = *MAGICNET_public_key();
+
     magicnet_council_certificate_hash(certificate_out, certificate_out->hash);
     res = magicnet_council_certificate_sign_and_take_ownership(certificate_out);
     if (res < 0)
@@ -752,6 +804,152 @@ int magicnet_council_build_certificate(struct magicnet_council *council, int id_
 
     certificate_out->council = council;
 out:
+    return res;
+}
+
+int magicnet_council_certificate_build_transfer_vote(struct magicnet_council_certificate *voting_certificate, struct magicnet_council_certificate *original_certificate, struct magicnet_council_certificate *new_certificate, struct key *vote_for_key, struct key *winning_key, int index, time_t valid_from, time_t valid_to)
+{
+    int res = 0;
+
+    if (!key_cmp(&voting_certificate->owner_key, MAGICNET_public_key()))
+    {
+        magicnet_log("%s voting certificate is not the same as the logged in private key. How can we sign something with that certificate when we dont have the private keys? Use the voting certificate of the logged in key", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    if (new_certificate->signed_data.transfer.total_voters <= index)
+    {
+        res = -1;
+        goto out;
+    }
+
+    struct council_certificate_transfer_vote *vote = &new_certificate->signed_data.transfer.voters[0];
+    strncpy(vote->signed_data.certificate_to_transfer_hash, original_certificate->hash, sizeof(vote->signed_data.certificate_to_transfer_hash));
+    vote->signed_data.total_voters = 1;
+    vote->signed_data.total_for_vote = 1;
+    vote->signed_data.total_against_vote = 0;
+    vote->signed_data.certificate_expires_at = valid_to;
+    vote->signed_data.certificate_valid_from = valid_from;
+    vote->signed_data.new_owner_key = *vote_for_key;
+    if (winning_key)
+    {
+        vote->signed_data.winning_key = *winning_key;
+    }
+
+    // Clones neccessary as the certificates get freed.
+    vote->voter_certificate = magicnet_council_certificate_clone(voting_certificate);
+
+    // Hash and sign with currently logged in private key
+    magicnet_council_certificate_transfer_vote_hash(vote, vote->hash);
+    res = private_sign(vote->hash, sizeof(vote->hash), &vote->signature);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
+int magicnet_council_certificate_self_transfer_claim(struct magicnet_council_certificate *certificate_to_claim)
+{
+    int res = 0;
+
+    if (!key_cmp(MAGICNET_public_key(), &certificate_to_claim->owner_key))
+    {
+        magicnet_log("%s certificate to claim is not owned by the logged in key\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // All we need to do now is sign the certificate and its claimed
+    res = magicnet_council_certificate_sign_and_take_ownership(certificate_to_claim);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Lets verify everything went okay
+    res = magicnet_council_certificate_verify(certificate_to_claim);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+int magicnet_council_certificate_self_transfer(struct magicnet_council_certificate *certificate, struct magicnet_council_certificate **new_certificate_out, struct key *new_owner, time_t valid_from, time_t valid_to)
+{
+    int res = 0;
+    if (!(certificate->signed_data.flags & MAGICNET_COUNCIL_CERTIFICATE_FLAG_TRANSFERABLE_WITHOUT_VOTE))
+    {
+        magicnet_log("%s this certificate is not transferable without a vote\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Clone the original certificate since most properties will remain present.
+    struct magicnet_council_certificate *new_certificate = magicnet_council_certificate_clone(certificate);
+    if (!new_certificate)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Let's free the voting data since its the old certificate voting data
+    magicnet_council_certificate_transfer_free_data(&new_certificate->signed_data.transfer);
+
+    // Lets now clear the transfer structure
+    memset(&new_certificate->signed_data.transfer, 0, sizeof(new_certificate->signed_data.transfer));
+
+    // Next we need to setup the voting data there will be one vote, which will be the owner of the certificate
+    new_certificate->signed_data.transfer.total_voters = 1;
+    new_certificate->signed_data.transfer.voters = calloc(1, sizeof(struct council_certificate_transfer_vote));
+    if (!new_certificate->signed_data.transfer.voters)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Change valid from and expiry all the rest is same as the certificate we are transfeering.
+    new_certificate->signed_data.valid_from = valid_from;
+    new_certificate->signed_data.expires_at = valid_to;
+
+    // No memory flags for this buddy since this is a new certificate.
+    new_certificate->memory_flags = 0;
+
+    // We will create one transfer vote for index zero of the voters array
+    // It will vote for the new owner and mark the new owner as the winner. This is valid because the certificate is self transferable.
+    // Using only this vote we confirm the transfer correctly.
+    res = magicnet_council_certificate_build_transfer_vote(certificate, certificate, new_certificate, new_owner, new_owner, 0, valid_from, valid_to);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Great let's set the old certificate so theirs a clear transfer history, Clones neccessary as the certificates get freed.
+    new_certificate->signed_data.transfer.certificate = magicnet_council_certificate_clone(certificate);
+
+    // We will not allow infinite transfers without vote by default.. Can be overridden programmatially if required later.
+    // no system wide restriction for this. Flags will remain zero no special privilage rights will be given.
+    new_certificate->signed_data.flags = 0;
+    new_certificate->owner_key = *new_owner;
+    new_certificate->signed_data.transfer.new_owner = *new_owner;
+    magicnet_council_certificate_hash(new_certificate, new_certificate->hash);
+
+    // Now the certificate at this point needs to be signed by the receiver. Then the transfer will be completed.
+
+out:
+    if (res >= 0)
+    {
+        *new_certificate_out = new_certificate;
+    }
+    else
+    {
+        magicnet_council_certificate_free(new_certificate);
+    }
     return res;
 }
 
@@ -770,7 +968,6 @@ int magicnet_council_sign(struct magicnet_council *council)
 out:
     return res;
 }
-
 
 struct magicnet_council *magicnet_council_create(const char *name, size_t total_certificates, time_t creation_time)
 {

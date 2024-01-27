@@ -1251,6 +1251,13 @@ int magicnet_council_verify(struct magicnet_council *council);
 */
 int magicnet_council_certificate_verify_signed_data(struct magicnet_council_certificate *certificate, struct signature* signature, const char* hash);
 
+
+/**
+ * Verifies that the certificate is valid and signed by the owner of the certificate.
+ * Then saves the certificate to the database.
+*/
+int magicnet_council_certificate_save(struct magicnet_council_certificate *certificate);
+
 /**
  * Verifies that the council certificate is valid
  * 
@@ -1266,6 +1273,25 @@ void magicnet_council_certificate_free(struct magicnet_council_certificate *cert
 int magicnet_council_certificate_verify_signature(struct magicnet_council_certificate *certificate);
 void magicnet_council_certificate_hash(struct magicnet_council_certificate *certificate, char *out_hash);
 
+/**
+ * Transfeers the council certificate without the need of vote, this is only allowed if the certificate holds the
+ * MAGICNET_COUNCIL_CERTIFICATE_FLAG_TRANSFERABLE_WITHOUT_VOTE flag. Additionally if two certificates become in existance with overlapping
+ * valid from and expiry times then both certificates will become invalidated. This is to prevent a situation where a certificate
+ * is transfered to two people at the same time. Breaking this rule will invalidate the certificates in question when any peer becomes aware of a 
+ * co-existing certificate. 
+ * 
+ * This function will fail in the event the certificate cannot be transfeered due to overlapping times. If you force it programatically all nodes
+ * will reject this certificate for the entire future so please ensure you respect the return result of this function.
+ * 
+*/
+int magicnet_council_certificate_self_transfer(struct magicnet_council_certificate *certificate, struct magicnet_council_certificate** new_certificate_out, struct key *new_owner, time_t valid_from, time_t valid_to);
+
+
+/**
+ * Should be called by anyone who wishes to claim a certificate that has been assigned to them. This function will sign the certificate and ensure
+ * that the certificate is valid. If the certificate is not valid then the function will return an error.
+*/
+int magicnet_council_certificate_self_transfer_claim(struct magicnet_council_certificate* certificate_to_claim);
 /**
  * Returns true if the given certificate is a genesis certificate belonging to the council
 */
