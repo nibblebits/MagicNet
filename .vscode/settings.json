@@ -28,7 +28,10 @@
         "unordered_map": "cpp",
         "vector": "cpp",
         "string_view": "cpp",
-        "initializer_list": "cpp"
+        "initializer_list": "cpp",
+        "memory": "c",
+        "system_error": "c",
+        "variant": "c"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/qt-chain-admin/ChainAdmin"
 }

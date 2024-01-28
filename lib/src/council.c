@@ -77,11 +77,18 @@ int magicnet_council_vector_deallocate()
     return res;
 }
 
+int magicnet_council_vector_add_no_locks(struct magicnet_council *council)
+{
+    int res = 0;
+    vector_push(loaded_council.vector, &council);
+    return res;
+}
+
 int magicnet_council_vector_add(struct magicnet_council *council)
 {
     int res = 0;
     pthread_mutex_lock(&loaded_council.lock);
-    vector_push(loaded_council.vector, &council);
+    res = magicnet_council_vector_add_no_locks(council);
     pthread_mutex_unlock(&loaded_council.lock);
     return res;
 }
@@ -117,19 +124,22 @@ int magicnet_council_load(const char *council_id_hash, struct magicnet_council *
     res = magicnet_database_load_council(council_id_hash, council);
     if (res < 0)
     {
+        magicnet_log("%s failed to load council from database\n", __FUNCTION__);
         goto out;
     }
 
     res = magicnet_council_verify(council);
     if (res < 0)
     {
+        magicnet_log("%s council verification failed for hash %s, council is invalid\n", __FUNCTION__, council->hash);
         goto out;
     }
 
     // Lets add the council to the vector so it remains cached
-    res = magicnet_council_vector_add(council);
+    res = magicnet_council_vector_add_no_locks(council);
     if (res < 0)
     {
+        magicnet_log("%s failed to add council to vector\n", __FUNCTION__);
         goto out;
     }
 out:
@@ -162,17 +172,9 @@ out:
     return res;
 }
 
-int magicnet_council_init()
+int magicnet_council_create_master()
 {
     int res = 0;
-
-    // INitialize the council vector cache
-    res = magicnet_council_vector_init();
-    if (res < 0)
-    {
-        goto out;
-    }
-
     time_t council_creation_time = time(NULL);
     // Obviously we want to load the council from the database
     // we are simulating many actions here as we continue to build on the council funtionality
@@ -190,7 +192,7 @@ int magicnet_council_init()
     }
 
     struct magicnet_council_certificate *new_certificate = NULL;
-    res = magicnet_council_certificate_self_transfer(&central_council->signed_data.certificates[0], &new_certificate, MAGICNET_public_key(), council_creation_time, council_creation_time+(86400*65));
+    res = magicnet_council_certificate_self_transfer(&central_council->signed_data.certificates[0], &new_certificate, MAGICNET_public_key(), council_creation_time, council_creation_time + (86400 * 65));
     if (res < 0)
     {
         magicnet_log("%s failed to self transfer certificate\n", __FUNCTION__);
@@ -204,12 +206,58 @@ int magicnet_council_init()
         goto out;
     }
 
-     res = magicnet_council_certificate_save(new_certificate);
-     if (res < 0)
-     {
-         magicnet_log("%s failed to save certificate\n", __FUNCTION__);
-         goto out;
-     }
+    res = magicnet_council_certificate_save(new_certificate);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to save certificate\n", __FUNCTION__);
+        goto out;
+    }
+
+    res = magicnet_setting_set(MAGICNET_MASTER_COUNCIL_NAME, central_council->signed_data.id_hash);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to save master council hash\n", __FUNCTION__);
+        goto out;
+    }
+out:
+    return res;
+}
+int magicnet_council_init()
+{
+    int res = 0;
+
+    // INitialize the council vector cache
+    res = magicnet_council_vector_init();
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    if (magicnet_setting_exists(MAGICNET_MASTER_COUNCIL_NAME))
+    {
+        // We have a master council, lets load it
+        char council_hash[MAGICNET_MAX_SETTING_VALUE_SIZE] = {0};
+        res = magicnet_setting_get(MAGICNET_MASTER_COUNCIL_NAME, council_hash);
+        if (res < 0)
+        {
+            goto out;
+        }
+
+        res = magicnet_council_load(council_hash, &central_council);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+    else
+    {
+        // We need to create the master council
+        res = magicnet_council_create_master();
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
 
 out:
     return res;
@@ -260,7 +308,6 @@ int magicnet_council_certificate_save(struct magicnet_council_certificate *certi
 out:
     return res;
 }
-
 
 void magicnet_council_certificate_many_free(struct magicnet_council_certificate *certificates_ptr, size_t amount)
 {

@@ -170,7 +170,6 @@ out:
     return res;
 }
 
-
 int magicnet_database_setting_set_update_no_locks(const char *key, const char *value)
 {
     int res = 0;
@@ -1772,6 +1771,9 @@ out:
 
 int magicnet_database_load_certificate_no_locks(struct magicnet_council_certificate *certificate_out, const char *certificate_hash);
 
+/**
+ * Loads the initial council certificates that existed upon council creation.
+ */
 int magicnet_database_load_council_certificates_no_locks(const char *council_id_hash, struct magicnet_council_certificate *certificates, size_t max_certificates)
 {
 
@@ -1789,7 +1791,9 @@ int magicnet_database_load_council_certificates_no_locks(const char *council_id_
     int res = 0;
 
     sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT hash FROM council_certificates WHERE council_id_hash = ?";
+
+    // Where the council hash is equal to the provided hash and the MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS flag is set
+    const char *load_block_sql = "SELECT hash FROM council_certificates WHERE council_id_hash = ? AND (flags & ?) = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1797,6 +1801,9 @@ int magicnet_database_load_council_certificates_no_locks(const char *council_id_
     }
 
     sqlite3_bind_text(stmt, 1, council_id_hash, strlen(council_id_hash), NULL);
+    sqlite3_bind_int(stmt, 2, MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS);
+    sqlite3_bind_int(stmt, 3, MAGICNET_COUNCIL_CERITFICATE_FLAG_GENESIS);
+
     int step = sqlite3_step(stmt);
     size_t i = 0;
     while (step == SQLITE_ROW)
@@ -2178,11 +2185,15 @@ int magicnet_database_load_transfer_no_locks(struct council_certificate_transfer
         res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
-    certificate_transfer_out->certificate = magicnet_council_certificate_create();
-    res = magicnet_database_load_certificate_no_locks(certificate_transfer_out->certificate, sqlite3_column_text(stmt, 1));
-    if (res < 0)
+
+    if (sqlite3_column_text(stmt, 1))
     {
-        goto out;
+        certificate_transfer_out->certificate = magicnet_council_certificate_create();
+        res = magicnet_database_load_certificate_no_locks(certificate_transfer_out->certificate, sqlite3_column_text(stmt, 1));
+        if (res < 0)
+        {
+            goto out;
+        }
     }
     certificate_transfer_out->new_owner = MAGICNET_key_from_string(sqlite3_column_text(stmt, 2));
     certificate_transfer_out->total_voters = sqlite3_column_int(stmt, 3);
@@ -2312,6 +2323,8 @@ int magicnet_database_load_certificate_no_locks(struct magicnet_council_certific
     certificate_out->signed_data.valid_from = (time_t)sqlite3_column_int64(stmt, 5);
 
     magicnet_database_load_transfer_no_locks(&certificate_out->signed_data.transfer, sqlite3_column_int(stmt, 6));
+    strncpy(certificate_out->hash, sqlite3_column_text(stmt, 7), sizeof(certificate_out->hash));
+
     certificate_out->owner_key = MAGICNET_key_from_string(sqlite3_column_text(stmt, 8));
 
     if (sqlite3_column_blob(stmt, 9))
