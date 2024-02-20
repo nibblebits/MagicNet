@@ -305,14 +305,11 @@ struct magicnet_packet
                 } vote_next_verifier;
 
                 /**
-                 * @brief Once this packet is signed and sent your public key
-                 * will be eligible to be voted for to be the next signer of the block
-                 * unless you signup before a block is created you wont be considered.
-                 * You must sign up for every block you wish to sign.
+                 * @brief The verifier with a validate certificate may sign up to sign the next block
                  */
                 struct magicnet_verifier_signup
                 {
-                    // Empty... We will use the key that signed this block.
+                    struct magicnet_council_certificate *certificate;
                 } verifier_signup;
 
                 struct magicnet_transaction_send
