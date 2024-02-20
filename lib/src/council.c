@@ -220,6 +220,7 @@ int magicnet_council_create_master()
         magicnet_log("%s failed to save master council hash\n", __FUNCTION__);
         goto out;
     }
+
 out:
     return res;
 }

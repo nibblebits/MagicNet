@@ -143,6 +143,16 @@ const char *create_tables[] = {
 const char *magicnet_database_path()
 {
     static char filepath[PATH_MAX];
+
+    sprintf(filepath, "./%s", MAGICNET_DATABASE_SQLITE_FILEPATH);
+
+    // First check for a local path if it exists we will use that one
+    if (file_exists(filepath))
+    {
+        return filepath;
+    }
+
+    memset(filepath, 0, sizeof(filepath));
     sprintf(filepath, "%s/%s%s", getenv(MAGICNET_DATA_BASE_DIRECTORY_ENV), MAGICNET_DATA_BASE, MAGICNET_DATABASE_SQLITE_FILEPATH);
     return filepath;
 }
