@@ -143,6 +143,7 @@ int magicnet_council_load(const char *council_id_hash, struct magicnet_council *
         goto out;
     }
 out:
+    *council_out = council;
     pthread_mutex_unlock(&loaded_council.lock);
     return res;
 }
