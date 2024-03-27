@@ -3,10 +3,38 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
+
+long hash_number(const char *hash)
+{
+    if (strlen(hash) < 8)
+        return -1;
+
+    char eight_bytes[9] = {};
+    char *ptr = NULL;
+    strncpy(eight_bytes, hash, 8);
+
+    return strtol(eight_bytes, &ptr, 16);
+}
+
+
+void* alloc_memcpy(void* src, size_t size)
+{
+    void* dest = malloc(size);
+    if (dest)
+        memcpy(dest, src, size);
+    return dest;
+}
+
+void alloc_memcpy_free(void* ptr)
+{
+    if (ptr)
+        free(ptr);
+}
 
 bool file_exists(const char *filename)
 {

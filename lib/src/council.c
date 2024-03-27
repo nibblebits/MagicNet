@@ -148,6 +148,25 @@ out:
     return res;
 }
 
+bool magicnet_council_certificate_is_mine(const char* certificate_hash)
+{
+    bool res = false;
+    struct magicnet_council_certificate *certificate = magicnet_council_certificate_load(certificate_hash);
+    if (!certificate)
+    {
+        res = false;
+        goto out;
+    }
+
+    if (key_cmp(&certificate->owner_key, MAGICNET_public_key()))
+    {
+        res = true;
+        goto out;
+    }
+out:
+    return res;
+}
+
 bool magicnet_council_is_genesis_certificate(struct magicnet_council *council, struct magicnet_council_certificate *certificate)
 {
     bool res = false;
@@ -374,11 +393,19 @@ out:
 
 struct magicnet_council_certificate *magicnet_council_certificate_load(const char *certificate_hash)
 {
-    // Pretend to load from the database for noww... At the moment we aren't loading anything. Just
-    // simulate it
+    struct magicnet_council_certificate *certificate = calloc(1, sizeof(struct magicnet_council_certificate));
+    if (!certificate)
+    {
+        return NULL;
+    }
 
-    // Just load the first certificate from the central council, we all playign simulation games right now..
-    struct magicnet_council_certificate *certificate = magicnet_council_certificate_clone(&central_council->signed_data.certificates[0]);
+    int res = magicnet_database_load_certificate(certificate, certificate_hash);
+    if (res < 0)
+    {
+        free(certificate);
+        return NULL;
+    }
+
     return certificate;
 }
 

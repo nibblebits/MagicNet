@@ -1220,20 +1220,20 @@ int magicnet_database_load_last_block(char *hash_out, char *prev_hash_out)
     return res;
 }
 
-int magicnet_database_load_block_from_previous_hash(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, time_t *created_time)
+int magicnet_database_load_block_from_previous_hash(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, char *signing_certificate_hash, time_t *created_time)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);
-    res = magicnet_database_load_block_from_previous_hash_no_locks(prev_hash, hash_out, blockchain_id, transaction_group_hash, created_time);
+    res = magicnet_database_load_block_from_previous_hash_no_locks(prev_hash, hash_out, blockchain_id, transaction_group_hash, signing_certificate_hash, created_time);
     pthread_mutex_unlock(&db_lock);
     return res;
 }
 
-int magicnet_database_load_block_from_previous_hash_no_locks(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, time_t *created_time)
+int magicnet_database_load_block_from_previous_hash_no_locks(const char *prev_hash, char *hash_out, int *blockchain_id, char *transaction_group_hash, char *signing_certificate_hash, time_t *created_time)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT hash, blockchain_id, transaction_group_hash, time_created FROM blocks WHERE prev_hash = ?";
+    const char *load_block_sql = "SELECT hash, blockchain_id, transaction_group_hash, signing_certificate_hash, time_created FROM blocks WHERE prev_hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1268,9 +1268,18 @@ int magicnet_database_load_block_from_previous_hash_no_locks(const char *prev_ha
         }
     }
 
+    if (signing_certificate_hash)
+    {
+        bzero(transaction_group_hash, SHA256_STRING_LENGTH);
+        if (sqlite3_column_text(stmt, 3))
+        {
+            strncpy(transaction_group_hash, sqlite3_column_text(stmt, 3), SHA256_STRING_LENGTH);
+        }
+    }
+
     if (created_time)
     {
-        *created_time = sqlite3_column_int(stmt, 3);
+        *created_time = sqlite3_column_int(stmt, 4);
     }
 out:
     if (stmt)
@@ -1518,20 +1527,20 @@ int magicnet_database_load_block_transactions(struct block *block)
     return res;
 }
 
-int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature, time_t *created_time)
+int magicnet_database_load_block(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, char *signing_certificate_hash, struct signature *signature, time_t *created_time)
 {
     int res = 0;
     pthread_mutex_lock(&db_lock);
-    res = magicnet_database_load_block_no_locks(hash, prev_hash_out, blockchain_id, transaction_group_hash, key, signature, created_time);
+    res = magicnet_database_load_block_no_locks(hash, prev_hash_out, blockchain_id, transaction_group_hash, signing_certificate_hash, signature, created_time);
     pthread_mutex_unlock(&db_lock);
     return res;
 }
 
-int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, struct key *key, struct signature *signature, time_t *created_time)
+int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out, int *blockchain_id, char *transaction_group_hash, char *signing_certificate_hash, struct signature *signature, time_t *created_time)
 {
     int res = 0;
     sqlite3_stmt *stmt = NULL;
-    const char *load_block_sql = "SELECT prev_hash, blockchain_id, transaction_group_hash, key, signature, time_created FROM blocks WHERE hash = ?";
+    const char *load_block_sql = "SELECT prev_hash, blockchain_id, transaction_group_hash, signing_certificate_hash, signature, time_created FROM blocks WHERE hash = ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {
@@ -1567,13 +1576,15 @@ int magicnet_database_load_block_no_locks(const char *hash, char *prev_hash_out,
         }
     }
 
-    if (key)
+    if (signing_certificate_hash)
     {
-        if (sqlite3_column_blob(stmt, 3))
+        bzero(signing_certificate_hash, SHA256_STRING_LENGTH);
+        if (sqlite3_column_text(stmt, 3))
         {
-            memcpy(key, sqlite3_column_blob(stmt, 3), sizeof(struct key));
+            strncpy(signing_certificate_hash, sqlite3_column_text(stmt, 3), SHA256_STRING_LENGTH);
         }
     }
+
 
     if (signature)
     {
@@ -2373,7 +2384,7 @@ int magicnet_database_load_blocks(struct vector *block_vec_out, size_t amount)
     int res = 0;
     sqlite3_stmt *stmt = NULL;
     int pos = vector_count(block_vec_out);
-    const char *load_block_sql = "SELECT hash, prev_hash, blockchain_id, transaction_group_hash, key, signature FROM blocks LIMIT ?, ?";
+    const char *load_block_sql = "SELECT hash, prev_hash, blockchain_id, transaction_group_hash, signing_certificate_hash, key, signature FROM blocks LIMIT ?, ?";
     res = sqlite3_prepare_v2(db, load_block_sql, strlen(load_block_sql), &stmt, 0);
     if (res != SQLITE_OK)
     {

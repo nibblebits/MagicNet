@@ -309,6 +309,7 @@ struct magicnet_packet
                  */
                 struct magicnet_verifier_signup
                 {
+                    // The valid council certificate that wishes to sign the next block.
                     struct magicnet_council_certificate *certificate;
                 } verifier_signup;
 
@@ -476,17 +477,20 @@ struct magicnet_client
     struct magicnet_server *server;
 };
 
-struct magicnet_key_vote
+// This is the network vote structure to vote for the next block creator
+struct magicnet_certificate_vote
 {
-    // THe key who voted
-    struct key vote_from;
-    // The key voted for
-    struct key voted_for;
+    // The certificate that voted for the next block creator
+    struct magicnet_council_certificate* vote_from_cert;
+
+    // The hash of the certificate that was voted for. This is the person who will create the next block.
+    char vote_for_cert_hash[SHA256_STRING_LENGTH];
 };
 
 struct magicnet_vote_count
 {
-    struct key key;
+    // The hash of the certificate
+    char vote_for_cert_hash[SHA256_STRING_LENGTH];
     // The number of voters whome voted for this key.
     size_t voters;
 };
@@ -541,7 +545,7 @@ struct magicnet_server
          */
         struct votes
         {
-            // vector of struct magicnet_key_vote*
+            // vector of struct magicnet_certificate_vote*
             struct vector *votes;
 
             // vector of struct magicnet_vote_count*
@@ -1242,6 +1246,13 @@ void magicnet_council_free(struct magicnet_council *council);
 int magicnet_council_save(struct magicnet_council *council);
 int magicnet_council_verify(struct magicnet_council *council);
 
+
+/**
+ * Verifies that the council certificate is owned by the public key of this node
+ * 
+ * \param certificate The certificate to verify
+*/
+bool magicnet_council_certificate_is_mine(const char* certificate_hash);
 
 /**
  * Verifies that a given council certificate signed a particular hash.

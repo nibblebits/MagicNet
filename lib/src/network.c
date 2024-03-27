@@ -29,6 +29,7 @@
 #include "magicnet/magicnet.h"
 #include "magicnet/log.h"
 #include "key.h"
+#include "misc.h"
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
@@ -43,7 +44,6 @@ void magicnet_server_update_our_transaction_states(struct magicnet_server *serve
 int magicnet_server_push_event(struct magicnet_server *server, struct magicnet_event *event);
 int magicnet_client_write_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate, struct buffer *write_buf);
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf);
-
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
@@ -146,6 +146,17 @@ void magicnet_server_free(struct magicnet_server *server)
     magicnet_server_reset_block_sequence(server);
     vector_free(server->next_block.block_transactions);
     // TODO free the waiting transactions
+
+    // Free all the signed up verifiers
+    vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
+    struct magicnet_council_certificate *council_cert = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while (council_cert)
+    {
+        magicnet_council_certificate_free(council_cert);
+        council_cert = vector_peek(server->next_block.signed_up_verifiers);
+    }
+
+    // Free the vector
     vector_free(server->next_block.signed_up_verifiers);
     vector_free(server->next_block.verifier_votes.vote_counts);
     vector_free(server->next_block.verifier_votes.votes);
@@ -314,9 +325,9 @@ struct magicnet_server *magicnet_server_start(int port)
 
     srand(time(NULL));
 
-    server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_key_vote *));
+    server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_certificate_vote *));
     server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count *));
-    server->next_block.signed_up_verifiers = vector_create(sizeof(struct key *));
+    server->next_block.signed_up_verifiers = vector_create(sizeof(struct magicnet_council_certificate **));
     server->next_block.block_transactions = vector_create(sizeof(struct block_transaction *));
     server->our_waiting_transactions = vector_create(sizeof(struct self_block_transaction *));
     server->server_started = time(NULL);
@@ -545,16 +556,17 @@ out:
     return res;
 }
 
-bool magicnet_server_has_voted(struct magicnet_server *server, struct key *voter_key)
+bool magicnet_server_has_voted(struct magicnet_server *server, struct magicnet_council_certificate *voting_cert)
 {
     vector_set_peek_pointer(server->next_block.verifier_votes.votes, 0);
-    struct magicnet_key_vote *key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    struct magicnet_certificate_vote *key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
     while (key_vote)
     {
-        if (key_cmp(voter_key, &key_vote->vote_from))
+        if (memcmp(key_vote->vote_from_cert->hash, voting_cert->hash, sizeof(key_vote->vote_from_cert->hash)) == 0)
         {
             return true;
         }
+
         key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
     }
 
@@ -599,24 +611,25 @@ long magicnet_key_number(struct key *key)
 
     return strtol(eight_bytes, &ptr, 16);
 }
+
 /**
  * @brief This function attempts to break a tie between votes to create the next block
  * if it fails to break the tie then NULL is returned. The algorithm for how the function breaks a tie will work across
  * all peers as we do not rely on verifier signup order.
  *  *
- * @param vector_of_keys
- * @return struct key*
+ * @param vector_of_votes
+ * @return struct magicnet_vote_count*
  */
-struct key *magicnet_verifier_tie_breaker(struct vector *vector_of_keys)
+struct magicnet_vote_count *magicnet_verifier_tie_breaker(struct vector *vector_of_votes)
 {
-    if (vector_empty(vector_of_keys))
+    if (vector_empty(vector_of_votes))
     {
         return NULL;
     }
 
-    if (vector_count(vector_of_keys) == 1)
+    if (vector_count(vector_of_votes) == 1)
     {
-        return vector_back_ptr(vector_of_keys);
+        return vector_back_ptr(vector_of_votes);
     }
 
     /**
@@ -624,147 +637,147 @@ struct key *magicnet_verifier_tie_breaker(struct vector *vector_of_keys)
      * will win and the tie will be broken.
      */
 
-    struct key *key_winner = NULL;
-    vector_set_peek_pointer(vector_of_keys, 0);
-    struct key *key = vector_peek_ptr(vector_of_keys);
-    while (key)
+    struct magicnet_vote_count *vote_count_winner = NULL;
+    vector_set_peek_pointer(vector_of_votes, 0);
+    struct magicnet_vote_count *vote_count = vector_peek_ptr(vector_of_votes);
+    while (vote_count)
     {
-        if (key_winner)
+        if (vote_count_winner)
         {
-            if (magicnet_key_number(key) == magicnet_key_number(key_winner))
+            if (hash_number(vote_count->vote_for_cert_hash) == hash_number(vote_count_winner->vote_for_cert_hash))
             {
                 // We can't break this tie what incredibly circumstances..
                 return NULL;
             }
-            else if (magicnet_key_number(key) > magicnet_key_number(key_winner))
+            else if (hash_number(vote_count->vote_for_cert_hash) > hash_number(vote_count_winner->vote_for_cert_hash))
             {
-                key_winner = key;
+                vote_count_winner = vote_count;
             }
         }
-        if (!key_winner)
+        if (!vote_count_winner)
         {
-            key_winner = key;
+            vote_count_winner = vote_count;
         }
-        key = vector_peek_ptr(vector_of_keys);
+        vote_count = vector_peek_ptr(vector_of_votes);
     }
 
-    return key_winner;
+    return vote_count_winner;
 }
 /**
  * @brief All peers vote on who should make the next block, this function returns the current winner whome should
  * make the next block. Only call this at the right time because it takes time for votes to sync around the network.
  *
  * @param server
- * @return struct key*
+ * @return struct magicnet_vote_count*
  */
-struct key *magicnet_server_verifier_who_won(struct magicnet_server *server)
+struct magicnet_vote_count *magicnet_server_verifier_who_won(struct magicnet_server *server)
 {
-    struct key *winning_key = NULL;
-    struct magicnet_vote_count *winning_key_vote_count = NULL;
+    struct magicnet_vote_count *winning_vote_count = NULL;
+    struct magicnet_vote_count *winning_cert_vote_count = NULL;
     vector_set_peek_pointer(server->next_block.verifier_votes.vote_counts, 0);
-    struct magicnet_vote_count *key_vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
-    struct vector *tied_voters = vector_create(sizeof(struct key *));
-    while (key_vote_count)
+    struct magicnet_vote_count *vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+    struct vector *tied_voters = vector_create(sizeof(struct magicnet_vote_count *));
+    while (vote_count)
     {
 
-        if (winning_key_vote_count)
+        if (winning_cert_vote_count)
         {
-            if (winning_key_vote_count->voters == key_vote_count->voters)
+            if (winning_cert_vote_count->voters == vote_count->voters)
             {
-                struct key *winning_key = &winning_key_vote_count->key;
-                struct key *key_vote_count_key = &key_vote_count->key;
-                vector_push(tied_voters, &winning_key);
-                vector_push(tied_voters, &key_vote_count_key);
+                vector_push(tied_voters, &winning_cert_vote_count);
+                vector_push(tied_voters, &vote_count);
             }
 
-            if (winning_key_vote_count->voters < key_vote_count->voters)
+            if (winning_cert_vote_count->voters < vote_count->voters)
             {
-                winning_key_vote_count = key_vote_count;
+                winning_cert_vote_count = vote_count;
             }
         }
 
-        if (!winning_key_vote_count)
+        if (!winning_cert_vote_count)
         {
-            winning_key_vote_count = key_vote_count;
+            winning_cert_vote_count = vote_count;
         }
 
-        key_vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
+        vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
     }
 
-    if (winning_key_vote_count)
+    if (winning_cert_vote_count)
     {
-        winning_key = &winning_key_vote_count->key;
+        winning_vote_count = winning_cert_vote_count;
     }
 
     // Let us see if their is a tie with the winning key
     bool was_tie = false;
     vector_set_peek_pointer(tied_voters, 0);
-    struct key *tied_key = vector_peek_ptr(tied_voters);
-    while (tied_key)
+    struct magicnet_vote_count *tied_vote_count = vector_peek_ptr(tied_voters);
+    while (tied_vote_count)
     {
-        // If we have a tied key with the winning key then their can be no winner. This would allow the network to fork and divide.
+        // If we have a tied certificate with the winning certificate then their can be no winner. This would allow the network to fork and divide.
         // we cant allow that where it can be stopped it will.
-        if (key_cmp(winning_key, tied_key))
+        if (memcmp(winning_vote_count->vote_for_cert_hash, tied_vote_count->vote_for_cert_hash, sizeof(winning_vote_count->vote_for_cert_hash)) == 0)
         {
             was_tie = true;
             break;
         }
-        tied_key = vector_peek_ptr(tied_voters);
+
+        tied_vote_count = vector_peek_ptr(tied_voters);
     }
 
     if (was_tie)
     {
         // Lets see if we can break the tie
-        winning_key = magicnet_verifier_tie_breaker(tied_voters);
+        winning_vote_count = magicnet_verifier_tie_breaker(tied_voters);
     }
 
     vector_free(tied_voters);
-    return winning_key;
+    return winning_vote_count;
 }
 
-struct magicnet_vote_count *magicnet_vote_count_key_get(struct magicnet_server *server, struct key *voting_for_key)
+struct magicnet_vote_count *magicnet_cert_vote_count_get(struct magicnet_server *server, const char *cert_hash)
 {
     vector_set_peek_pointer(server->next_block.verifier_votes.vote_counts, 0);
     struct magicnet_vote_count *vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
     while (vote_count)
     {
-        if (key_cmp(&vote_count->key, voting_for_key))
+        if (memcmp(vote_count->vote_for_cert_hash, cert_hash, sizeof(vote_count->vote_for_cert_hash)) == 0)
         {
             return vote_count;
         }
+
         vote_count = vector_peek_ptr(server->next_block.verifier_votes.vote_counts);
     }
 
     return NULL;
 }
-void magicnet_vote_count_create_or_increment(struct magicnet_server *server, struct key *voting_for_key)
+void magicnet_vote_count_create_or_increment(struct magicnet_server *server, const char *voting_for_cert_hash)
 {
-    struct magicnet_vote_count *vote_count = magicnet_vote_count_key_get(server, voting_for_key);
+    struct magicnet_vote_count *vote_count = magicnet_cert_vote_count_get(server, voting_for_cert_hash);
     if (!vote_count)
     {
         vote_count = calloc(1, sizeof(struct magicnet_vote_count));
-        vote_count->key = *voting_for_key;
+        memcpy(vote_count->vote_for_cert_hash, voting_for_cert_hash, sizeof(vote_count->vote_for_cert_hash));
         vote_count->voters = 0;
         vector_push(server->next_block.verifier_votes.vote_counts, &vote_count);
     }
     vote_count->voters++;
 }
-int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct key *voter_key, struct key *vote_for_key)
+int magicnet_server_cast_verifier_vote(struct magicnet_server *server, struct magicnet_council_certificate *voting_cert, const char *vote_for_cert_hash)
 {
-    if (magicnet_server_has_voted(server, voter_key))
+    if (magicnet_server_has_voted(server, voting_cert))
     {
         // Cheeky trying to cast a vote twice! We dont allow change of votes all future votes REJECTED!
         return MAGICNET_ERROR_ALREADY_EXISTANT;
     }
 
-    struct magicnet_key_vote *key_vote = calloc(1, sizeof(struct magicnet_key_vote));
-    key_vote->vote_from = *voter_key;
-    key_vote->voted_for = *vote_for_key;
-    vector_push(server->next_block.verifier_votes.votes, &key_vote);
+    struct magicnet_certificate_vote *cert_vote = calloc(1, sizeof(struct magicnet_certificate_vote));
+    cert_vote->vote_from_cert = magicnet_council_certificate_clone(voting_cert);
+    memcpy(cert_vote->vote_for_cert_hash, vote_for_cert_hash, sizeof(cert_vote->vote_for_cert_hash));
+    vector_push(server->next_block.verifier_votes.votes, &cert_vote);
 
-    magicnet_vote_count_create_or_increment(server, vote_for_key);
+    magicnet_vote_count_create_or_increment(server, vote_for_cert_hash);
 
-    magicnet_log("%s new verifier vote. Voter(%s) votes for (%s) to make the next block\n", __FUNCTION__, voter_key->key, vote_for_key->key);
+    magicnet_log("%s new verifier vote. Voter cert(%s) votes for certificate (%s) to make the next block\n", __FUNCTION__, voting_cert->hash, vote_for_cert_hash);
 
     return 0;
 }
@@ -1305,6 +1318,13 @@ int magicnet_client_read_verifier_signup_packet(struct magicnet_client *client, 
         goto out;
     }
 out:
+    if (res < 0)
+    {
+        if (magicnet_signed_data(packet_out)->payload.verifier_signup.certificate)
+        {
+            magicnet_council_certificate_free(magicnet_signed_data(packet_out)->payload.verifier_signup.certificate);
+        }
+    }
     return 0;
 }
 
@@ -1468,33 +1488,37 @@ int magicnet_client_write_council_certificate_signed_data(struct magicnet_client
 
     // Write the ID
     res = magicnet_write_int(client, signed_data->id, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the flags
     res = magicnet_write_int(client, signed_data->flags, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the council ID hash
     res = magicnet_write_bytes(client, signed_data->council_id_hash, sizeof(signed_data->council_id_hash), write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the expiration timestamp
     res = magicnet_write_long(client, signed_data->expires_at, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the valid from timestamp
     res = magicnet_write_long(client, signed_data->valid_from, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the transfer data
     res = magicnet_client_write_council_certificate_transfer(client, &signed_data->transfer, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
 out:
     return res;
 }
-
-
 
 int magicnet_client_write_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate, struct buffer *write_buf)
 {
@@ -1502,29 +1526,29 @@ int magicnet_client_write_council_certificate(struct magicnet_client *client, st
 
     // Write the hash of the council certificate
     res = magicnet_write_bytes(client, certificate->hash, sizeof(certificate->hash), write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the owner key
     res = magicnet_write_bytes(client, &certificate->owner_key, sizeof(certificate->owner_key), write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the signature
     res = magicnet_write_bytes(client, &certificate->signature, sizeof(certificate->signature), write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the certificate signed data
     res = magicnet_client_write_council_certificate_signed_data(client, &certificate->signed_data, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
 out:
     return res;
 }
 
-
-
-
-
-int magicnet_client_write_council_certificate_vote_signed_data(struct magicnet_client* client, struct council_certificate_transfer_vote_signed_data* signed_data, struct buffer* write_buf)
+int magicnet_client_write_council_certificate_vote_signed_data(struct magicnet_client *client, struct council_certificate_transfer_vote_signed_data *signed_data, struct buffer *write_buf)
 {
     int res = 0;
 
@@ -1579,8 +1603,7 @@ out:
     return res;
 }
 
-    
-int magicnet_client_write_council_certificate_vote(struct magicnet_client* client, struct council_certificate_transfer_vote* vote, struct buffer* write_buf)
+int magicnet_client_write_council_certificate_vote(struct magicnet_client *client, struct council_certificate_transfer_vote *vote, struct buffer *write_buf)
 {
     int res = 0;
 
@@ -1607,8 +1630,8 @@ int magicnet_client_write_council_certificate_vote(struct magicnet_client* clien
     {
         goto out;
     }
-    
-out:    
+
+out:
     return res;
 }
 
@@ -1618,28 +1641,29 @@ int magicnet_client_write_council_certificate_transfer(struct magicnet_client *c
 
     // Write the nested council certificate
     res = magicnet_client_write_council_certificate(client, transfer->certificate, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the new owner data
     res = magicnet_write_bytes(client, &transfer->new_owner, sizeof(transfer->new_owner), write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Write the total number of voters
     res = magicnet_write_long(client, transfer->total_voters, write_buf);
-    if (res < 0) goto out;
+    if (res < 0)
+        goto out;
 
     // Loop through and send all the votes
     for (int i = 0; i < transfer->total_voters; i++)
     {
         res = magicnet_client_write_council_certificate_vote(client, &transfer->voters[i], write_buf);
-        if (res < 0) goto out;
+        if (res < 0)
+            goto out;
     }
 out:
     return res;
 }
-
-
-
 
 int magicnet_client_read_council_certificate_transfer_vote_signed_data(struct magicnet_client *client, struct council_certificate_transfer_vote_signed_data *signed_data, struct buffer *write_buf)
 {
@@ -1650,7 +1674,6 @@ int magicnet_client_read_council_certificate_transfer_vote_signed_data(struct ma
     {
         goto out;
     }
-
 
     signed_data->total_voters = magicnet_read_long(client, write_buf);
     if (signed_data->total_voters < 0)
@@ -1688,28 +1711,7 @@ out:
     return res;
 }
 
-int magicnet_client_read_council_certificate_transfer_vote(struct magicnet_client *client, struct council_certificate_transfer_vote *transfer_vote, struct buffer *write_buf)
-{
-    int res = 0;
-    res = magicnet_read_bytes(client, &transfer_vote->signature, sizeof(transfer_vote->signature), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    res = magicnet_client_read_council_certificate(client, transfer_vote->voter_certificate, write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-out:
-    return res;
-}
-
-
-
-int magicnet_client_read_council_certificate_vote_signed_data(struct magicnet_client* client, struct council_certificate_transfer_vote_signed_data* signed_data, struct buffer* write_buf)
+int magicnet_client_read_council_certificate_vote_signed_data(struct magicnet_client *client, struct council_certificate_transfer_vote_signed_data *signed_data, struct buffer *write_buf)
 {
     int res = 0;
     res = magicnet_read_bytes(client, signed_data->certificate_to_transfer_hash, sizeof(signed_data->certificate_to_transfer_hash), write_buf);
@@ -1766,12 +1768,11 @@ int magicnet_client_read_council_certificate_vote_signed_data(struct magicnet_cl
         goto out;
     }
 
-
 out:
     return res;
 }
 
-int magicnet_client_read_council_certificate_vote(struct magicnet_client* client, struct council_certificate_transfer_vote* vote, struct buffer* write_buf)
+int magicnet_client_read_council_certificate_vote(struct magicnet_client *client, struct council_certificate_transfer_vote *vote, struct buffer *write_buf)
 {
     int res = 0;
 
@@ -1780,7 +1781,6 @@ int magicnet_client_read_council_certificate_vote(struct magicnet_client* client
     {
         goto out;
     }
-
 
     res = magicnet_read_bytes(client, vote->hash, sizeof(vote->hash), write_buf);
     if (res < 0)
@@ -1794,9 +1794,12 @@ int magicnet_client_read_council_certificate_vote(struct magicnet_client* client
         goto out;
     }
 
+    vote->voter_certificate = magicnet_council_certificate_create();
     res = magicnet_client_read_council_certificate(client, vote->voter_certificate, write_buf);
     if (res < 0)
     {
+        // Free the certificate
+        magicnet_council_certificate_free(vote->voter_certificate);
         goto out;
     }
 
@@ -2007,11 +2010,12 @@ int magicnet_client_read_block(struct magicnet_client *client, struct block **bl
         res = MAGICNET_ERROR_UNKNOWN;
         goto out;
     }
-    
+
     block->certificate = magicnet_council_certificate_create();
     res = magicnet_client_read_council_certificate(client, block->certificate, write_buf);
     if (res < 0)
     {
+        magicnet_log("%s failed to read the certificate for the block\n", __FUNCTION__);
         goto out;
     }
 
@@ -2795,7 +2799,16 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 
 int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    return 0;
+    int res = 0;
+
+    res = magicnet_client_write_council_certificate(client, magicnet_signed_data(packet)->payload.verifier_signup.certificate, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
 }
 
 int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *client, struct magicnet_packet *packet)
@@ -4964,27 +4977,28 @@ int magicnet_server_poll_process_user_defined_packet(struct magicnet_client *cli
     return res;
 }
 
-bool magicnet_server_verifier_is_signed_up(struct magicnet_server *server, struct key *key)
+bool magicnet_server_verifier_is_signed_up(struct magicnet_server *server, struct magicnet_council_certificate *certificate)
 {
     vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
-    struct key *key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
-    while (key_in_vec)
+    struct magicnet_council_certificate *vec_certificate = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while (vec_certificate)
     {
-        if (key_cmp(key_in_vec, key))
+        if (memcmp(certificate->hash, vec_certificate->hash, sizeof(certificate->hash)) == 0)
         {
             return true;
         }
-        key_in_vec = vector_peek_ptr(server->next_block.signed_up_verifiers);
+
+        vec_certificate = vector_peek_ptr(server->next_block.signed_up_verifiers);
     }
 
     return false;
 }
 
-int magicnet_server_verifier_signup(struct magicnet_server *server, struct key *pub_key)
+int magicnet_server_verifier_signup(struct magicnet_server *server, struct magicnet_council_certificate *certificate)
 {
     int res = 0;
     // Already signed up.
-    if (magicnet_server_verifier_is_signed_up(server, pub_key))
+    if (magicnet_server_verifier_is_signed_up(server, certificate))
     {
         res = MAGICNET_ERROR_ALREADY_EXISTANT;
         goto out;
@@ -4998,12 +5012,11 @@ int magicnet_server_verifier_signup(struct magicnet_server *server, struct key *
     }
 
     // We must now add this verifier to the vector
-    // Clone the key
-    struct key *cloned_key = calloc(1, sizeof(struct key));
-    memcpy(cloned_key, pub_key, sizeof(struct key));
-    vector_push(server->next_block.signed_up_verifiers, &cloned_key);
+    // Clone the certificate
+    struct magicnet_council_certificate *cloned_cert = magicnet_council_certificate_clone(certificate);
+    vector_push(server->next_block.signed_up_verifiers, &cloned_cert);
 
-    magicnet_log("%s new verifier signup %s\n", __FUNCTION__, pub_key->key);
+    magicnet_log("%s new verifier signup cert_hash=%s owned_by=%s\n", __FUNCTION__, certificate->hash, certificate->owner_key.key);
 out:
     return res;
 }
@@ -5013,7 +5026,7 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
     int res = 0;
     magicnet_log("%s client has asked to signup as a verifier for the next block: %s\n", __FUNCTION__, inet_ntoa(client->client_info.sin_addr));
     magicnet_server_lock(client->server);
-    res = magicnet_server_verifier_signup(client->server, &packet->pub_key);
+    res = magicnet_server_verifier_signup(client->server, magicnet_signed_data(packet)->payload.verifier_signup.certificate);
     magicnet_server_add_packet_to_relay(client->server, packet);
 
     magicnet_server_unlock(client->server);
@@ -5687,7 +5700,7 @@ bool magicnet_vote_allowed(struct key *key, struct key *votes_for)
     return true;
 }
 
-struct key *magicnet_server_get_random_block_verifier(struct magicnet_server *server)
+struct magicnet_council_certificate *magicnet_server_get_random_block_verifier(struct magicnet_server *server)
 {
     if (vector_count(server->next_block.signed_up_verifiers) == 0)
     {
@@ -5756,11 +5769,12 @@ void magicnet_server_client_vote_for_verifier(struct magicnet_server *server)
 void magicnet_server_reset_block_sequence(struct magicnet_server *server)
 {
     vector_set_peek_pointer(server->next_block.verifier_votes.votes, 0);
-    struct magicnet_key_vote *key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
-    while (key_vote)
+    struct magicnet_certificate_vote *cert_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+    while (cert_vote)
     {
-        free(key_vote);
-        key_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
+        magicnet_council_certificate_free(cert_vote->vote_from_cert);
+        free(cert_vote);
+        cert_vote = vector_peek_ptr(server->next_block.verifier_votes.votes);
     }
 
     vector_clear(server->next_block.verifier_votes.votes);
@@ -5776,11 +5790,13 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
     vector_clear(server->next_block.verifier_votes.vote_counts);
 
     vector_set_peek_pointer(server->next_block.signed_up_verifiers, 0);
-    struct key *verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
-    while (verifier_key)
+    struct magicnet_council_certificate *verifier_council_cert = vector_peek_ptr(server->next_block.signed_up_verifiers);
+    while (verifier_council_cert)
     {
-        free(verifier_key);
-        verifier_key = vector_peek_ptr(server->next_block.signed_up_verifiers);
+        // Free the certificate
+        magicnet_council_certificate_free(verifier_council_cert);
+
+        verifier_council_cert = vector_peek_ptr(server->next_block.signed_up_verifiers);
     }
 
     vector_clear(server->next_block.signed_up_verifiers);
@@ -5807,8 +5823,8 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 {
 
     struct block *block = block_create(transaction_group, prev_hash);
-    #warning "COME BACK TO THIS AND FIX IT KEY IS GONE CERTIFICATES NOW USED"
-   // block->key = *MAGICNET_public_key();
+#warning "COME BACK TO THIS AND FIX IT KEY IS GONE CERTIFICATES NOW USED"
+    // block->key = *MAGICNET_public_key();
 
     if (block_hash_sign_verify(block) < 0)
     {
@@ -6062,20 +6078,26 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     else if (current_block_sequence_time >= block_time_third_quarter_start && current_block_sequence_time < block_time_fourth_quarter_start && step == BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK)
     {
         // We must select a verifier who won the vote.
-        struct key *key_who_won = magicnet_server_verifier_who_won(server);
-        if (!key_who_won)
+        struct magicnet_vote_count *verifier_vote_who_won = magicnet_server_verifier_who_won(server);
+        if (!verifier_vote_who_won)
         {
-            magicnet_important("%s no verifier key won the vote.\n", __FUNCTION__);
+            magicnet_important("%s no verifier certificate won the vote.\n", __FUNCTION__);
         }
         else
         {
-            magicnet_important("%s awaiting for new block from voted verifier: %s \n", __FUNCTION__, key_who_won->key);
+            magicnet_important("%s awaiting for new block from voted verifier certificate: %s \n", __FUNCTION__, verifier_vote_who_won->vote_for_cert_hash);
+            if (magicnet_council_certificate_is_mine(verifier_vote_who_won->vote_for_cert_hash))
+            {
+                magicnet_important("%s we won the vote! Lets create the block\n", __FUNCTION__);
+                // What do you know we won the vote! Lets create this block
+                magicnet_server_create_and_send_block(server);
+            }
+            else
+            {
+                magicnet_important("%s we did not win the vote. We will wait for the block to be sent to us\n", __FUNCTION__);
+            }
         }
-        if (key_cmp(key_who_won, MAGICNET_public_key()))
-        {
-            // What do you know we won the vote! Lets create this block
-            magicnet_server_create_and_send_block(server);
-        }
+
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
     }
     else if (current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end && step == BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE)

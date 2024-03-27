@@ -387,7 +387,7 @@ BLOCKCHAIN_TYPE blockchain_should_create_new(struct block *block, int *blockchai
     }
 
     int bco = 0;
-    if (magicnet_database_load_block_from_previous_hash(block->hash, NULL, &bco, NULL, NULL) >= 0)
+    if (magicnet_database_load_block_from_previous_hash(block->hash, NULL, &bco, NULL, NULL, NULL) >= 0)
     {
         *blockchain_id_out = bco;
         return MAGICNET_BLOCKCHAIN_TYPE_NO_NEW_CHAIN;
@@ -953,10 +953,10 @@ struct block *block_load(const char *hash)
     char prev_hash[SHA256_STRING_LENGTH];
     int blockchain_id = -1;
     char transaction_group_hash[SHA256_STRING_LENGTH];
-    struct key key;
+    char signing_certificate_hash[SHA256_STRING_LENGTH];
     struct signature signature;
     time_t created_time;
-    res = magicnet_database_load_block(hash, prev_hash, &blockchain_id, transaction_group_hash, &key, &signature, &created_time);
+    res = magicnet_database_load_block(hash, prev_hash, &blockchain_id, transaction_group_hash, signing_certificate_hash, &signature, &created_time);
     if (res < 0)
     {
         goto out;
@@ -966,8 +966,13 @@ struct block *block_load(const char *hash)
     memcpy(group->hash, transaction_group_hash, sizeof(group->hash));
     block = block_create_with_group(hash, prev_hash, group);
     block->blockchain_id = blockchain_id;
-    #warning "TODO UPDATE BLOCK LOADING TO ACCOMODATE FOR COUNCIL CERTIFICATES"
-   // block->key = key;
+    block->certificate = magicnet_council_certificate_load(signing_certificate_hash);
+    if (!block->certificate)
+    {
+        magicnet_log("%s failed to load certificate for block %s\n", __FUNCTION__, hash);
+        res = -1;
+        goto out;
+    }
     block->signature = signature;
     block->time = created_time;
 
