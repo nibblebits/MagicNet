@@ -113,6 +113,21 @@ struct magicnet_packet *magicnet_packet_new()
     return packet;
 }
 
+int magicnet_client_packet_strip_private_flags(struct magicnet_packet *packet)
+{
+    return magicnet_signed_data(packet)->flags &= ~MAGICNET_PACKET_PRIVATE_FLAGS;
+}
+
+bool magicnet_client_packet_flags_are_private(int flags)
+{
+    return flags & MAGICNET_PACKET_PRIVATE_FLAGS;
+}
+
+bool magicnet_client_packet_has_private_flags(struct magicnet_packet *packet)
+{
+    return magicnet_client_packet_flags_are_private(magicnet_signed_data(packet)->flags);
+}
+
 /**
  * @brief Clears the signature and hash of this packet, sets the MAGICNET_PACKET_FLAG_MUST_BE_SIGNED flag
  * to ensure it gets signed when we send this packet.
@@ -1361,8 +1376,8 @@ int magicnet_client_read_vote_for_verifier_packet(struct magicnet_client *client
 {
     int res = 0;
 
-    // Let us read the key we are voting for
-    res = magicnet_read_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key, sizeof(struct key), packet->not_sent.tmp_buf);
+    // Let us read the certificate hash we are voting for
+    res = magicnet_read_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_cert, sizeof(magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_cert), packet->not_sent.tmp_buf);
     if (res < 0)
     {
         magicnet_log("%s could not read key for verifier packet\n", __FUNCTION__);
@@ -2455,6 +2470,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     int res = 0;
     int packet_id = 0;
     int packet_type = 0;
+    int packet_flags = 0;
 
     packet_out->not_sent.tmp_buf = buffer_create();
 
@@ -2491,6 +2507,29 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     if (packet_type < 0)
     {
         goto out;
+    }
+
+    packet_flags = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (packet_flags < 0)
+    {
+        goto out;
+    }
+
+    if (magicnet_client_packet_flags_are_private(packet_flags))
+    {
+        magicnet_log("%s some flags designed for local use only have been sent down the network, the packet has been rejected.\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    if (packet_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
+    {
+        res = magicnet_client_read_council_certificate(client, magicnet_signed_data(packet_out)->my_certificate, packet_out->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            magicnet_log("%s failed to read the council certificate\n", __FUNCTION__);
+            goto out;
+        }
     }
 
     switch (packet_type)
@@ -2622,6 +2661,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     }
     magicnet_signed_data(packet_out)->id = packet_id;
     magicnet_signed_data(packet_out)->type = packet_type;
+    magicnet_signed_data(packet_out)->flags = packet_flags;
 
     bool has_signature = false;
 
@@ -2658,9 +2698,8 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
      * this is okay because this is the local machine therefore it is the authority of this server instance
      * to sign all packets
      */
-    if (!has_signature)
+    if (!has_signature && client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST)
     {
-        assert((client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST));
         // Since we have no signature let us create our own this is allowed since we have confimed
         // that we are localhost and by default localhost packets have no signatures.
 
@@ -2814,7 +2853,7 @@ out:
 int magicnet_client_write_packet_vote_for_verifier(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key, sizeof(struct key), packet->not_sent.tmp_buf);
+    res = magicnet_write_bytes(client, &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_cert, sizeof(magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_cert), packet->not_sent.tmp_buf);
 
     return res;
 }
@@ -3258,6 +3297,26 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         goto out;
     }
 
+    // We need to strip any private localuse flags from the packet before we send it.
+    // Only flags intended for public viewing should be sent.
+    int stripped_flags = magicnet_client_packet_strip_private_flags(packet);
+    res = magicnet_write_int(client, stripped_flags, packet->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    if (stripped_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
+    {
+        // We have a council certificate to send with this packet we will just send it
+        // we dont know at this point if its valid or not. The receiver can decide.
+        res = magicnet_client_write_council_certificate(client, magicnet_signed_data(packet)->my_certificate, packet->not_sent.tmp_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
     switch (magicnet_signed_data(packet)->type)
     {
 
@@ -3346,6 +3405,17 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         if (res < 0)
         {
             magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
+            goto out;
+        }
+    }
+
+    if (stripped_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
+    {
+        // Lets check that the key who signed the packet is the same as the key who signed the certificate
+        if (key_cmp(&packet->pub_key, &magicnet_signed_data(packet)->my_certificate->owner_key) != 0)
+        {
+            magicnet_log("%s the key who signed the packet is not the same as the key who signed the certificate\n", __FUNCTION__);
+            res = -1;
             goto out;
         }
     }
@@ -3765,6 +3835,11 @@ void magicnet_copy_packet_events_res(struct magicnet_packet *packet_out, struct 
 void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
     memcpy(packet_out, packet_in, sizeof(struct magicnet_packet));
+    if (magicnet_signed_data(packet_in)->flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
+    {
+        magicnet_signed_data(packet_out)->my_certificate = magicnet_council_certificate_clone(magicnet_signed_data(packet_in)->my_certificate);
+    }
+
     switch (magicnet_signed_data(packet_in)->type)
     {
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
@@ -4330,6 +4405,31 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
 {
     assert(client->server);
     int res = 0;
+    if (magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
+    {
+        if (!magicnet_signed_data(packet)->my_certificate)
+        {
+            magicnet_log("%s packet contains my council certificate but the certificate is null\n", __FUNCTION__);
+            res = -1;
+            return res;
+        }
+
+        if (!key_cmp(&magicnet_signed_data(packet)->my_certificate->owner_key, &packet->pub_key))
+        {
+            magicnet_log("%s packet contains council certificate but the certificate owner key does not match the packet key that signed the packet therefore someone is pretending to own a certificate they dont hold\n", __FUNCTION__);
+            res = -1;
+            return res;
+        }
+
+        // In cases where a council certificate is sent we must verify the signature of the packet there will be no
+        // signing exemption even if its localhost
+        if (!magicnet_client_verify_packet_was_signed(packet))
+        {
+            magicnet_log("%s the packet was not signed correctly\n", __FUNCTION__);
+            res = -1;
+            return res;
+        }
+    }
 
     if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
     {
@@ -5035,13 +5135,20 @@ int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *
 
 int magicnet_server_process_vote_for_verifier_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    struct key *voteing_for_key = &magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key;
+    struct magicnet_council_certificate *my_certificate = magicnet_signed_data(packet)->my_certificate;
+    if (!my_certificate)
+    {
+        magicnet_log("%s packet does not contain my council certificate so I am not able to make a vote.\n", __FUNCTION__);
+        return -1;
+    }
+
+    const char *voting_for_cert_hash = magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_cert;
     magicnet_server_lock(client->server);
-    int res = magicnet_server_cast_verifier_vote(client->server, &packet->pub_key, voteing_for_key);
+    int res = magicnet_server_cast_verifier_vote(client->server, my_certificate, voting_for_cert_hash);
     magicnet_server_unlock(client->server);
     if (res < 0)
     {
-        magicnet_log("%s Failed to cast vote from key = %s voting for key %s\n", __FUNCTION__, &packet->pub_key.key, voteing_for_key->key);
+        magicnet_log("%s Failed to cast vote from key = %s with certificate voting for certificate hash %s\n", __FUNCTION__, &packet->pub_key.key, my_certificate->hash, voting_for_cert_hash);
     }
 
     magicnet_server_add_packet_to_relay(client->server, packet);
@@ -5716,48 +5823,64 @@ size_t magicnet_total_verifiers(struct magicnet_server *server)
     return vector_count(server->next_block.signed_up_verifiers);
 }
 
-struct key *magicnet_server_find_verifier_to_vote_for(struct magicnet_server *server)
+struct magicnet_council_certificate *magicnet_server_find_verifier_to_vote_for(struct magicnet_server *server)
 {
-    struct key *verifier_key = NULL;
+    struct magicnet_council_certificate *verifier_certificate = NULL;
     size_t attempts = 0;
-    while ((verifier_key = magicnet_server_get_random_block_verifier(server)) != NULL && attempts < 4)
+    while ((verifier_certificate = magicnet_server_get_random_block_verifier(server)) != NULL && attempts < 4)
     {
         // Is the key that we chose allowed?
-        if (magicnet_vote_allowed(MAGICNET_public_key(), verifier_key))
-        {
-            // yeah allowed? okay great
-            break;
-        }
+        // if (magicnet_vote_allowed(MAGICNET_public_key(), verifier_certificate))
+        // {
+        //     // yeah allowed? okay great
+        //     break;
+        // }
         attempts++;
     }
 
-    return verifier_key;
+    return verifier_certificate;
 }
 
 void magicnet_server_client_vote_for_verifier(struct magicnet_server *server)
 {
-    struct key *verifier_key = magicnet_server_find_verifier_to_vote_for(server);
-    if (!verifier_key)
+    int res = 0;
+    struct magicnet_council_certificate *certificate = NULL;
+    struct magicnet_council_certificate *verifier_cert_to_vote_for = magicnet_server_find_verifier_to_vote_for(server);
+    if (!verifier_cert_to_vote_for)
     {
         magicnet_error("%s failed to find a key to vote for\n", __FUNCTION__);
-        return;
+        goto out;
     }
 
-    int res = magicnet_server_cast_verifier_vote(server, MAGICNET_public_key(), verifier_key);
+    res = magicnet_council_default_certificate_for_key(NULL, MAGICNET_public_key(), &certificate);
+    if (res < 0)
+    {
+        magicnet_error("%s failed to get our own certificate, I guess we are not a council member and cant vote.\n", __FUNCTION__);
+        goto out;
+    }
+
+    res = magicnet_server_cast_verifier_vote(server, certificate, verifier_cert_to_vote_for->hash);
     if (res < 0)
     {
         magicnet_error("%s we failed to cast a vote on our local client\n", __FUNCTION__);
-        return;
+        goto out;
     }
 
     // Let us create a new vote packet to relay.
     struct magicnet_packet *packet = magicnet_packet_new();
-    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED | MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE;
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER;
-    magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_key = *verifier_key;
+    magicnet_signed_data(packet)->my_certificate = magicnet_council_certificate_clone(certificate);
+    memcpy(magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_cert, verifier_cert_to_vote_for->hash, sizeof(verifier_cert_to_vote_for->hash));
     magicnet_server_add_packet_to_relay(server, packet);
 
     magicnet_free_packet(packet);
+
+out:
+    if (certificate)
+    {
+        magicnet_council_certificate_free(certificate);
+    }
 }
 
 /**
@@ -5825,6 +5948,7 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
     struct block *block = block_create(transaction_group, prev_hash);
 #warning "COME BACK TO THIS AND FIX IT KEY IS GONE CERTIFICATES NOW USED"
     // block->key = *MAGICNET_public_key();
+
 
     if (block_hash_sign_verify(block) < 0)
     {

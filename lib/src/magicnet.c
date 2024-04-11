@@ -114,6 +114,12 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
     {
         return;
     }
+
+    if (magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
+    {
+        magicnet_council_certificate_free(magicnet_signed_data(packet)->my_certificate);
+    }
+    
     switch (magicnet_signed_data(packet)->type)
     {
     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:

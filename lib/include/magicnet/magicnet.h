@@ -98,9 +98,12 @@ enum
 {
     MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE = 0b00000001,
     MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING = 0b00000010,
-    MAGICNET_PACKET_FLAG_MUST_BE_SIGNED = 0b00000100
+    MAGICNET_PACKET_FLAG_MUST_BE_SIGNED = 0b00000100,
+    // The below flag is set if the packet has been signed by a council member who has provided his certificate.
+    MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE = 0b00001000
 };
 
+#define MAGICNET_PACKET_PRIVATE_FLAGS (MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE | MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING | MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
 enum
 {
     MAGICNET_BLOCK_SAVE_FLAG_NONE = 0,
@@ -254,6 +257,13 @@ struct magicnet_packet
         // The type of this packet see above.
         int type;
         int flags;
+
+        // When a packet is sent from someone who holds a council certificate, they should
+        // send there certificate with the packet. This is used to verify the packet for council operations.
+        // you dont need to provide the certificate if the packet is not a council operation it becomes optional.
+        // The MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE flag must be set if the my_certificate is provided.
+        struct magicnet_council_certificate* my_certificate;
+
         struct payload
         {
             union
@@ -298,10 +308,10 @@ struct magicnet_packet
                  */
                 struct magicnet_vote
                 {
-                    // Contains the public key of whome this vote is for.
-                    // If enough people vote for this key they will create the next block
+                    // Contains the certificate hash of whome this vote is for.
+                    // If enough people vote for this certificate they will create the next block
                     // all blocks signed whome are not the winner will be rejected.
-                    struct key vote_for_key;
+                    char vote_for_cert[SHA256_STRING_LENGTH];
                 } vote_next_verifier;
 
                 /**
@@ -803,6 +813,10 @@ struct magicnet_council
     // Flags used to determine states of the loaded council.
     // The flags are not saved or transfeered over the network
     int memory_flags;
+
+    // This is equal to the default certificate of the person using the software if they have a certificate with this council
+    // this is not saved and is for in-memory purposes and preformance reasons only.
+    struct magicnet_council_certificate* my_certificate;
 };
 
 /**
@@ -1246,6 +1260,26 @@ void magicnet_council_free(struct magicnet_council *council);
 int magicnet_council_save(struct magicnet_council *council);
 int magicnet_council_verify(struct magicnet_council *council);
 
+/**
+ * Returns the certificates for the given council
+*/
+int magicnet_council_certificates_for_key(struct magicnet_council* council, struct key* key, struct vector* certificate_vec);
+/**
+ * Returns the default certificate of the key given, for now this returns the first certificate it encounters but in the future
+ * we could have a means of determining the default certificate as some kind of setting that the owner can change
+ * 
+ * \param council The council to search for the certificate in or NULL to use the central council
+ * \param key The key to search for
+ * \param certificate_out The certificate that was found
+ * 
+ * \return 0 if the certificate was found, -1 if the certificate was not found
+*/
+int magicnet_council_default_certificate_for_key(struct magicnet_council* council, struct key* key, struct magicnet_council_certificate** certificate_out);
+
+/**
+ * Returns true if the council certificate exists
+*/
+bool magicnet_council_certificate_exists(const char *certificate_hash);
 
 /**
  * Verifies that the council certificate is owned by the public key of this node
