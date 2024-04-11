@@ -5777,22 +5777,29 @@ bool magicnet_server_should_make_new_connections(struct magicnet_server *server)
 
 void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
 {
-
+    int res = 0;
     // Lets create verifier signups for the block
     // peers can ask to be elected to make the next block
 
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    res = magicnet_council_my_certificate(NULL, &magicnet_signed_data(packet)->payload.verifier_signup.certificate);
+    if (res < 0)
+    {
+        magicnet_error("%s failed to get our own certificate maybe we aren't a council member\n", __FUNCTION__);
+        goto out;
+    }
 
     // Let's add this packet to the server relay so all connected hosts will find it and relay it
     // to millions
-    int res = magicnet_server_add_packet_to_relay(server, packet);
+    res = magicnet_server_add_packet_to_relay(server, packet);
     if (res < 0)
     {
         magicnet_error("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
     }
 
+out:
     magicnet_free_packet(packet);
 }
 
@@ -5944,23 +5951,29 @@ void magicnet_server_reset_block_sequence(struct magicnet_server *server)
 
 int magicnet_server_create_block(struct magicnet_server *server, const char *prev_hash, struct block_transaction_group *transaction_group, struct block **block_out)
 {
-
+    int res = 0;
     struct block *block = block_create(transaction_group, prev_hash);
-#warning "COME BACK TO THIS AND FIX IT KEY IS GONE CERTIFICATES NOW USED"
-    // block->key = *MAGICNET_public_key();
+
+    res = magicnet_council_my_certificate(NULL, &block->certificate);
+    if (res < 0)
+    {
+        magicnet_error("%s failed to get our own certificate, are you sure we are a member of the council\n", __FUNCTION__);
+        goto out;
+    } 
 
 
-    if (block_hash_sign_verify(block) < 0)
+    res = block_hash_sign_verify(block);
+    if (res < 0)
     {
         magicnet_error("%s could not hash sign and verify the block\n", __FUNCTION__);
-        block_free(block);
-        return -1;
+        goto out;
     }
 
-    if (block_verify(block) < 0)
+    res = block_verify(block);
+    if (res < 0)
     {
-        magicnet_error("%s failed to verify the block we created. We did something wrong\n");
-        return -1;
+        magicnet_error("%s failed to verify the block we created. We did something wrong\n", __FUNCTION__);
+        goto out;
     }
 
     // Save the block
@@ -5971,6 +5984,15 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
     // We need to remove our self transactions from the received block so we dont resend them to the network
     magicnet_server_update_our_transaction_states(server, block);
     *block_out = block;
+
+out:
+    if (res < 0)
+    {
+        if(block)
+        {
+            block_free(block);
+        }
+    }
     return 0;
 }
 
@@ -6190,7 +6212,16 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
     if (current_block_sequence_time >= block_time_first_quarter_start && current_block_sequence_time < block_time_second_quarter_start && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
     {
         // Alright lets deal with this
-        magicnet_server_client_signup_as_verifier(server);
+
+        // Lets get our certificate
+        struct magicnet_council_certificate* certificate = NULL;
+        int res = magicnet_council_my_certificate(NULL, &certificate);
+        if (res >= 0)
+        {
+            // We have a council certificate okay great!
+            magicnet_server_client_signup_as_verifier(server);
+        }
+
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;
     }
     else if (current_block_sequence_time >= block_time_second_quarter_start && current_block_sequence_time < block_time_third_quarter_start && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)

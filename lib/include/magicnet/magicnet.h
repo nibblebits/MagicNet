@@ -1282,6 +1282,14 @@ int magicnet_council_default_certificate_for_key(struct magicnet_council* counci
 bool magicnet_council_certificate_exists(const char *certificate_hash);
 
 /**
+ * Returns the default council certificate for the given key
+ * \param council The council to search for the certificate in or NULL to use the central council
+ * \param key The key to search for
+ * \param certificate_out The certificate that was found
+*/
+int magicnet_council_my_certificate(struct magicnet_council* council, struct magicnet_council_certificate** certificate_out);
+
+/**
  * Verifies that the council certificate is owned by the public key of this node
  * 
  * \param certificate The certificate to verify

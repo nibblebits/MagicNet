@@ -163,10 +163,4 @@ int main(int argc, char **argv)
 
         usleep(1000);
     }
-
-    magicnet_log("%s awaiting termination of main thread\n", __FUNCTION__);
-    while (1)
-    {
-        sleep(1);
-    }
 }

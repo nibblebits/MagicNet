@@ -212,10 +212,31 @@ out:
     return res;
 }
 
+int magicnet_council_my_certificate(struct magicnet_council* council, struct magicnet_council_certificate** certificate_out)
+{
+    int res = 0;
+    if (council->my_certificate)
+    {
+        *certificate_out = magicnet_council_certificate_clone(council->my_certificate);
+    }
+    else
+    {
+        res = magicnet_council_default_certificate_for_key(council, MAGICNET_public_key(), certificate_out);
+    }
+
+
+out:
+    return res;
+}
 int magicnet_council_default_certificate_for_key(struct magicnet_council* council, struct key* key, struct magicnet_council_certificate** certificate_out)
 {
     int res = 0;
     *certificate_out = NULL;
+    if (!council)
+    {
+        council = central_council;
+    }
+
     struct vector* certificate_vec = vector_create(sizeof(struct magicnet_council_certificate));
     if (!certificate_vec)
     {
@@ -430,12 +451,20 @@ struct magicnet_council_certificate *magicnet_council_certificate_create()
 
 void magincet_council_certificate_vote_free_data(struct council_certificate_transfer_vote *certificate_vote)
 {
+    if (!certificate_vote || !certificate_vote->voter_certificate)
+    {
+        return;
+    }
     magicnet_council_certificate_free(certificate_vote->voter_certificate);
 }
 
 void magicnet_council_certificate_transfer_free_data(struct council_certificate_transfer *certificate_transfer)
 {
-
+    if (!certificate_transfer)
+    {
+        return;
+    }
+    
     if (certificate_transfer->voters)
     {
         for (int i = 0; i < certificate_transfer->total_voters; i++)

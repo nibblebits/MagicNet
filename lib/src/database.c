@@ -1830,14 +1830,14 @@ int magicnet_database_load_council_certificates_of_key_no_locks(const char *coun
     size_t i = 0;
     while (step == SQLITE_ROW)
     {
-        struct magicnet_council_certificate *certificate = magicnet_council_certificate_new();
+        struct magicnet_council_certificate *certificate = magicnet_council_certificate_create();
         res = magicnet_database_load_certificate_no_locks(certificate, sqlite3_column_text(stmt, 0));
         if (res < 0)
         {
-            magicnet_council_free(certificate);
+            magicnet_council_certificate_free(certificate);
             goto out;
         }
-        vector_push(certificates_vec, certificate);
+        vector_push(certificates_vec, &certificate);
         step = sqlite3_step(stmt);
         i++;
     }
