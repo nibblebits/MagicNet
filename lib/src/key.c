@@ -396,13 +396,7 @@ int generate_key()
     return res;
 }
 
-/**
- * Function that checks if the key is the genesis key 
-*/
-bool MAGICNET_is_genesis_key(struct key *key)
-{
-    return memcmp(key, MAGICNET_GENESIS_KEY, sizeof(struct key)) == 0;
-}
+
 
 bool MAGICNET_nulled_signature(struct signature *signature)
 {

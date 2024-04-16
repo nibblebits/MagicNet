@@ -50,7 +50,6 @@
 // 0.5 coins of the bet will be thrown away causing the currency to deflate.
 #define MAGICNET_BLOCK_BET_MONEY_TO_THROW_AWAY 0.5
 
-#define MAGICNET_GENESIS_KEY ""
 // Anyone who listens on this will get all packets regardless who they are.
 #define MAGICNET_LISTEN_ALL_PROGRAM "magicnet"
 
