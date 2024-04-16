@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/select.h>
 #include <sys/signal.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -849,58 +850,78 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
  */
 struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id)
 {
-    int sockfd;
-    struct sockaddr_in servaddr, cli;
-
-    struct in_addr addr = {};
-    if (inet_aton(ip_address, &addr) == 0)
-    {
-        return NULL;
-    }
-
-    // socket create and varification
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd == -1)
-    {
-        return NULL;
-    }
-
-    bzero(&servaddr, sizeof(servaddr));
-
-    // assign IP, PORT
-    servaddr.sin_family = AF_INET;
-    servaddr.sin_addr = addr;
-    servaddr.sin_port = htons(port);
-
+    int sockfd, res;
+    struct sockaddr_in servaddr;
     struct timeval timeout;
-    timeout.tv_sec = MAGICNET_CLIENT_TIMEOUT_SECONDS;
+    fd_set fdset;
+
+    // Initialize server address structure
+    memset(&servaddr, 0, sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(port);
+    if (inet_pton(AF_INET, ip_address, &servaddr.sin_addr) <= 0)
+    {
+        return NULL;
+    }
+
+    // Create socket
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0)
+    {
+        return NULL;
+    }
+
+    // Make socket non-blocking
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+
+    // Start connect
+    res = connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr));
+    if (res < 0 && errno != EINPROGRESS)
+    {
+        close(sockfd);
+        return NULL;
+    }
+
+    // Connection attempt is in progress
+    FD_ZERO(&fdset);
+    FD_SET(sockfd, &fdset);
+    timeout.tv_sec = MAGICNET_CLIENT_TIMEOUT_SECONDS; // Ensure this macro is defined
     timeout.tv_usec = 0;
 
-    if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout,
-                   sizeof timeout) < 0)
+    // Use select to wait for the socket to be writable
+    res = select(sockfd + 1, NULL, &fdset, NULL, &timeout);
+    if (res == 0)
     {
-        // magicnet_log("Failed to set socket timeout\n");
+        close(sockfd); // Timeout
+        return NULL;
+    }
+    else if (res < 0)
+    {
+        close(sockfd); // select() error
         return NULL;
     }
 
-    int _true = 1;
-    if (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &_true, sizeof(int)) < 0)
+    // Check socket error
+    int so_error;
+    socklen_t len = sizeof so_error;
+    getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &so_error, &len);
+    if (so_error != 0)
     {
-        magicnet_log("Failed to set socket reusable option\n");
+        close(sockfd);
         return NULL;
     }
 
-    // connect the client socket to server socket
-    if (connect(sockfd, (const struct sockaddr *)&servaddr, sizeof(servaddr)) != 0)
-    {
-        return NULL;
-    }
+    // Set back to blocking mode as necessary
+    fcntl(sockfd, F_SETFL, flags);
 
+    // Proceed with initialization if connection succeeded
     magicnet_server_lock(server);
     struct magicnet_client *mclient = magicnet_find_free_outgoing_client(server);
     if (!mclient)
     {
         magicnet_server_unlock(server);
+        close(sockfd);
         return NULL;
     }
     magicnet_init_client(mclient, server, sockfd, &servaddr);
@@ -914,10 +935,9 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
     }
 
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, signal_id);
+    res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, signal_id);
     if (res < 0)
     {
-        // entry protocol failed show message
         magicnet_log("%s entry protocol failed\n", __FUNCTION__);
         magicnet_server_lock(server);
         magicnet_close(mclient);
@@ -925,9 +945,9 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         mclient = NULL;
     }
 
-    // Let's find a free slot
     return mclient;
 }
+
 
 struct magicnet_client *magicnet_accept(struct magicnet_server *server)
 {
@@ -3969,6 +3989,7 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
         }
     }
 
+
     return 0;
 }
 
@@ -5775,7 +5796,7 @@ bool magicnet_server_should_make_new_connections(struct magicnet_server *server)
     return (time(NULL) - server->last_new_connection_attempt) >= MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS;
 }
 
-void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
+void magicnet_server_client_signup_as_verifier(struct magicnet_server *server, struct magicnet_council_certificate* certificate)
 {
     int res = 0;
     // Lets create verifier signups for the block
@@ -5784,10 +5805,13 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     struct magicnet_packet *packet = magicnet_packet_new();
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    res = magicnet_council_my_certificate(NULL, &magicnet_signed_data(packet)->payload.verifier_signup.certificate);
+    magicnet_signed_data(packet)->payload.verifier_signup.certificate = magicnet_council_certificate_clone(certificate);
+
+    // Lets sign ourselves up to our local server
+    res = magicnet_server_verifier_signup(server, magicnet_signed_data(packet)->payload.verifier_signup.certificate);
     if (res < 0)
     {
-        magicnet_error("%s failed to get our own certificate maybe we aren't a council member\n", __FUNCTION__);
+        magicnet_error("%s failed to signup as a verifier in our own server\n", __FUNCTION__);
         goto out;
     }
 
@@ -5796,8 +5820,9 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server)
     res = magicnet_server_add_packet_to_relay(server, packet);
     if (res < 0)
     {
-        magicnet_error("%s failed to signup as a verifier.. Issue with relaying the packet\n", __FUNCTION__);
+        magicnet_error("%s signed up as a verifier locally but failed to signup as a verifier remotely.. Issue with relaying the packet\n", __FUNCTION__);
     }
+
 
 out:
     magicnet_free_packet(packet);
@@ -6219,7 +6244,13 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         if (res >= 0)
         {
             // We have a council certificate okay great!
-            magicnet_server_client_signup_as_verifier(server);
+            magicnet_server_client_signup_as_verifier(server, certificate);
+        }
+
+        // Free the certificate we dont need it anymore
+        if (certificate)
+        {
+            magicnet_council_certificate_free(certificate);
         }
 
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;

@@ -215,6 +215,13 @@ out:
 int magicnet_council_my_certificate(struct magicnet_council* council, struct magicnet_council_certificate** certificate_out)
 {
     int res = 0;
+    
+    // No council provided? default to the central council
+    if (!council)
+    {
+        council = central_council;
+    }
+
     if (council->my_certificate)
     {
         *certificate_out = magicnet_council_certificate_clone(council->my_certificate);

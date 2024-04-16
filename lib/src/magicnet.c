@@ -150,6 +150,13 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
         block_transaction_free(magicnet_signed_data(packet)->payload.transaction_send.transaction);
         break;
 
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        // Free the council certificate
+        if (magicnet_signed_data(packet)->payload.verifier_signup.certificate)
+        {
+            magicnet_council_certificate_free(magicnet_signed_data(packet)->payload.verifier_signup.certificate);
+        }
+    break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         magicnet_block_send_packet_free(packet);
         break;
