@@ -5892,6 +5892,18 @@ struct magicnet_council_certificate *magicnet_server_find_verifier_to_vote_for(s
     return verifier_certificate;
 }
 
+/**
+ * Applies the provided certificate to the my_certificate field of the packet, proves the certificate of the person
+ * who crafted a packet. Only neccessary to be applied to certain packets to prove authenticity.
+*/
+int magicnet_packet_apply_my_certificate(struct magicnet_packet* packet, struct magicnet_council_certificate* certificate)
+{
+    int res = 0;
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE;
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER;
+    magicnet_signed_data(packet)->my_certificate = magicnet_council_certificate_clone(certificate);
+    return res;
+}
 void magicnet_server_client_vote_for_verifier(struct magicnet_server *server)
 {
     int res = 0;
@@ -5919,9 +5931,8 @@ void magicnet_server_client_vote_for_verifier(struct magicnet_server *server)
 
     // Let us create a new vote packet to relay.
     struct magicnet_packet *packet = magicnet_packet_new();
-    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED | MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE;
-    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER;
-    magicnet_signed_data(packet)->my_certificate = magicnet_council_certificate_clone(certificate);
+    magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    magicnet_packet_apply_my_certificate(packet, certificate);
     memcpy(magicnet_signed_data(packet)->payload.vote_next_verifier.vote_for_cert, verifier_cert_to_vote_for->hash, sizeof(verifier_cert_to_vote_for->hash));
     magicnet_server_add_packet_to_relay(server, packet);
 
