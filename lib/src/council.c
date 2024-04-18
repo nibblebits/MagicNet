@@ -975,13 +975,13 @@ struct magicnet_council_certificate *magicnet_council_certificate_clone(struct m
     }
 
     memcpy(certificate_out, certificate, sizeof(struct magicnet_council_certificate));
-    magicnet_council_certificate_clone_signed_data(certificate_out, certificate);
+    magicnet_council_certificate_clone_signed_data(certificate, certificate_out);
 
     // Verify the integrety of what we have copied
     int res = magicnet_council_certificate_verify_signature(certificate_out);
     if (res < 0)
     {
-        magicnet_log("%s We had an issue copying the council certificate correctly or the input certificate was invalid", __FUNCTION__);
+        magicnet_log("%s We had an issue copying the council certificate correctly or the input certificate was invalid\n", __FUNCTION__);
         magicnet_council_certificate_free(certificate_out);
         certificate_out = NULL;
         goto out;
