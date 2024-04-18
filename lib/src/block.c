@@ -510,11 +510,8 @@ int block_save_with_rules(struct block *block, int flags)
         goto out;
     }
 
-    res = magicnet_council_certificate_save(block->certificate);
-    if (res < 0)
-    {
-        goto out;
-    }
+    magicnet_council_certificate_save(block->certificate);
+
 
     res = magicnet_database_save_block(block);
     if (res < 0)
