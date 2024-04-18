@@ -948,7 +948,6 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
     return mclient;
 }
 
-
 struct magicnet_client *magicnet_accept(struct magicnet_server *server)
 {
     struct sockaddr_in client;
@@ -1674,10 +1673,19 @@ int magicnet_client_write_council_certificate_transfer(struct magicnet_client *c
 {
     int res = 0;
 
-    // Write the nested council certificate
-    res = magicnet_client_write_council_certificate(client, transfer->certificate, write_buf);
+    // Write byte to determine if we have certificate or not
+    res = magicnet_write_int(client, transfer->certificate != NULL, write_buf);
     if (res < 0)
         goto out;
+
+    // If we have certificate write it.
+    if (transfer->certificate)
+    {
+        // Write the nested council certificate
+        res = magicnet_client_write_council_certificate(client, transfer->certificate, write_buf);
+        if (res < 0)
+            goto out;
+    }
 
     // Write the new owner data
     res = magicnet_write_bytes(client, &transfer->new_owner, sizeof(transfer->new_owner), write_buf);
@@ -1844,12 +1852,17 @@ out:
 int magicnet_client_read_council_certificate_transfer(struct magicnet_client *client, struct council_certificate_transfer *transfer, struct buffer *write_buf)
 {
     int res = 0;
-    res = magicnet_client_read_council_certificate(client, transfer->certificate, write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
 
+    // Read byte to determine if we have certificate or not
+    int has_certificate = magicnet_read_int(client, write_buf);
+    if (has_certificate)
+    {
+        res = magicnet_client_read_council_certificate(client, transfer->certificate, write_buf);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
     res = magicnet_read_bytes(client, &transfer->new_owner, sizeof(transfer->new_owner), write_buf);
     if (res < 0)
     {
@@ -1887,7 +1900,7 @@ out:
 int magicnet_client_read_council_certificate_signed_data(struct magicnet_client *client, struct council_certificate_signed_data *signed_data, struct buffer *write_buf)
 {
     int res = 0;
-    
+
     signed_data->id = magicnet_read_int(client, write_buf);
     if (signed_data->id < 0)
     {
@@ -1934,7 +1947,7 @@ out:
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf)
 {
     int res = 0;
-    
+
     res = magicnet_read_bytes(client, certificate_out->hash, sizeof(certificate_out->hash), write_buf);
     if (res < 0)
     {
@@ -2027,7 +2040,6 @@ int magicnet_client_read_block(struct magicnet_client *client, struct block **bl
         res = MAGICNET_ERROR_SECURITY_RISK;
         goto out;
     }
-
 
     block = block_create_with_group(hash, prev_hash, block_transaction_group_clone(transaction_group));
     if (!block)
@@ -2861,7 +2873,7 @@ int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client,
         res = -1;
         goto out;
     }
-    
+
     res = magicnet_client_write_council_certificate(client, magicnet_signed_data(packet)->payload.verifier_signup.certificate, packet->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -3850,7 +3862,7 @@ void magicnet_copy_packet_events_res(struct magicnet_packet *packet_out, struct 
 void magicnet_copy_packet_verifier_signup(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
     assert(magicnet_signed_data(packet_in)->type == MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP);
-    assert(magicnet_signed_data(packet_in)->payload.verifier_signup.certificate != NULL);  
+    assert(magicnet_signed_data(packet_in)->payload.verifier_signup.certificate != NULL);
     magicnet_signed_data(packet_out)->payload.verifier_signup.certificate = magicnet_council_certificate_clone(magicnet_signed_data(packet_in)->payload.verifier_signup.certificate);
 }
 
@@ -4000,7 +4012,6 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
             magicnet_relay_packet_to_client(&server->outgoing_clients[i], packet);
         }
     }
-
 
     return 0;
 }
@@ -5815,7 +5826,7 @@ bool magicnet_server_should_make_new_connections(struct magicnet_server *server)
     return (time(NULL) - server->last_new_connection_attempt) >= MAGICNET_ATTEMPT_NEW_CONNECTIONS_AFTER_SECONDS;
 }
 
-void magicnet_server_client_signup_as_verifier(struct magicnet_server *server, struct magicnet_council_certificate* certificate)
+void magicnet_server_client_signup_as_verifier(struct magicnet_server *server, struct magicnet_council_certificate *certificate)
 {
     int res = 0;
     // Lets create verifier signups for the block
@@ -5841,7 +5852,6 @@ void magicnet_server_client_signup_as_verifier(struct magicnet_server *server, s
     {
         magicnet_error("%s signed up as a verifier locally but failed to signup as a verifier remotely.. Issue with relaying the packet\n", __FUNCTION__);
     }
-
 
 out:
     magicnet_free_packet(packet);
@@ -5895,8 +5905,8 @@ struct magicnet_council_certificate *magicnet_server_find_verifier_to_vote_for(s
 /**
  * Applies the provided certificate to the my_certificate field of the packet, proves the certificate of the person
  * who crafted a packet. Only neccessary to be applied to certain packets to prove authenticity.
-*/
-int magicnet_packet_apply_my_certificate(struct magicnet_packet* packet, struct magicnet_council_certificate* certificate)
+ */
+int magicnet_packet_apply_my_certificate(struct magicnet_packet *packet, struct magicnet_council_certificate *certificate)
 {
     int res = 0;
     magicnet_signed_data(packet)->flags |= MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE;
@@ -6014,8 +6024,7 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
     {
         magicnet_error("%s failed to get our own certificate, are you sure we are a member of the council\n", __FUNCTION__);
         goto out;
-    } 
-
+    }
 
     res = block_hash_sign_verify(block);
     if (res < 0)
@@ -6043,7 +6052,7 @@ int magicnet_server_create_block(struct magicnet_server *server, const char *pre
 out:
     if (res < 0)
     {
-        if(block)
+        if (block)
         {
             block_free(block);
         }
@@ -6269,7 +6278,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         // Alright lets deal with this
 
         // Lets get our certificate
-        struct magicnet_council_certificate* certificate = NULL;
+        struct magicnet_council_certificate *certificate = NULL;
         int res = magicnet_council_my_certificate(NULL, &certificate);
         if (res >= 0)
         {
