@@ -1938,7 +1938,7 @@ int magicnet_client_read_council_certificate(struct magicnet_client *client, str
     res = magicnet_read_bytes(client, certificate_out->hash, sizeof(certificate_out->hash), write_buf);
     if (res < 0)
     {
-        magicnet_log("%s error reading hash of council certificate", __FUNCTION__);
+        magicnet_log("%s error reading hash of council certificate\n", __FUNCTION__);
         goto out;
     }
 
@@ -1959,7 +1959,7 @@ int magicnet_client_read_council_certificate(struct magicnet_client *client, str
     res = magicnet_client_read_council_certificate_signed_data(client, &certificate_out->signed_data, write_buf);
     if (res < 0)
     {
-        magicnet_log("%s failed to read certificate signed data", __FUNCTION__);
+        magicnet_log("%s failed to read certificate signed data\n", __FUNCTION__);
         goto out;
     }
 
