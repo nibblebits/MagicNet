@@ -3845,6 +3845,11 @@ void magicnet_copy_packet_events_res(struct magicnet_packet *packet_out, struct 
     magicnet_signed_data(packet_out)->payload.events_poll_res.events = magicnet_copy_events(events_vec_in);
 }
 
+void magicnet_copy_packet_verifier_signup(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
+{
+    magicnet_signed_data(packet_out)->payload.verifier_signup.certificate = magicnet_council_certificate_clone(magicnet_signed_data(packet_in)->payload.verifier_signup.certificate);
+}
+
 /**
  * @brief Copies the packet including copying all internal pointers and creating new memory
  * for the destination packet
@@ -3874,6 +3879,9 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         magicnet_copy_packet_block_send(packet_out, packet_in);
         break;
 
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        magicnet_copy_packet_verifier_signup(packet_out, packet_in);
+        break;
     case MAGICNET_PACKET_TYPE_EVENTS_POLL:
         magicnet_copy_packet_events_poll(packet_out, packet_in);
         break;

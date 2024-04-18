@@ -568,7 +568,7 @@ int magicnet_database_create()
     }
 
     // This is the root host the peer everybody knows about.
-    magicnet_save_peer_info(&(struct magicnet_peer_information){.ip_address = "104.248.237.170", .email = "hello@dragonzap.com"});
+    magicnet_save_peer_info(&(struct magicnet_peer_information){.ip_address = "167.71.136.118", .email = "hello@dragonzap.com"});
     return res;
 }
 int magicnet_database_load()
