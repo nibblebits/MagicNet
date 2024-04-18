@@ -598,6 +598,7 @@ int magicnet_database_load()
         res = magicnet_database_create();
         if (res < 0)
         {
+            magicnet_log("Failed to create the database\n");
             goto out;
         }
 

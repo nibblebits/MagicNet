@@ -31,7 +31,8 @@
         "initializer_list": "cpp",
         "memory": "c",
         "system_error": "c",
-        "variant": "c"
+        "variant": "c",
+        "database.h": "c"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/qt-chain-admin/ChainAdmin"
 }

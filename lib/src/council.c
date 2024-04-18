@@ -514,8 +514,9 @@ bool magicnet_council_certificate_exists(const char *certificate_hash)
     if (certificate)
     {
         res = true;
+        magicnet_council_certificate_free(certificate);
+
     }
-    magicnet_council_certificate_free(certificate);
     return res;
 }
 

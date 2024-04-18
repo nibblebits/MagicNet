@@ -7,12 +7,14 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <fcntl.h>
+#include <string.h>
 #include <stdlib.h>
 #include "database.h"
 
 int magicnet_create_files()
 {
     char data_directory[PATH_MAX];
+    bzero(data_directory, PATH_MAX);
     sprintf(data_directory, "%s/%s", getenv("HOME"), ".magicnet");
     DIR *dir = opendir(data_directory);
     if (!dir)
@@ -51,14 +53,11 @@ int magicnet_server_init()
 
     MAGICNET_load_keypair();
 
-
-
     res = blockchain_init();
     if (res < 0)
     {
         goto out;
     }
-
 
     // Initialize the council
     res = magicnet_council_init();
@@ -66,7 +65,6 @@ int magicnet_server_init()
     {
         goto out;
     }
-
 
 out:
     return res;
