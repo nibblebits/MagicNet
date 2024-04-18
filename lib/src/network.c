@@ -1974,7 +1974,6 @@ int magicnet_client_read_block(struct magicnet_client *client, struct block **bl
     char prev_hash[SHA256_STRING_LENGTH];
     char transaction_group_hash[SHA256_STRING_LENGTH];
     time_t block_time;
-    struct key key;
     struct signature signature;
     struct block *block = NULL;
     int total_transactions = magicnet_read_int(client, write_buf);
@@ -2029,17 +2028,6 @@ int magicnet_client_read_block(struct magicnet_client *client, struct block **bl
         goto out;
     }
 
-    res = magicnet_read_bytes(client, &key, sizeof(key), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    res = magicnet_read_bytes(client, &signature, sizeof(signature), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
 
     block = block_create_with_group(hash, prev_hash, block_transaction_group_clone(transaction_group));
     if (!block)
@@ -2053,6 +2041,12 @@ int magicnet_client_read_block(struct magicnet_client *client, struct block **bl
     if (res < 0)
     {
         magicnet_log("%s failed to read the certificate for the block\n", __FUNCTION__);
+        goto out;
+    }
+
+    res = magicnet_read_bytes(client, &signature, sizeof(signature), write_buf);
+    if (res < 0)
+    {
         goto out;
     }
 
