@@ -1887,6 +1887,7 @@ out:
 int magicnet_client_read_council_certificate_signed_data(struct magicnet_client *client, struct council_certificate_signed_data *signed_data, struct buffer *write_buf)
 {
     int res = 0;
+    
     signed_data->id = magicnet_read_int(client, write_buf);
     if (signed_data->id < 0)
     {
@@ -1933,6 +1934,7 @@ out:
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf)
 {
     int res = 0;
+    
     res = magicnet_read_bytes(client, certificate_out->hash, sizeof(certificate_out->hash), write_buf);
     if (res < 0)
     {

@@ -817,7 +817,7 @@ struct magicnet_council
     // This is equal to the default certificate of the person using the software if they have a certificate with this council
     // this is not saved and is for in-memory purposes and preformance reasons only.
     struct magicnet_council_certificate* my_certificate;
-};
+} __attribute((packed));
 
 /**
  *
@@ -932,7 +932,7 @@ struct council_certificate_signed_data
 
     // The last certificate transfer of this certificate.
     struct council_certificate_transfer transfer;
-};
+} __attribute((packed));
 
 enum
 {
@@ -960,7 +960,7 @@ struct magicnet_council_certificate
     // Memory flags for this certificate, that are not saved or sent over the network and are purley used as a way of storing
     // runtime data for this certificate
     int memory_flags;
-};
+} __attribute((packed));
 
 struct block
 {
