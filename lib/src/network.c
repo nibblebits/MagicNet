@@ -3849,6 +3849,8 @@ void magicnet_copy_packet_events_res(struct magicnet_packet *packet_out, struct 
 
 void magicnet_copy_packet_verifier_signup(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
+    assert(magicnet_signed_data(packet_in)->type == MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP);
+    assert(magicnet_signed_data(packet_in)->payload.verifier_signup.certificate != NULL);  
     magicnet_signed_data(packet_out)->payload.verifier_signup.certificate = magicnet_council_certificate_clone(magicnet_signed_data(packet_in)->payload.verifier_signup.certificate);
 }
 
