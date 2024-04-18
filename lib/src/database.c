@@ -1950,7 +1950,7 @@ int magicnet_database_load_council_no_locks(const char *id_hash, struct magicnet
         res = MAGICNET_ERROR_NOT_FOUND;
         goto out;
     }
-    memcpy(council_out->signed_data.id_signed_data.name, sqlite3_column_text(stmt, 1), sizeof(council_out->signed_data.id_signed_data.name));
+    strncpy(council_out->signed_data.id_signed_data.name, sqlite3_column_text(stmt, 1), sizeof(council_out->signed_data.id_signed_data.name));
     council_out->signed_data.id_signed_data.total_certificates = sqlite3_column_int(stmt, 2);
     council_out->signed_data.id_signed_data.creation_time = (time_t)sqlite3_column_int64(stmt, 3);
     memcpy(council_out->signed_data.id_hash, sqlite3_column_text(stmt, 4), sizeof(council_out->signed_data.id_hash));
