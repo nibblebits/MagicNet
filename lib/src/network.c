@@ -2855,7 +2855,13 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 int magicnet_client_write_packet_verifier_signup(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-
+    if (!magicnet_signed_data(packet)->payload.verifier_signup.certificate)
+    {
+        magicnet_log("%s no certificate provided\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+    
     res = magicnet_client_write_council_certificate(client, magicnet_signed_data(packet)->payload.verifier_signup.certificate, packet->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -5124,6 +5130,13 @@ bool magicnet_server_verifier_is_signed_up(struct magicnet_server *server, struc
 int magicnet_server_verifier_signup(struct magicnet_server *server, struct magicnet_council_certificate *certificate)
 {
     int res = 0;
+    if (!certificate)
+    {
+        magicnet_log("%s certificate is null\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
     // Already signed up.
     if (magicnet_server_verifier_is_signed_up(server, certificate))
     {
