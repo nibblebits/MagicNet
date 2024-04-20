@@ -2553,10 +2553,13 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 
     if (packet_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
     {
+        magicnet_signed_data(packet_out)->my_certificate = magicnet_council_certificate_create();
         res = magicnet_client_read_council_certificate(client, magicnet_signed_data(packet_out)->my_certificate, packet_out->not_sent.tmp_buf);
         if (res < 0)
         {
             magicnet_log("%s failed to read the council certificate\n", __FUNCTION__);
+            magicnet_council_certificate_free(magicnet_signed_data(packet_out)->my_certificate);
+            magicnet_signed_data(packet_out)->my_certificate = NULL;
             goto out;
         }
     }
