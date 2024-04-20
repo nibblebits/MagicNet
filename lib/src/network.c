@@ -114,9 +114,10 @@ struct magicnet_packet *magicnet_packet_new()
     return packet;
 }
 
-int magicnet_client_packet_strip_private_flags(struct magicnet_packet *packet)
+int magicnet_client_packet_strip_private_flags(const struct magicnet_packet *packet)
 {
-    return magicnet_signed_data(packet)->flags &= ~MAGICNET_PACKET_PRIVATE_FLAGS;
+    int flags = packet->signed_data.flags;
+    return flags & ~MAGICNET_PACKET_PRIVATE_FLAGS;
 }
 
 bool magicnet_client_packet_flags_are_private(int flags)
