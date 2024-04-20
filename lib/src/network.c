@@ -3343,7 +3343,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     if (stripped_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
     {
-        magicnet_log("%s we have a council certificate to send with this packet\n", __FUNCTION__);
+        magicnet_log("%s we have a council certificate to send with this packet, hash=%s\n", __FUNCTION__, magicnet_signed_data(packet)->my_certificate->hash);
         // We have a council certificate to send with this packet we will just send it
         // we dont know at this point if its valid or not. The receiver can decide.
         res = magicnet_client_write_council_certificate(client, magicnet_signed_data(packet)->my_certificate, packet->not_sent.tmp_buf);
