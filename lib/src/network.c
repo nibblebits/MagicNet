@@ -3446,9 +3446,9 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     if (stripped_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
     {
         // Lets check that the key who signed the packet is the same as the key who signed the certificate
-        if (key_cmp(&packet->pub_key, &magicnet_signed_data(packet)->my_certificate->owner_key) != 0)
+        if (!key_cmp(&packet->pub_key, &magicnet_signed_data(packet)->my_certificate->owner_key))
         {
-            magicnet_log("%s the key who signed the packet is not the same as the key who signed the certificate\n", __FUNCTION__);
+            magicnet_log("%s the key who signed the packet is not the same as the key who signed the certificate.\n", __FUNCTION__);
             res = -1;
             goto out;
         }
