@@ -5154,6 +5154,14 @@ int magicnet_server_verifier_signup(struct magicnet_server *server, struct magic
         goto out;
     }
 
+    // Check the certificate is valid
+    if(magicnet_council_certificate_verify(certificate) < 0)
+    {
+        magicnet_log("%s certificate is invalid will not allow signup!\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
     // Already signed up.
     if (magicnet_server_verifier_is_signed_up(server, certificate))
     {
