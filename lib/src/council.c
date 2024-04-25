@@ -817,12 +817,6 @@ out:
 
 int magicnet_council_certificate_verify_for_council(struct magicnet_council *council, struct magicnet_council_certificate *certificate)
 {
-    if (certificate->council &&
-        certificate->council != council)
-    {
-        magicnet_log("%s council certificate with hash %s, certificate is not for this council.\n", __FUNCTION__, certificate->hash);
-        return -1;
-    }
 
     if (strncmp(certificate->signed_data.council_id_hash, council->signed_data.id_hash, sizeof(certificate->signed_data.council_id_hash)) != 0)
     {
