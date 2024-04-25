@@ -661,8 +661,8 @@ int block_verify_specified(struct block *block, int flags)
     // Okay the hashes are correct but was this block signed by the key in the block?
     if (flags & MAGICNET_BLOCK_VERIFICATION_VERIFY_SIGNATURE)
     {
-        // Verify the certificate
-        if (magicnet_council_certificate_verify(block->certificate) < 0)
+        // Verify the certificate is apart of the central council and is valid.
+        if (magicnet_central_council_certificate_verify(block->certificate) < 0)
         {
             magicnet_log("%s the council certificate could not be verified for the given block\n", __FUNCTION__);
             res = -1;

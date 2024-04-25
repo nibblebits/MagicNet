@@ -16,7 +16,6 @@
 
 static struct magicnet_council *central_council = NULL;
 
-
 /**
  * A vector of loaded councils
  */
@@ -91,7 +90,7 @@ int magicnet_council_vector_add(struct magicnet_council *council)
     pthread_mutex_lock(&loaded_council.lock);
     res = magicnet_council_vector_add_no_locks(council);
     pthread_mutex_unlock(&loaded_council.lock);
-    
+
     return res;
 }
 
@@ -154,7 +153,7 @@ out:
     return res;
 }
 
-bool magicnet_council_certificate_is_mine(const char* certificate_hash)
+bool magicnet_council_certificate_is_mine(const char *certificate_hash)
 {
     bool res = false;
     struct magicnet_council_certificate *certificate = magicnet_council_certificate_load(certificate_hash);
@@ -198,7 +197,7 @@ out:
     return res;
 }
 
-int magicnet_council_certificates_for_key(struct magicnet_council* council, struct key* key, struct vector* certificate_vec)
+int magicnet_council_certificates_for_key(struct magicnet_council *council, struct key *key, struct vector *certificate_vec)
 {
     int res = 0;
     res = magicnet_database_load_council_certificates_of_key(council->signed_data.id_hash, key, certificate_vec);
@@ -207,15 +206,14 @@ int magicnet_council_certificates_for_key(struct magicnet_council* council, stru
         goto out;
     }
 
-
 out:
     return res;
 }
 
-int magicnet_council_my_certificate(struct magicnet_council* council, struct magicnet_council_certificate** certificate_out)
+int magicnet_council_my_certificate(struct magicnet_council *council, struct magicnet_council_certificate **certificate_out)
 {
     int res = 0;
-    
+
     // No council provided? default to the central council
     if (!council)
     {
@@ -231,11 +229,10 @@ int magicnet_council_my_certificate(struct magicnet_council* council, struct mag
         res = magicnet_council_default_certificate_for_key(council, MAGICNET_public_key(), certificate_out);
     }
 
-
 out:
     return res;
 }
-int magicnet_council_default_certificate_for_key(struct magicnet_council* council, struct key* key, struct magicnet_council_certificate** certificate_out)
+int magicnet_council_default_certificate_for_key(struct magicnet_council *council, struct key *key, struct magicnet_council_certificate **certificate_out)
 {
     int res = 0;
     *certificate_out = NULL;
@@ -244,7 +241,7 @@ int magicnet_council_default_certificate_for_key(struct magicnet_council* counci
         council = central_council;
     }
 
-    struct vector* certificate_vec = vector_create(sizeof(struct magicnet_council_certificate));
+    struct vector *certificate_vec = vector_create(sizeof(struct magicnet_council_certificate));
     if (!certificate_vec)
     {
         res = -1;
@@ -266,7 +263,7 @@ int magicnet_council_default_certificate_for_key(struct magicnet_council* counci
     *certificate_out = vector_peek_ptr(certificate_vec);
 out:
     // Free every certificate except the one we plucked
-    struct magicnet_council_certificate* cert = vector_peek_ptr(certificate_vec);
+    struct magicnet_council_certificate *cert = vector_peek_ptr(certificate_vec);
     while (cert)
     {
         if (cert != *certificate_out)
@@ -471,7 +468,7 @@ void magicnet_council_certificate_transfer_free_data(struct council_certificate_
     {
         return;
     }
-    
+
     if (certificate_transfer->voters)
     {
         for (int i = 0; i < certificate_transfer->total_voters; i++)
@@ -515,7 +512,6 @@ bool magicnet_council_certificate_exists(const char *certificate_hash)
     {
         res = true;
         magicnet_council_certificate_free(certificate);
-
     }
     return res;
 }
@@ -817,6 +813,29 @@ int magicnet_council_certificate_verify_signature(struct magicnet_council_certif
     }
 out:
     return res;
+}
+
+int magicnet_council_certificate_verify_for_council(struct magicnet_council *council, struct magicnet_council_certificate *certificate)
+{
+    if (certificate->council &&
+        certificate->council != council)
+    {
+        magicnet_log("%s council certificate with hash %s, certificate is not for this council.\n", __FUNCTION__, certificate->hash);
+        return -1;
+    }
+
+    if (strncmp(certificate->signed_data.council_id_hash, council->signed_data.id_hash, sizeof(certificate->signed_data.council_id_hash)) != 0)
+    {
+        magicnet_log("%s council certificate with hash %s, certificate is not for this council.\n", __FUNCTION__, certificate->hash);
+        return -1;
+    }
+
+    return magicnet_council_certificate_verify(certificate);
+}
+
+int magicnet_central_council_certificate_verify(struct magicnet_council_certificate *certificate)
+{
+    return magicnet_council_certificate_verify_for_council(central_council, certificate);
 }
 
 int magicnet_council_certificate_verify(struct magicnet_council_certificate *certificate)

@@ -1258,6 +1258,22 @@ int magicnet_council_save(struct magicnet_council *council);
 int magicnet_council_verify(struct magicnet_council *council);
 
 /**
+ *  Verifies that the council certificate is valid and apart of the council
+ * This function will return < 0 if the certificate is not valid or not apart of the council
+ * \param council The council to verify the certificate against
+ * \param certificate The certificate to verify
+ * \return 0 if the certificate is valid and apart of the council
+*/
+int magicnet_council_certificate_verify_for_council(struct magicnet_council *council, struct magicnet_council_certificate *certificate);
+
+/**
+ * Verifies that the council certificate is valid and apart of the central council
+ * \param certificate The certificate to verify
+ * \return -1 if the certificate is not valid or not apart of the central council
+ */
+
+int magicnet_central_council_certificate_verify(struct magicnet_council_certificate *certificate);
+/**
  * Returns the certificates for the given council
  */
 int magicnet_council_certificates_for_key(struct magicnet_council *council, struct key *key, struct vector *certificate_vec);
