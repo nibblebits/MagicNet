@@ -6261,6 +6261,16 @@ void magicnet_server_sign_and_send_self_transactions(struct magicnet_server *ser
 }
 
 /**
+ * Sets the computer/peer/council member that we expect to receive the next block from
+ * All other senders are unauthorized and will be ignored.
+*/
+int magicnet_server_set_authorized_block_creator(struct magicnet_server *server, const char* certificate_hash)
+{
+    int res = 0;
+    memcpy(server->authorized_block_creator.authorized_cert_hash, certificate_hash, sizeof(server->authorized_block_creator.authorized_cert_hash));
+    return res;
+}
+/**
  * @brief Block creation is always happening every second, there is a special block sequence where certain steps
  * need to be followed over a period of a few minutes. The total seconds to make a block is split into four
  * operations, each will run within each quarter of the total seconds to make a block
@@ -6344,6 +6354,11 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
             {
                 magicnet_important("%s we did not win the vote. We will wait for the block to be sent to us\n", __FUNCTION__);
             }
+
+            // Let's set the authroized block creator to the winner whome we expect to receive blocks from
+            // even if we created the block we may end up receving it again from the network
+            // so we must be prepared to accept it.
+            magicnet_server_set_authorized_block_creator(server, verifier_vote_who_won->vote_for_cert_hash);
         }
 
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
