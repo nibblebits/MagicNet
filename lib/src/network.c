@@ -5256,7 +5256,7 @@ void magicnet_server_update_our_transaction_states(struct magicnet_server *serve
 
 bool magicnet_server_is_authorized_to_send_block(struct magicnet_server *server, struct magicnet_council_certificate *certificate)
 {
-    return memcmp(block->certificate->hash, server->authorized_block_creator.authorized_cert_hash, sizeof(block->certificate->hash)) == 0;
+    return memcmp(certificate->hash, server->authorized_block_creator.authorized_cert_hash, sizeof(certificate->hash)) == 0;
 }
 
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
