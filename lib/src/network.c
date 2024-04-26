@@ -5156,7 +5156,7 @@ int magicnet_server_verifier_signup(struct magicnet_server *server, struct magic
     }
 
     // Check the certificate is valid and apart of the central council before we allow signup
-    if(magicnet_central_council_certificate_verify(certificate) < 0)
+    if (magicnet_central_council_certificate_verify(certificate) < 0)
     {
         magicnet_log("%s certificate is invalid will not allow signup!\n", __FUNCTION__);
         res = -1;
@@ -5256,7 +5256,6 @@ void magicnet_server_update_our_transaction_states(struct magicnet_server *serve
 
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    bool hash_is_requested = false;
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
     if (vector_count(magicnet_signed_data(packet)->payload.block_send.blocks) > 1)
     {
@@ -5268,7 +5267,6 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
     struct block *block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     while (block)
     {
-        hash_is_requested = magicnet_default_downloader_is_hash_queued(block->hash);
         int save_res = block_save(block);
         if (save_res < 0)
         {
@@ -5302,21 +5300,16 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
 
         // Is this a new block from a verifeir? Then lets set the created block so we have proof of this
         // created block.
-        if (!hash_is_requested)
-        {
-            magicnet_server_set_created_block(client->server, block);
-        }
+        magicnet_server_set_created_block(client->server, block);
 
         block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     }
 
     // We don't relay if this was a block we requested.
-    if (!hash_is_requested)
-    {
-        magicnet_server_lock(client->server);
-        magicnet_server_add_packet_to_relay(client->server, packet);
-        magicnet_server_unlock(client->server);
-    }
+
+    magicnet_server_lock(client->server);
+    magicnet_server_add_packet_to_relay(client->server, packet);
+    magicnet_server_unlock(client->server);
 
     return 0;
 }
