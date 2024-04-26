@@ -548,6 +548,7 @@ struct block *block_clone(struct block *block)
     block_cloned->certificate = magicnet_council_certificate_clone(block->certificate);
     block_cloned->blockchain_id = block->blockchain_id;
     block_cloned->time = block->time;
+    block_cloned->signature = block->signature;
     return block_cloned;
 }
 

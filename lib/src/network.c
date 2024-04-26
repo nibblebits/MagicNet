@@ -1870,6 +1870,7 @@ int magicnet_client_read_council_certificate_transfer(struct magicnet_client *cl
         goto out;
     }
 
+    // Read the total number of voters
     res = magicnet_read_long(client, write_buf);
     if (res < 0)
     {
