@@ -5254,9 +5254,15 @@ void magicnet_server_update_our_transaction_states(struct magicnet_server *serve
     }
 }
 
+bool magicnet_server_is_authorized_to_send_block(struct magicnet_server *server, struct magicnet_council_certificate *certificate)
+{
+    return memcmp(block->certificate->hash, server->authorized_block_creator.authorized_cert_hash, sizeof(block->certificate->hash)) == 0;
+}
+
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     magicnet_log("%s block send packet discovered\n", __FUNCTION__);
+
     if (vector_count(magicnet_signed_data(packet)->payload.block_send.blocks) > 1)
     {
         magicnet_log("%s this version of the protocol does not allow multiple blocks to be sent. Blocks ignored\n", __FUNCTION__);
@@ -5267,6 +5273,15 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
     struct block *block = vector_peek_ptr(magicnet_signed_data(packet)->payload.block_send.blocks);
     while (block)
     {
+        bool authorized_sender = false;
+        magicnet_server_read_lock(client->server);
+        authorized_sender = magicnet_server_is_authorized_to_send_block(client->server, block->certificate);
+        magicnet_server_unlock(client->server);
+        if (!authorized_sender)
+        {
+            magicnet_log("%s block sender is not authorized to send blocks \033[1;31mIGNORED\033[0m\n", __FUNCTION__);
+            return -1;
+        }
         int save_res = block_save(block);
         if (save_res < 0)
         {

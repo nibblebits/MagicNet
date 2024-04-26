@@ -577,6 +577,17 @@ struct magicnet_server
 
     } next_block;
 
+    /**
+     * The peer who in this cycle is authorized to send us a single block without us requesting.
+     * This would be the certificate who won the last vote.
+     * 
+     * All blocks sent to us from anyone other than this peer will be ignored.
+     */
+    struct authorized_block_creator
+    {
+        char authorized_cert_hash[SHA256_STRING_LENGTH];
+    } authorized_block_creator;
+
     // Vector of struct self_block_transaction* all transactions in here are unsigned. These are transactions waiting to be sent
     // but havent been sent yet to the network.
     struct vector *our_waiting_transactions;
