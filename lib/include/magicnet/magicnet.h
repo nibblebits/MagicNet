@@ -613,11 +613,6 @@ struct magicnet_server
     // means we have successfully tested that we are able to receive incoming connections.
     bool port_forwarded;
 
-    // POSTED when a verifier has been selected to create the next block.
-    // Receivers of blocks should wait on this signal to ensure a verifier has been selected
-    // before the block is processed. THis is to ensure that the block isnt mistakingly declared fraudulent
-    // due to race conditions.
-    struct magicnet_signal* won_verifier_signal;
 };
 
 struct block_transaction_data
