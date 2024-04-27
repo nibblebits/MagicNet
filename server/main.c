@@ -132,8 +132,8 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    struct key key = MAGICNET_key_from_string("0466354D126A4603A196224C701D23A4592500E6B11B24894881F3CB07144826BB42E1D3EC83F1782C00816553791EDB53F17A1D8EC5C55AD10AE0BECCC1777095");
-    struct magicnet_wallet* test_wallet = magicnet_wallet_find(&key);
+    struct key* key = MAGICNET_public_key();
+    struct magicnet_wallet* test_wallet = magicnet_wallet_find(key);
     if (test_wallet)
     {
         printf("Wallet balance=%f\n", test_wallet->balance);

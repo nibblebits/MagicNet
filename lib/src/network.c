@@ -6159,6 +6159,7 @@ void magicnet_server_sign_and_send_self_transaction(struct magicnet_server *serv
     // Lets ensure its actually pending because we dont delete self transactions from memory without a good reason.
     if (!magicnet_server_should_sign_and_send_self_transaction(self_transaction))
     {
+        magicnet_log("%s the transaction has already been sent before so we will not send it again. This is not a BUG and is intended behaviour to allow a history of transactions per session\n", __FUNCTION__);
         return;
     }
 
