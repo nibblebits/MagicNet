@@ -350,6 +350,9 @@ struct magicnet_server *magicnet_server_start(int port)
     server->server_started = time(NULL);
     server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
     server->thread_ids = vector_create(sizeof(pthread_t));
+
+    // Cleanup of the signal is handled internally upon server shutdown in signaling.c
+    server->won_verifier_signal = magicnet_signal_find_free("won_verifier");
     return server;
 }
 
@@ -5262,7 +5265,11 @@ bool magicnet_server_is_authorized_to_send_block(struct magicnet_server *server,
 
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    magicnet_log("%s block send packet discovered\n", __FUNCTION__);
+    magicnet_log("%s block send packet discovered waiting for verifier discovery\n", __FUNCTION__);
+    if (magicnet_signal_wait_timed(client->server->won_verifier_signal, 30, NULL) < 0)
+    {
+        magicnet_log("%s failed to wait for verifier discovery we will try to deal with the block anyway..\n", __FUNCTION__);
+    }
 
     if (vector_count(magicnet_signed_data(packet)->payload.block_send.blocks) > 1)
     {
@@ -6361,6 +6368,9 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
             // even if we created the block we may end up receving it again from the network
             // so we must be prepared to accept it.
             magicnet_server_set_authorized_block_creator(server, verifier_vote_who_won->vote_for_cert_hash);
+
+            // Lets post the won_verifier signal for anyone waiting.
+            magicnet_signal_post(server->won_verifier_signal, verifier_vote_who_won->vote_for_cert_hash, sizeof(verifier_vote_who_won->vote_for_cert_hash), MAGICNET_SIGNAL_FLAG_CLONE_DATA_ON_POST);
         }
 
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
