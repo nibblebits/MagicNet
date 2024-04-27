@@ -313,10 +313,7 @@ int magicnet_chain_downloader_queue_for_block_download(const char *block_hash)
     return 0;
 }
 
-/**
- * FInd the bug
- * 
-*/
+
 int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downloader *downloader)
 {
     int res = 0;

@@ -4348,6 +4348,7 @@ int magicnet_client_process_request_block_response_packet(struct magicnet_client
         goto out;
     }
 
+    // Post the signal so that the downloader can continue at cdownloader.c
     magicnet_signal_post_for_signal(magicnet_signed_data(packet)->payload.request_block_response.signal_id, "downloader-req-block-signal", &packet->pub_key, sizeof(struct key), MAGICNET_SIGNAL_FLAG_CLONE_DATA_ON_POST);
 
 out:
