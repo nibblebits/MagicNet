@@ -46,6 +46,8 @@ int magicnet_server_push_event(struct magicnet_server *server, struct magicnet_e
 int magicnet_client_write_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate, struct buffer *write_buf);
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf);
 
+
+
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
     vector_set_peek_pointer(server->thread_ids, 0);
@@ -4210,6 +4212,8 @@ out:
     magicnet_free_packet(packet_to_relay);
     return res;
 }
+
+
 
 /**
  * This function rebuilds coin send transactions

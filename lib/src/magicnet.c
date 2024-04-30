@@ -298,6 +298,74 @@ int magicnet_update_transaction_payload(struct block_transaction *transaction, v
     return 0;
 }
 
+
+int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer)
+{
+    int res = 0;
+    if (transaction->type != MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER)
+    {
+        res = -1;
+        goto out;
+    }
+
+    struct buffer *buffer = buffer_wrap(transaction->data.ptr, transaction->data.size);
+    res = buffer_read_int(buffer, &council_certificate_transfer->flags);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = buffer_read_bytes(buffer,council_certificate_transfer->certificate_to_transfer_hash, sizeof(council_certificate_transfer->certificate_to_transfer_hash));
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = buffer_read_bytes(buffer,&council_certificate_transfer->new_owner_key, sizeof(council_certificate_transfer->new_owner_key));
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Verify the key
+    if (!MAGICNET_key_valid(&council_certificate_transfer->new_owner_key))
+    {
+        res = -1;
+        goto out;
+    }
+
+out:
+    return res;
+}
+
+void magicnet_write_transaction_council_certificate_initiate_transfer_data_to_buffer(struct buffer* buffer, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer)
+{
+    buffer_write_int(buffer, council_certificate_transfer->flags);
+    buffer_write_bytes(buffer, council_certificate_transfer->certificate_to_transfer_hash, sizeof(council_certificate_transfer->certificate_to_transfer_hash));
+    buffer_write_bytes(buffer, &council_certificate_transfer->new_owner_key, sizeof(council_certificate_transfer->new_owner_key));
+ 
+}
+
+int magicnet_initiate_certificate_transfer(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key)
+{
+    int res = 0;
+    struct block_transaction_council_certificate_initiate_transfer_request council_certificate_transfer = {};
+    council_certificate_transfer.flags = flags;
+    memcpy(&council_certificate_transfer.certificate_to_transfer_hash, certificate_to_transfer_hash, sizeof(council_certificate_transfer.certificate_to_transfer_hash));
+    memcpy(&council_certificate_transfer.new_owner_key, new_owner_key, sizeof(council_certificate_transfer.new_owner_key));
+    
+    struct buffer* buffer = buffer_create();
+    magicnet_write_transaction_council_certificate_initiate_transfer_data_to_buffer(buffer, &council_certificate_transfer);
+    res = magicnet_make_transaction_using_buffer(program, MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER, buffer);
+    if (res < 0)
+    {
+        goto out;
+    }
+        
+out:
+    buffer_free(buffer);
+    return res;
+}
+
 void magicnet_money_transfer_data_write_to_buffer(struct buffer *buffer, struct block_transaction_money_transfer *money_transfer)
 {
     buffer_write_double(buffer, money_transfer->amount);

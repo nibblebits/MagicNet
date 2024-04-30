@@ -174,6 +174,7 @@ enum
 {
     MAGICNET_TRANSACTION_TYPE_UNKNOWN = 0,
     MAGICNET_TRANSACTION_TYPE_COIN_SEND = 1,
+    MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER = 2,
 };
 
 struct block;
@@ -728,6 +729,31 @@ struct block_transaction_money_transfer
     // The sender is the person who signed the transaction.
 };
 
+enum
+{
+    // Only possible when the flag MAGICNET_COUNCIL_CERTIFICATE_FLAG_TRANSFERABLE_WITHOUT_VOTE is set in a council certificate.
+    COUNCIL_CERTIFICATE_TRANSFER_FLAG_TRANSFER_WITHOUT_VOTE = 0b00000001,
+};
+/**
+ * transaction for initiating a council certificate transfer, this is only a proposal and
+ * is not a completed transfer until the votes are in. 
+*/
+struct block_transaction_council_certificate_initiate_transfer_request
+{
+    
+    // Flags about the transfer
+    int flags;
+
+    char certificate_to_transfer_hash[SHA256_STRING_LENGTH];
+    struct key new_owner_key;
+
+    // The timestamp when this request for transfer will expire
+    // The request expiry must not exceed eight days or it will be rejected.
+    // If the transfer is not completed before this time the transfer is voided.
+    time_t request_expires_at;
+
+};
+
 /**
  * This is a structure representing banned peer information it represents the table in database.c
  */
@@ -1152,6 +1178,7 @@ int magicnet_make_transaction(struct magicnet_program *program, int type, void *
 int magicnet_make_transaction_using_buffer(struct magicnet_program *program, int type, struct buffer *buffer);
 int magicnet_money_transfer_data(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
 int magicnet_money_transfer_data_write(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
+int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
