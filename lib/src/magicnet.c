@@ -345,7 +345,7 @@ void magicnet_write_transaction_council_certificate_initiate_transfer_data_to_bu
  
 }
 
-int magicnet_initiate_certificate_transfer(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key)
+int magicnet_certificate_initiate_transfer(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key)
 {
     int res = 0;
     struct block_transaction_council_certificate_initiate_transfer_request council_certificate_transfer = {};
