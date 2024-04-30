@@ -5278,12 +5278,27 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
         bool authorized_sender = false;
         magicnet_server_lock(client->server);
         authorized_sender = magicnet_server_is_authorized_to_send_block(client->server, block->certificate);
-        magicnet_server_unlock(client->server);
         if (!authorized_sender)
         {
+
             magicnet_log("%s block sender is not authorized to send blocks \033[1;31mIGNORED\033[0m\n", __FUNCTION__);
+            magicnet_server_unlock(client->server);
+
             return -1;
         }
+
+        if (client->server->authorized_block_creator.was_block_received)
+        {
+            magicnet_log("%s although the block was authorized to be sent we have already received a block from this verifier this time round\n", __FUNCTION__);
+            magicnet_server_unlock(client->server);
+            return -1;
+        }
+
+        // Its a valid block so mark it as received.
+        client->server->authorized_block_creator.was_block_received = true;
+
+        magicnet_server_unlock(client->server);
+
         int save_res = block_save(block);
         if (save_res < 0)
         {
@@ -6271,6 +6286,7 @@ int magicnet_server_set_authorized_block_creator(struct magicnet_server *server,
 {
     int res = 0;
     memcpy(server->authorized_block_creator.authorized_cert_hash, certificate_hash, sizeof(server->authorized_block_creator.authorized_cert_hash));
+    server->authorized_block_creator.was_block_received = false;
     return res;
 }
 /**

@@ -587,6 +587,7 @@ struct magicnet_server
     struct authorized_block_creator
     {
         char authorized_cert_hash[SHA256_STRING_LENGTH];
+        bool was_block_received;
     } authorized_block_creator;
 
     // Vector of struct self_block_transaction* all transactions in here are unsigned. These are transactions waiting to be sent
