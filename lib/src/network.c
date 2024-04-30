@@ -5263,7 +5263,7 @@ bool magicnet_server_is_authorized_to_send_block(struct magicnet_server *server,
 
 int magicnet_server_process_block_send_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    magicnet_log("%s block send packet discovered waiting for verifier discovery\n", __FUNCTION__);
+    magicnet_log("%s block send packet discovered\n", __FUNCTION__);
 
     if (vector_count(magicnet_signed_data(packet)->payload.block_send.blocks) > 1)
     {
@@ -6289,17 +6289,19 @@ int magicnet_server_set_authorized_block_creator(struct magicnet_server *server,
 void magicnet_server_block_creation_sequence(struct magicnet_server *server)
 {
     // Lets say we create a block every 256 seconds
-    // the first quarter of that time we will be signing up as a verifier and receving new verifiers
-    // the second quarter we will be casting votes
-    // third quarter we wait to receive the block
-    // final quarter we reset the block creation rules, clearing all the verifiers and votes wether
+    // the first fifth of that time we will be signing up as a verifier and receving new verifiers
+    // the second fifth we will be casting votes
+    // third fifth we calculate the verifier who won the vote
+    // fourth fifth we await the block
+    // final fifth we reset the block creation rules, clearing all the verifiers and votes wether
     // we receive a block or not this will happen
-    time_t one_quarter_seconds = MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 4;
-    time_t block_time_first_quarter_start = 0;
-    time_t block_time_second_quarter_start = one_quarter_seconds * 1;
-    time_t block_time_third_quarter_start = one_quarter_seconds * 2;
-    time_t block_time_fourth_quarter_start = one_quarter_seconds * 3;
-    time_t block_cycle_end = one_quarter_seconds * 4;
+    time_t one_fifth_seconds = MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS / 5;
+    time_t block_time_first_fifth_start = 0;
+    time_t block_time_second_fifth_start = one_fifth_seconds * 1;
+    time_t block_time_third_fifth_start = one_fifth_seconds * 2;
+    time_t block_time_fourth_fifth_start = one_fifth_seconds * 3;
+    time_t block_time_fifth_fifth_start = one_fifth_seconds * 4;
+    time_t block_cycle_end = one_fifth_seconds * 5;
 
     // This gives us what second into the sequence we are I.e 15 seconds into the block sequence
     // it cannot be greater than the MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS
@@ -6309,7 +6311,7 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
 
     // First quarter, signup as a verifier. (Note we check that the step is correct for clients that came online too late.. or did not complete a vital step on time)
     int step = server->next_block.step;
-    if (current_block_sequence_time >= block_time_first_quarter_start && current_block_sequence_time < block_time_second_quarter_start && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
+    if (current_block_sequence_time >= block_time_first_fifth_start && current_block_sequence_time < block_time_second_fifth_start && step == BLOCK_CREATION_SEQUENCE_SIGNUP_VERIFIERS)
     {
         // Alright lets deal with this
 
@@ -6330,13 +6332,13 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
 
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CAST_VOTES;
     }
-    else if (current_block_sequence_time >= block_time_second_quarter_start && current_block_sequence_time < block_time_third_quarter_start && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
+    else if (current_block_sequence_time >= block_time_second_fifth_start && current_block_sequence_time < block_time_third_fifth_start && step == BLOCK_CREATION_SEQUENCE_CAST_VOTES)
     {
         magicnet_important("%s second quarter in the block sequence, lets create a random vote\n", __FUNCTION__);
         magicnet_server_client_vote_for_verifier(server);
-        server->next_block.step = BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK;
+        server->next_block.step = BLOCK_CREATION_SEQUENCE_CALCULATE_VOTED_VERIFIER;
     }
-    else if (current_block_sequence_time >= block_time_third_quarter_start && current_block_sequence_time < block_time_fourth_quarter_start && step == BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK)
+    else if (current_block_sequence_time >= block_time_third_fifth_start && current_block_sequence_time < block_time_fourth_fifth_start && step == BLOCK_CREATION_SEQUENCE_CALCULATE_VOTED_VERIFIER)
     {
         // We must select a verifier who won the vote.
         struct magicnet_vote_count *verifier_vote_who_won = magicnet_server_verifier_who_won(server);
@@ -6346,12 +6348,9 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
         }
         else
         {
-            magicnet_important("%s awaiting for new block from voted verifier certificate: %s \n", __FUNCTION__, verifier_vote_who_won->vote_for_cert_hash);
             if (magicnet_council_certificate_is_mine(verifier_vote_who_won->vote_for_cert_hash))
             {
-                magicnet_important("%s we won the vote! Lets create the block\n", __FUNCTION__);
-                // What do you know we won the vote! Lets create this block
-                magicnet_server_create_and_send_block(server);
+                magicnet_important("%s we won the vote! We will send the block next cycle\n", __FUNCTION__);
             }
             else
             {
@@ -6364,9 +6363,24 @@ void magicnet_server_block_creation_sequence(struct magicnet_server *server)
             magicnet_server_set_authorized_block_creator(server, verifier_vote_who_won->vote_for_cert_hash);
         }
 
+        server->next_block.step = BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK;
+    }
+    else if (current_block_sequence_time >= block_time_fourth_fifth_start && current_block_sequence_time < block_time_fifth_fifth_start && step == BLOCK_CREATION_SEQUENCE_AWAIT_NEW_BLOCK)
+    {
+        struct magicnet_vote_count *verifier_vote_who_won = magicnet_server_verifier_who_won(server);
+        if (verifier_vote_who_won)
+        {
+            magicnet_important("%s awaiting for new block from voted verifier certificate: %s \n", __FUNCTION__, verifier_vote_who_won->vote_for_cert_hash);
+            if (magicnet_council_certificate_is_mine(verifier_vote_who_won->vote_for_cert_hash))
+            {
+                magicnet_important("%s creating and sending block\n", __FUNCTION__);
+                // What do you know we won the vote! Lets create this block
+                magicnet_server_create_and_send_block(server);
+            }
+        }
         server->next_block.step = BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE;
     }
-    else if (current_block_sequence_time >= block_time_fourth_quarter_start && current_block_sequence_time < block_cycle_end && step == BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE)
+    else if (current_block_sequence_time >= block_time_fifth_fifth_start && step == BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE)
     {
         // Clone the created block as reset will free it.
         struct block *created_block = server->next_block.created_block ? block_clone(server->next_block.created_block) : NULL;
