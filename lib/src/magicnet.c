@@ -96,7 +96,6 @@ void magicnet_transactions_list_response_packet_free(struct magicnet_packet *pac
     block_transaction_vector_free(magicnet_signed_data(packet)->payload.transaction_list_response.transactions);
 }
 
-
 void magicnet_events_res_packet_free(struct magicnet_packet *packet)
 {
     if (!magicnet_signed_data(packet)->payload.events_poll_res.events)
@@ -104,7 +103,7 @@ void magicnet_events_res_packet_free(struct magicnet_packet *packet)
         // Events already freed or not available since its NULL? then nothing to do
         return;
     }
-    
+
     magicnet_events_vector_free(magicnet_signed_data(packet)->payload.events_poll_res.events);
 }
 
@@ -119,7 +118,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
     {
         magicnet_council_certificate_free(magicnet_signed_data(packet)->my_certificate);
     }
-    
+
     switch (magicnet_signed_data(packet)->type)
     {
     case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
@@ -156,7 +155,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
         {
             magicnet_council_certificate_free(magicnet_signed_data(packet)->payload.verifier_signup.certificate);
         }
-    break;
+        break;
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         magicnet_block_send_packet_free(packet);
         break;
@@ -298,7 +297,6 @@ int magicnet_update_transaction_payload(struct block_transaction *transaction, v
     return 0;
 }
 
-
 int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer)
 {
     int res = 0;
@@ -315,12 +313,12 @@ int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct 
         goto out;
     }
 
-    res = buffer_read_bytes(buffer,council_certificate_transfer->certificate_to_transfer_hash, sizeof(council_certificate_transfer->certificate_to_transfer_hash));
+    res = buffer_read_bytes(buffer, council_certificate_transfer->certificate_to_transfer_hash, sizeof(council_certificate_transfer->certificate_to_transfer_hash));
     if (res < 0)
     {
         goto out;
     }
-    res = buffer_read_bytes(buffer,&council_certificate_transfer->new_owner_key, sizeof(council_certificate_transfer->new_owner_key));
+    res = buffer_read_bytes(buffer, &council_certificate_transfer->new_owner_key, sizeof(council_certificate_transfer->new_owner_key));
     if (res < 0)
     {
         goto out;
@@ -337,30 +335,35 @@ out:
     return res;
 }
 
-void magicnet_write_transaction_council_certificate_initiate_transfer_data_to_buffer(struct buffer* buffer, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer)
+void magicnet_write_transaction_council_certificate_initiate_transfer_data_to_buffer(struct buffer *buffer, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer)
 {
     buffer_write_int(buffer, council_certificate_transfer->flags);
     buffer_write_bytes(buffer, council_certificate_transfer->certificate_to_transfer_hash, sizeof(council_certificate_transfer->certificate_to_transfer_hash));
     buffer_write_bytes(buffer, &council_certificate_transfer->new_owner_key, sizeof(council_certificate_transfer->new_owner_key));
- 
 }
 
-int magicnet_certificate_initiate_transfer(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key)
+int magicnet_certificate_initiate_transfer(struct magicnet_program *program, int flags, const char *certificate_to_transfer_hash, struct key *new_owner_key)
 {
     int res = 0;
+    struct buffer *buffer = buffer_create();
     struct block_transaction_council_certificate_initiate_transfer_request council_certificate_transfer = {};
     council_certificate_transfer.flags = flags;
-    memcpy(&council_certificate_transfer.certificate_to_transfer_hash, certificate_to_transfer_hash, sizeof(council_certificate_transfer.certificate_to_transfer_hash));
+    strncpy(council_certificate_transfer.certificate_to_transfer_hash, certificate_to_transfer_hash, sizeof(council_certificate_transfer.certificate_to_transfer_hash));
+    if (!MAGICNET_key_valid(new_owner_key))
+    {
+        res = -1;
+        goto out;
+    }
+
     memcpy(&council_certificate_transfer.new_owner_key, new_owner_key, sizeof(council_certificate_transfer.new_owner_key));
-    
-    struct buffer* buffer = buffer_create();
+
     magicnet_write_transaction_council_certificate_initiate_transfer_data_to_buffer(buffer, &council_certificate_transfer);
     res = magicnet_make_transaction_using_buffer(program, MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER, buffer);
     if (res < 0)
     {
         goto out;
     }
-        
+
 out:
     buffer_free(buffer);
     return res;
@@ -509,7 +512,6 @@ struct magicnet_program *magicnet_program_new()
     struct magicnet_program *program = calloc(1, sizeof(struct magicnet_program));
     return program;
 }
-
 
 void magicnet_program_free(struct magicnet_program *program)
 {

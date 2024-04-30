@@ -1199,6 +1199,23 @@ struct magicnet_program *magicnet_program(const char *name);
  */
 int magicnet_make_money_transfer(struct magicnet_program *program, const char *to, double amount);
 
+
+/**
+ * Initiates a transfer request of a council certificate to a new owner, the transaction is likely to be dropped
+ * by receving peers if the signer of this transaction is not a council certificate holder in the council of the
+ * certificate they are trying to transfer.
+ * 
+ * Transfer requests are not final and further steps need to be taken for them to be official such as proving you have
+ * the right to transfer the certificate. Or through voting.
+ * 
+ * \param program The program to make the transaction with
+ * \param flags The flags of the transfer
+ * \param certificate_to_transfer_hash The hash of the certificate to transfer
+ * \param new_owner_key The key of the new owner of the certificate
+ * \return int 0 if the transaction was successfully created
+*/
+int magicnet_certificate_initiate_transfer(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key);
+
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id);
