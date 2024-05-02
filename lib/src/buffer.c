@@ -166,7 +166,7 @@ int buffer_read_bytes(struct buffer *buffer, void *ptr, size_t amount)
 // Read short
 int buffer_read_short(struct buffer *buffer, short* short_out)
 {
-    if (buffer_read_bytes(buffer, short_out, sizeof(short_out)) < 0)
+    if (buffer_read_bytes(buffer, short_out, sizeof(short)) < 0)
     {
         return -1;
     }
@@ -176,7 +176,7 @@ int buffer_read_short(struct buffer *buffer, short* short_out)
 // Read int
 int buffer_read_int(struct buffer *buffer, int* int_out)
 {
-    if (buffer_read_bytes(buffer, int_out, sizeof(int_out)) < 0)
+    if (buffer_read_bytes(buffer, int_out, sizeof(int)) < 0)
     {
         return -1;
     }
@@ -187,7 +187,7 @@ int buffer_read_int(struct buffer *buffer, int* int_out)
 // Read long
 int buffer_read_long(struct buffer *buffer, long* long_out)
 {
-    if (buffer_read_bytes(buffer, long_out, sizeof(long_out)) < 0)
+    if (buffer_read_bytes(buffer, long_out, sizeof(long)) < 0)
     {
         return -1;
     }
@@ -199,7 +199,7 @@ int buffer_read_long(struct buffer *buffer, long* long_out)
 // Read double
 int buffer_read_double(struct buffer *buffer, double* double_out)
 {
-    if (buffer_read_bytes(buffer, double_out, sizeof(*double_out)) < 0)
+    if (buffer_read_bytes(buffer, double_out, sizeof(double)) < 0)
     {
         return -1;
     }
@@ -209,7 +209,7 @@ int buffer_read_double(struct buffer *buffer, double* double_out)
 // Read float
 int buffer_read_float(struct buffer *buffer, float* float_out)
 {
-    if (buffer_read_bytes(buffer, float_out, sizeof(float_out)) < 0)
+    if (buffer_read_bytes(buffer, float_out, sizeof(float)) < 0)
     {
         return -1;
     }
