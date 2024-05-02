@@ -291,6 +291,7 @@ int block_transaction_initiate_certificate_transfer_valid(struct block_transacti
     res = magicnet_read_transaction_council_certificate_initiate_transfer_data(transaction, &initiate_transfer_req);
     if (res < 0)
     {
+        magicnet_log("%s failed to read the initiate transfer request\n", __FUNCTION__);
         goto out;
     }
 
