@@ -286,6 +286,7 @@ out:
 int block_transaction_initiate_certificate_transfer_valid(struct block_transaction *transaction, int flags)
 {
     int res = 0;
+    struct magicnet_council_certificate *certificate  = NULL;
     struct block_transaction_council_certificate_initiate_transfer_request initiate_transfer_req;
     res = magicnet_read_transaction_council_certificate_initiate_transfer_data(transaction, &initiate_transfer_req);
     if (res < 0)
@@ -294,7 +295,7 @@ int block_transaction_initiate_certificate_transfer_valid(struct block_transacti
     }
 
     // Get the council certificate
-    struct magicnet_council_certificate *certificate = magicnet_council_certificate_load(initiate_transfer_req.certificate_to_transfer_hash);
+    certificate = magicnet_council_certificate_load(initiate_transfer_req.certificate_to_transfer_hash);
     if (!certificate)
     {
         magicnet_log("%s the certificate to transfer does not exist and is unknown to us\n", __FUNCTION__);
@@ -322,6 +323,10 @@ int block_transaction_initiate_certificate_transfer_valid(struct block_transacti
     }
 
 out:
+    if (certificate)
+    {
+        magicnet_council_certificate_free(certificate);
+    }
     return res;
 }
 int block_transaction_valid_transaction_data(struct block_transaction *transaction, int flags)
