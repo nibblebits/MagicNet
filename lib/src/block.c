@@ -283,6 +283,63 @@ out:
     return res;
 }
 
+int block_transaction_initiate_certificate_transfer_valid(struct block_transaction *transaction, int flags)
+{
+    int res = 0;
+    struct block_transaction_council_certificate_initiate_transfer_request initiate_transfer_req;
+    res = magicnet_read_transaction_council_certificate_initiate_transfer_data(transaction, &initiate_transfer_req);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Get the council certificate
+    struct magicnet_council_certificate *certificate = magicnet_council_certificate_load(initiate_transfer_req.certificate_to_transfer_hash);
+    if (!certificate)
+    {
+        magicnet_log("%s the certificate to transfer does not exist and is unknown to us\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // If the flag is set to transfer without a vote then we must ensure the requestor is the owner of the certificate
+    if (initiate_transfer_req.flags & COUNCIL_CERTIFICATE_TRANSFER_FLAG_TRANSFER_WITHOUT_VOTE)
+    {
+        if (!key_cmp(&transaction->key, &certificate->owner_key))
+        {
+            magicnet_log("%s the certificate transfer request is invalid, the requestor is not the owner of the certificate, remove the COUNCIL_CERTIFICATE_TRANSFER_FLAG_TRANSFER_WITHOUT_VOTE flag and expect votes\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+
+        // We also need to ensure that the certificate is allowed to be transfeered without vote
+        if (!(certificate->signed_data.flags & MAGICNET_COUNCIL_CERTIFICATE_FLAG_TRANSFERABLE_WITHOUT_VOTE))
+        {
+            magicnet_log("%s this certificate is not transferable without a vote\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+    }
+
+out:
+    return res;
+}
+int block_transaction_valid_transaction_data(struct block_transaction *transaction, int flags)
+{
+    int res = 0;
+    switch (transaction->type)
+    {
+    case MAGICNET_TRANSACTION_TYPE_COIN_SEND:
+        res = block_transaction_coin_transfer_valid(transaction);
+        break;
+
+    case MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER:
+        res = block_transaction_initiate_certificate_transfer_valid(transaction, flags);
+        break;
+    }
+
+    return res;
+}
 int block_transaction_valid_specified(struct block_transaction *transaction, int flags)
 {
     if (transaction->data.size > MAGICNET_MAX_SIZE_FOR_TRANSACTION_DATA)
@@ -308,13 +365,10 @@ int block_transaction_valid_specified(struct block_transaction *transaction, int
 
     if (flags & MAGICNET_BLOCK_VERIFICATION_VERIFY_TRANSACTION_DATA)
     {
-        if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
+        if (block_transaction_valid_transaction_data(transaction, flags) < 0)
         {
-            int res = block_transaction_coin_transfer_valid(transaction);
-            if (res < 0)
-            {
-                return res;
-            }
+            magicnet_log("%s the transaction data is invalid\n", __FUNCTION__);
+            return -1;
         }
     }
 
@@ -511,7 +565,6 @@ int block_save_with_rules(struct block *block, int flags)
     }
 
     magicnet_council_certificate_save(block->certificate);
-
 
     res = magicnet_database_save_block(block);
     if (res < 0)
