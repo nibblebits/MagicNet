@@ -54,6 +54,7 @@ int magicnet_database_blockchain_all(struct vector *blockchain_vector_out);
 int magicnet_database_get_active_blockchain_id();
 
 int magincet_database_save_transaction_group(struct block_transaction_group *transaction_group);
+int magicnet_database_save_money_transaction(struct block_transaction *transaction);
 
 // Councils
 int magicnet_database_load_council(const char *id_hash, struct magicnet_council *council_out);

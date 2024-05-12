@@ -286,7 +286,7 @@ out:
 int block_transaction_initiate_certificate_transfer_valid(struct block_transaction *transaction, int flags)
 {
     int res = 0;
-    struct magicnet_council_certificate *certificate  = NULL;
+    struct magicnet_council_certificate *certificate = NULL;
     struct block_transaction_council_certificate_initiate_transfer_request initiate_transfer_req;
     res = magicnet_read_transaction_council_certificate_initiate_transfer_data(transaction, &initiate_transfer_req);
     if (res < 0)
@@ -537,6 +537,59 @@ int blockchain_reformat(struct block *block)
     return res;
 }
 
+int block_transaction_post_save_coin_send(struct block_transaction *transaction)
+{
+    int res = 0;
+    res = magicnet_database_save_money_transaction(transaction);
+
+    return res;
+}
+int block_transaction_post_save(struct block_transaction *transaction)
+{
+    int res = 0;
+    // We must also save it as a money transaction IF it is a money transaction type
+    switch (transaction->type)
+    {
+    case MAGICNET_TRANSACTION_TYPE_COIN_SEND:
+        res = block_transaction_post_save_coin_send(transaction);
+        break;
+
+    case MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER:
+
+        break;
+    }
+
+out:
+    return res;
+}
+int block_save_transaction_group(struct block_transaction_group *group)
+{
+    int res = 0;
+    if (!group)
+    {
+        return -1;
+    }
+
+    res = magincet_database_save_transaction_group(group);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Next we will process the saved transactions incase more needs to be done
+    for (int i = 0; i < group->total_transactions; i++)
+    {
+        struct block_transaction *transaction = group->transactions[i];
+        res = block_transaction_post_save(transaction);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+out:
+    return res;
+}
+
 int block_save_with_rules(struct block *block, int flags)
 {
     int res = 0;
@@ -578,7 +631,7 @@ int block_save_with_rules(struct block *block, int flags)
         goto out;
     }
 
-    res = magincet_database_save_transaction_group(block->transaction_group);
+    res = block_save_transaction_group(block->transaction_group);
     if (res < 0)
     {
         goto out;

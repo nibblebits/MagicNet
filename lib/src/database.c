@@ -1663,6 +1663,15 @@ out:
     return res;
 }
 
+int magicnet_database_save_money_transaction(struct block_transaction *transaction)
+{
+    int res = 0;
+    pthread_mutex_lock(&db_lock);
+    res = magicnet_database_save_money_transaction_no_locks(transaction);
+    pthread_mutex_unlock(&db_lock);
+    return res;
+}
+
 int magincet_database_save_transaction_group(struct block_transaction_group *transaction_group)
 {
     int res = 0;
@@ -1729,15 +1738,7 @@ int magincet_database_save_transaction_group(struct block_transaction_group *tra
         sqlite3_finalize(stmt);
         stmt = NULL;
 
-        // We must also save it as a money transaction IF it is a money transaction type
-        if (transaction->type == MAGICNET_TRANSACTION_TYPE_COIN_SEND)
-        {
-            res = magicnet_database_save_money_transaction_no_locks(transaction);
-            if (res != 0)
-            {
-                goto out;
-            }
-        }
+      
     }
 
 out:
