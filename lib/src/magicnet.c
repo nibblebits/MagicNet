@@ -335,6 +335,27 @@ out:
     return res;
 }
 
+int magicnet_read_transaction_council_certificate_claim_request(struct block_transaction* transaction, struct block_transaction_council_certificate_claim_request* claim_req_out)
+{
+    int res = 0;
+    struct buffer *buffer = buffer_wrap(transaction->data.ptr, transaction->data.size);
+    // Read the sha256 certificate transfer request hash
+    res = buffer_read_bytes(buffer, claim_req_out->initiate_transfer_transaction_hash, sizeof(claim_req_out->initiate_transfer_transaction_hash));
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Read the sha256 certificate hash
+    res = buffer_read_bytes(buffer, claim_req_out->certificate_hash, sizeof(claim_req_out->certificate_hash));
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
 void magicnet_write_transaction_council_certificate_initiate_transfer_data_to_buffer(struct buffer *buffer, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer)
 {
     buffer_write_int(buffer, council_certificate_transfer->flags);
@@ -342,7 +363,13 @@ void magicnet_write_transaction_council_certificate_initiate_transfer_data_to_bu
     buffer_write_bytes(buffer, &council_certificate_transfer->new_owner_key, sizeof(council_certificate_transfer->new_owner_key));
 }
 
-int magicnet_certificate_initiate_transfer(struct magicnet_program *program, int flags, const char *certificate_to_transfer_hash, struct key *new_owner_key)
+void magicnet_write_transaction_council_certificate_claim_request_data_to_buffer(struct buffer *buffer, struct block_transaction_council_certificate_claim_request *claim_req)
+{
+    buffer_write_bytes(buffer, claim_req->initiate_transfer_transaction_hash, sizeof(claim_req->initiate_transfer_transaction_hash));
+    buffer_write_bytes(buffer, claim_req->certificate_hash, sizeof(claim_req->certificate_hash));
+}
+
+int magicnet_certificate_transfer_initiate(struct magicnet_program *program, int flags, const char *certificate_to_transfer_hash, struct key *new_owner_key)
 {
     int res = 0;
     struct buffer *buffer = buffer_create();
@@ -369,6 +396,18 @@ out:
     return res;
 }
 
+int magicnet_certificate_transfer_claim(struct magicnet_program *program, const char *initiate_transfer_transaction_hash, const char *certificate_hash)
+{
+    int res = 0;
+    struct buffer *buffer = buffer_create();
+    struct block_transaction_council_certificate_claim_request claim_req = {};
+    strncpy(claim_req.initiate_transfer_transaction_hash, initiate_transfer_transaction_hash, sizeof(claim_req.initiate_transfer_transaction_hash));
+    strncpy(claim_req.certificate_hash, certificate_hash, sizeof(claim_req.certificate_hash));
+    magicnet_write_transaction_council_certificate_claim_request_data_to_buffer(buffer, &claim_req);
+    res = magicnet_make_transaction_using_buffer(program, MAGICNET_TRANSACTION_TYPE_CLAIM_CERTIFICATE, buffer);
+    buffer_free(buffer);
+    return res;
+}
 void magicnet_money_transfer_data_write_to_buffer(struct buffer *buffer, struct block_transaction_money_transfer *money_transfer)
 {
     buffer_write_double(buffer, money_transfer->amount);

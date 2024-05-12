@@ -175,6 +175,8 @@ enum
     MAGICNET_TRANSACTION_TYPE_UNKNOWN = 0,
     MAGICNET_TRANSACTION_TYPE_COIN_SEND = 1,
     MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER = 2,
+    // Issued by a key who wishes to claim a certificate, it will be rejected if the peer did not win any transfer vote or has no right to that certificate he is claiming.
+    MAGICNET_TRANSACTION_TYPE_CLAIM_CERTIFICATE = 3,
 };
 
 struct block;
@@ -755,6 +757,16 @@ struct block_transaction_council_certificate_initiate_transfer_request
 };
 
 /**
+ * This certificate claim request is used to claim a certificate that was won in a transfer vote.
+*/
+struct block_transaction_council_certificate_claim_request
+{
+    char initiate_transfer_transaction_hash[SHA256_STRING_LENGTH];
+    // Though we can get the certificate hash from the transaction the user must provide it to ensure their was no mistake.
+    char certificate_hash[SHA256_STRING_LENGTH];
+};
+
+/**
  * This is a structure representing banned peer information it represents the table in database.c
  */
 struct magicnet_banned_peer_information
@@ -1180,6 +1192,13 @@ int magicnet_money_transfer_data(struct block_transaction *transaction, struct b
 int magicnet_money_transfer_data_write(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
 int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer);
 
+/*
+ *Called to claim transfers of council certificates.. This is only possible if the transfer was successful. As always
+ * we will verify the request on our local server but only distribute the packet if we believe we are eligible
+ * to claim a certificate transfer. 
+*/
+int magicnet_certificate_transfer_claim(struct magicnet_program *program, const char *initiate_transfer_transaction_hash, const char *certificate_hash);
+
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_free_packet(struct magicnet_packet *packet);
 void magicnet_free_packet_pointers(struct magicnet_packet *packet);
@@ -1214,7 +1233,7 @@ int magicnet_make_money_transfer(struct magicnet_program *program, const char *t
  * \param new_owner_key The key of the new owner of the certificate
  * \return int 0 if the transaction was successfully created
 */
-int magicnet_certificate_initiate_transfer(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key);
+int magicnet_certificate_transfer_initiate(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key);
 
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
