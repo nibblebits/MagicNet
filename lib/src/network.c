@@ -1159,7 +1159,7 @@ struct magicnet_buffer_stream_private_data* magicnet_buffer_stream_private_data_
     struct magicnet_buffer_stream_private_data *private_data = calloc(1, sizeof(struct magicnet_buffer_stream_private_data));
     private_data->client = client;
     private_data->write_buf = write_buffer;
-    return 0;
+    return private_data;
 }
 
 /**
