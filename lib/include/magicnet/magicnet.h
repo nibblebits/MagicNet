@@ -1191,7 +1191,7 @@ int magicnet_make_transaction_using_buffer(struct magicnet_program *program, int
 int magicnet_money_transfer_data(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
 int magicnet_money_transfer_data_write(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
 int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer);
-
+int magicnet_read_transaction_council_certificate_claim_request(struct block_transaction* transaction, struct block_transaction_council_certificate_claim_request* claim_req_out);
 /*
  *Called to claim transfers of council certificates.. This is only possible if the transfer was successful. As always
  * we will verify the request on our local server but only distribute the packet if we believe we are eligible
@@ -1350,6 +1350,15 @@ int magicnet_council_certificate_verify_for_council(struct magicnet_council *cou
  */
 
 int magicnet_central_council_certificate_verify(struct magicnet_council_certificate *certificate);
+
+/**
+ * Writes the council certificate data to the buffer
+ * \param buffer_out The buffer to write the data to
+ * \param certificate The certificate to write
+ * \return 0 if the certificate was written to the buffer
+*/
+int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct magicnet_council_certificate* certificate);
+
 /**
  * Returns the certificates for the given council
  */

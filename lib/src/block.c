@@ -330,6 +330,97 @@ out:
     }
     return res;
 }
+
+int block_transaction_claim_certificate_valid(struct block_transaction *transaction)
+{
+    int res = 0;
+    struct block_transaction_council_certificate_initiate_transfer_request initiate_transfer_req = {0};
+    struct block_transaction_council_certificate_claim_request claim_request;
+    struct magicnet_council_certificate *certificate = NULL;
+    res = magicnet_read_transaction_council_certificate_claim_request(transaction, &claim_request);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read the claim request\n", __FUNCTION__);
+        goto out;
+    }
+
+    // Load the apparent transaction
+    struct block_transaction *initiate_transfer_transaction = block_transaction_load(claim_request.initiate_transfer_transaction_hash);
+    if (!transaction)
+    {
+        magicnet_log("%s the transaction to claim does not exist and is unknown to us\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Read the data from the transaction
+    res = magicnet_read_transaction_council_certificate_initiate_transfer_data(initiate_transfer_transaction, &initiate_transfer_req);
+    if (res < 0)
+    {
+        magicnet_log("%s failed to read the initiate transfer request\n", __FUNCTION__);
+        goto out;
+    }
+
+    certificate = magicnet_council_certificate_load(claim_request.certificate_hash);
+    if (!certificate)
+    {
+        magicnet_log("%s the certificate to claim does not exist and is unknown to us\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+    
+    // Compare the provided certificate hash with the hash in the initiate transfer transaction
+    if (memcmp(certificate->hash, initiate_transfer_req.certificate_to_transfer_hash, sizeof(certificate->hash)) != 0)
+    {
+        magicnet_log("%s the certificate hash provided does not match the certificate hash in the initiate transfer transaction which means a human or machine error has occured\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+    
+    // Lets ensure the person who made this claim transaction is the recipient of the transfer request
+    if (memcmp(&transaction->key, &initiate_transfer_req.new_owner_key, sizeof(transaction->key)) != 0)
+    {
+        magicnet_log("%s the claim transaction is invalid, the claimer is not the recipient of the certificate transfer\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // By default we will fail now unless further checks are valid
+    res = -1;
+
+    // Finally is this a certificate transfer without vote?
+    if (initiate_transfer_req.flags & COUNCIL_CERTIFICATE_TRANSFER_FLAG_TRANSFER_WITHOUT_VOTE)
+    {
+        magicnet_log("%s the certificate is to be transfeered without a council vote\n", __FUNCTION__);
+
+        // We must check that the certificate is allowed to be transferred without a vote
+         if (!(certificate->signed_data.flags & MAGICNET_COUNCIL_CERTIFICATE_FLAG_TRANSFERABLE_WITHOUT_VOTE))
+        {
+            magicnet_log("%s this certificate is not transferable without a vote\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+
+        // And that the key of the person who made the claim transaction is the recipient of the certificate transfer.
+        if (memcmp(&transaction->key, &certificate->owner_key, sizeof(transaction->key)) != 0)
+        {
+            magicnet_log("%s the claim transaction is invalid, the claimer is not the owner of the certificate\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+        
+    } 
+
+
+out:
+    if (certificate)
+    {
+        magicnet_council_certificate_free(certificate);
+    }
+    return res;
+
+}
+
 int block_transaction_valid_transaction_data(struct block_transaction *transaction, int flags)
 {
     int res = 0;
@@ -341,6 +432,10 @@ int block_transaction_valid_transaction_data(struct block_transaction *transacti
 
     case MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER:
         res = block_transaction_initiate_certificate_transfer_valid(transaction, flags);
+        break;
+
+    case MAGICNET_TRANSACTION_TYPE_CLAIM_CERTIFICATE:
+        res = block_transaction_claim_certificate_valid(transaction);
         break;
     }
 
@@ -544,6 +639,8 @@ int block_transaction_post_save_coin_send(struct block_transaction *transaction)
 
     return res;
 }
+
+
 int block_transaction_post_save(struct block_transaction *transaction)
 {
     int res = 0;
@@ -555,8 +652,13 @@ int block_transaction_post_save(struct block_transaction *transaction)
         break;
 
     case MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER:
-
+        // Nothing today..
         break;
+
+    case MAGICNET_TRANSACTION_TYPE_CLAIM_CERTIFICATE:
+        // Nothing today..
+        break;
+
     }
 
 out:

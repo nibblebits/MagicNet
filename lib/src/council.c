@@ -28,6 +28,7 @@ struct loaded_council_vector
 
 void magicnet_council_certificate_free(struct magicnet_council_certificate *certificate);
 void magicnet_council_certificate_free_data(struct magicnet_council_certificate *certificate);
+int magicnet_council_stream_write_certificate_transfer(struct buffer* buffer_out, struct council_certificate_transfer* transfer);
 
 int magicnet_council_certificate_verify_signed_data(struct magicnet_council_certificate *certificate, struct signature *signature, const char *hash)
 {
@@ -91,6 +92,40 @@ int magicnet_council_vector_add(struct magicnet_council *council)
     res = magicnet_council_vector_add_no_locks(council);
     pthread_mutex_unlock(&loaded_council.lock);
 
+    return res;
+}
+
+
+int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct magicnet_council_certificate* certificate)
+{
+    int res = 0;
+    struct buffer* buffer = buffer_create();
+    res = magicnet_council_stream_write_certificate(buffer, certificate);
+    if  (res < 0)
+    {
+        goto out;
+    }
+
+    // Lets write the whole buffer
+    buffer_write_bytes(buffer_out, buffer_ptr(buffer), buffer_len(buffer));
+out:
+    return res;
+}
+
+
+int magicnet_council_stream_read_certificate(struct buffer* buffer_in, struct magicnet_council_certificate** certificate_out)
+{
+    int res = 0;    
+    struct magicnet_council_certificate* certificate = magicnet_council_certificate_create();
+    if (!certificate)
+    {
+        res = -1;
+        goto out;
+    }
+
+
+out:
+    *certificate_out = certificate;
     return res;
 }
 
