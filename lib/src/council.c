@@ -94,21 +94,169 @@ int magicnet_council_vector_add(struct magicnet_council *council)
 
     return res;
 }
+int magicnet_council_stream_write_certificate_vote_signed_data(struct buffer* buffer_out, struct council_certificate_transfer_vote_signed_data* signed_data)
+{
+    int res = 0;
+
+    res = buffer_write_bytes(buffer_out, signed_data->certificate_to_transfer_hash, sizeof(signed_data->certificate_to_transfer_hash));
+    if (res < 0)
+        return res;
+
+    res = buffer_write_long(buffer_out, signed_data->total_voters);
+    if (res < 0)
+        return res;
+
+    res = buffer_write_long(buffer_out, signed_data->total_for_vote);
+    if (res < 0)
+        return res;
+
+    res = buffer_write_long(buffer_out, signed_data->total_against_vote);
+    if (res < 0)
+        return res;
+
+    res = buffer_write_long(buffer_out, signed_data->certificate_expires_at);
+    if (res < 0)
+        return res;
+
+    res = buffer_write_long(buffer_out, signed_data->certificate_valid_from);
+    if (res < 0)
+        return res;
+
+    res = buffer_write_bytes(buffer_out, &signed_data->new_owner_key, sizeof(signed_data->new_owner_key));
+    if (res < 0)
+        return res;
+
+    res = buffer_write_bytes(buffer_out, &signed_data->winning_key, sizeof(signed_data->winning_key));
+    if (res < 0)
+        return res;
+
+    return res;
+}
+
+int magicnet_council_stream_write_certificate_vote(struct buffer* buffer_out, struct council_certificate_transfer_vote* vote)
+{
+    int res = 0;
+
+    res = magicnet_council_stream_write_certificate_vote_signed_data(buffer_out, &vote->signed_data);
+    if (res < 0)
+        return res;
+
+    res = buffer_write_bytes(buffer_out, vote->hash, sizeof(vote->hash));
+    if (res < 0)
+        return res;
+
+    res = buffer_write_bytes(buffer_out, &vote->signature, sizeof(vote->signature));
+    if (res < 0)
+        return res;
+
+    res = magicnet_council_stream_write_certificate(buffer_out, vote->voter_certificate);
+    if (res < 0)
+        return res;
+
+    return res;
+}
+
+
+int magicnet_council_stream_write_certificate_signed_data(struct buffer* buffer_out, struct council_certificate_signed_data* signed_data)
+{
+    int res = 0;
+
+    // Write the ID
+    res = buffer_write_int(buffer_out, signed_data->id);
+    if (res < 0)
+        return res;
+
+    // Write the flags
+    res = buffer_write_int(buffer_out, signed_data->flags);
+    if (res < 0)
+        return res;
+
+    // Write the council ID hash
+    res = buffer_write_bytes(buffer_out, signed_data->council_id_hash, sizeof(signed_data->council_id_hash));
+    if (res < 0)
+        return res;
+
+    // Write the expiration timestamp
+    res = buffer_write_long(buffer_out, signed_data->expires_at);
+    if (res < 0)
+        return res;
+
+    // Write the valid from timestamp
+    res = buffer_write_long(buffer_out, signed_data->valid_from);
+    if (res < 0)
+        return res;
+
+    // Write the transfer data
+    res = magicnet_council_stream_write_certificate_transfer(buffer_out, &signed_data->transfer);
+    if (res < 0)
+        return res;
+
+    return res;
+}
+int magicnet_council_stream_write_certificate_transfer(struct buffer* buffer_out, struct council_certificate_transfer* transfer)
+{
+    int res = 0;
+
+    // Write byte to determine if we have certificate or not
+    res = buffer_write_int(buffer_out, transfer->certificate != NULL);
+    if (res < 0)
+        return res;
+
+    // If we have certificate write it.
+    if (transfer->certificate)
+    {
+        // Write the nested council certificate
+        res = magicnet_council_stream_write_certificate(buffer_out, transfer->certificate);
+        if (res < 0)
+            return res;
+    }
+
+    // Write the new owner data
+    res = buffer_write_bytes(buffer_out, &transfer->new_owner, sizeof(transfer->new_owner));
+    if (res < 0)
+        return res;
+
+    // Write the total number of voters
+    res = buffer_write_long(buffer_out, transfer->total_voters);
+    if (res < 0)
+        return res;
+
+    // Loop through and send all the votes
+    for (int i = 0; i < transfer->total_voters; i++)
+    {
+        res = magicnet_council_stream_write_certificate_vote(buffer_out, &transfer->voters[i]);
+        if (res < 0)
+            return res;
+    }
+
+    return res;
+}
 
 
 int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct magicnet_council_certificate* certificate)
 {
     int res = 0;
-    struct buffer* buffer = buffer_create();
-    res = magicnet_council_stream_write_certificate(buffer, certificate);
-    if  (res < 0)
-    {
-        goto out;
-    }
 
-    // Lets write the whole buffer
-    buffer_write_bytes(buffer_out, buffer_ptr(buffer), buffer_len(buffer));
-out:
+    // Write the hash of the council certificate
+    res = buffer_write_bytes(buffer_out, certificate->hash, sizeof(certificate->hash));
+    if (res < 0)
+        return res;
+
+    // Write the owner key
+    res = buffer_write_bytes(buffer_out, &certificate->owner_key, sizeof(certificate->owner_key));
+    if (res < 0)
+        return res;
+
+    // Write the signature
+    res = buffer_write_bytes(buffer_out, &certificate->signature, sizeof(certificate->signature));
+    if (res < 0)
+        return res;
+
+    // Write the certificate signed data
+    res = magicnet_council_stream_write_certificate_signed_data(buffer_out, &certificate->signed_data);
+    if (res < 0)
+        return res;
+
     return res;
 }
 

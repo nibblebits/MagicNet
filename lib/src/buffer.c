@@ -3,19 +3,36 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <memory.h>
+int buffer_write_bytes_default_handler(struct buffer *buffer, void *ptr, size_t amount);
+int buffer_read_bytes_default_handler(struct buffer *buffer, void *ptr, size_t amount);
 
-struct buffer* buffer_create()
+struct buffer *buffer_create()
 {
-    struct buffer* buf = calloc(sizeof(struct buffer), 1);
+   return buffer_create_with_handler(NULL, NULL);
+}
+
+struct buffer* buffer_create_with_handler(BUFFER_WRITE_BYTES_FUNCTION write_bytes, BUFFER_READ_BYTES_FUNCTION read_bytes)
+{
+    struct buffer *buf = calloc(sizeof(struct buffer), 1);
     buf->data = calloc(BUFFER_REALLOC_AMOUNT, 1);
     buf->len = 0;
     buf->msize = BUFFER_REALLOC_AMOUNT;
+    buf->write_bytes = buffer_write_bytes_default_handler;
+    buf->read_bytes = buffer_read_bytes_default_handler;
+    if (write_bytes)
+    {
+        buf->write_bytes = write_bytes;
+    }
+    if (read_bytes)
+    {
+        buf->read_bytes = read_bytes;
+    }
     return buf;
 }
 
-struct buffer* buffer_wrap(void* data, size_t size)
+struct buffer *buffer_wrap(void *data, size_t size)
 {
-    struct buffer* buf = calloc(sizeof(struct buffer), 1);
+    struct buffer *buf = calloc(sizeof(struct buffer), 1);
     buf->data = data;
     buf->len = size;
     buf->msize = size;
@@ -23,54 +40,75 @@ struct buffer* buffer_wrap(void* data, size_t size)
     return buf;
 }
 
-int buffer_len(struct buffer* buffer)
+int buffer_len(struct buffer *buffer)
 {
     return buffer->len;
 }
 
-void buffer_extend(struct buffer* buffer, size_t size)
+void buffer_private_set(struct buffer* buffer, void* private)
 {
-    buffer->data = realloc(buffer->data, buffer->msize+size);
-    buffer->msize+=size;
+    buffer->private_data = private;
 }
 
-void buffer_need(struct buffer* buffer, size_t size)
+void* buffer_private_get(struct buffer* buffer)
 {
-    if (buffer->msize <= (buffer->len+size))
+    return buffer->private_data;
+}
+
+void buffer_extend(struct buffer *buffer, size_t size)
+{
+    buffer->data = realloc(buffer->data, buffer->msize + size);
+    buffer->msize += size;
+}
+
+void buffer_need(struct buffer *buffer, size_t size)
+{
+    if (buffer->msize <= (buffer->len + size))
     {
         size += BUFFER_REALLOC_AMOUNT;
         buffer_extend(buffer, size);
     }
 }
 
-
-void buffer_printf(struct buffer* buffer, const char* fmt, ...)
+void buffer_printf(struct buffer *buffer, const char *fmt, ...)
 {
-    va_list args;
-    va_start(args, fmt);
-    int index = buffer->len;
+    struct buffer* str_buf = buffer_create();
     // Temporary, this is a limitation we are guessing the size is no more than 2048
     int len = 2048;
-    buffer_extend(buffer, len);
-    int actual_len = vsnprintf(&buffer->data[index], len, fmt, args);
-    buffer->len += actual_len;
-    va_end(args);
-}
+    buffer_extend(str_buf, len);
 
-void buffer_printf_no_terminator(struct buffer* buffer, const char* fmt, ...)
-{
     va_list args;
     va_start(args, fmt);
-    int index = buffer->len;
-    // Temporary, this is a limitation we are guessing the size is no more than 2048
-    int len = 2048;
-    buffer_extend(buffer, len);
-    int actual_len = vsnprintf(&buffer->data[index], len, fmt, args);
-    buffer->len += actual_len-1;
+    int index = buffer->len;    
+
+    int actual_len = vsnprintf(&str_buf->data[0], len, fmt, args);
+    str_buf->len += actual_len;
     va_end(args);
+
+    buffer_write_bytes(buffer, str_buf->data, str_buf->len);
+    buffer_free(str_buf);
 }
 
-void buffer_write(struct buffer* buffer, char c)
+void buffer_printf_no_terminator(struct buffer *buffer, const char *fmt, ...)
+{
+    struct buffer* str_buf = buffer_create();
+    // Temporary, this is a limitation we are guessing the size is no more than 2048
+    int len = 2048;
+    buffer_extend(str_buf, len);
+
+    va_list args;
+    va_start(args, fmt);
+    int index = buffer->len;    
+
+    int actual_len = vsnprintf(&str_buf->data[0], len, fmt, args);
+    str_buf->len += actual_len - 1;
+    va_end(args);
+
+    buffer_write_bytes(buffer, str_buf->data, str_buf->len);
+    buffer_free(str_buf);
+}
+
+void buffer_write(struct buffer *buffer, char c)
 {
     buffer_need(buffer, sizeof(char));
 
@@ -78,8 +116,7 @@ void buffer_write(struct buffer* buffer, char c)
     buffer->len++;
 }
 
-
-int buffer_write_bytes(struct buffer *buffer, void *ptr, size_t amount)
+int buffer_write_bytes_default_handler(struct buffer *buffer, void *ptr, size_t amount)
 {
     int res = 0;
     buffer_need(buffer, amount);
@@ -88,7 +125,10 @@ int buffer_write_bytes(struct buffer *buffer, void *ptr, size_t amount)
     res = amount;
     return res;
 }
-
+int buffer_write_bytes(struct buffer *buffer, void *ptr, size_t amount)
+{
+    return buffer->write_bytes(buffer, ptr, amount);
+}
 
 int buffer_write_int(struct buffer *buffer, int value)
 {
@@ -132,12 +172,12 @@ int buffer_write_float(struct buffer *buffer, float value)
     return 0;
 }
 
-void* buffer_ptr(struct buffer* buffer)
+void *buffer_ptr(struct buffer *buffer)
 {
     return buffer->data;
 }
 
-char buffer_read(struct buffer* buffer)
+char buffer_read(struct buffer *buffer)
 {
     if (buffer->rindex >= buffer->len)
     {
@@ -148,11 +188,10 @@ char buffer_read(struct buffer* buffer)
     return c;
 }
 
-// Read bytes
-int buffer_read_bytes(struct buffer *buffer, void *ptr, size_t amount)
+int buffer_read_bytes_default_handler(struct buffer *buffer, void *ptr, size_t amount)
 {
     int res = 0;
-    if (buffer->rindex+amount > buffer->len)
+    if (buffer->rindex + amount > buffer->len)
     {
         return -1;
     }
@@ -162,9 +201,14 @@ int buffer_read_bytes(struct buffer *buffer, void *ptr, size_t amount)
     return res;
 }
 
+// Read bytes
+int buffer_read_bytes(struct buffer *buffer, void *ptr, size_t amount)
+{
+    return buffer->read_bytes(buffer, ptr, amount);
+}
 
 // Read short
-int buffer_read_short(struct buffer *buffer, short* short_out)
+int buffer_read_short(struct buffer *buffer, short *short_out)
 {
     if (buffer_read_bytes(buffer, short_out, sizeof(short)) < 0)
     {
@@ -174,7 +218,7 @@ int buffer_read_short(struct buffer *buffer, short* short_out)
 }
 
 // Read int
-int buffer_read_int(struct buffer *buffer, int* int_out)
+int buffer_read_int(struct buffer *buffer, int *int_out)
 {
     if (buffer_read_bytes(buffer, int_out, sizeof(int)) < 0)
     {
@@ -183,9 +227,8 @@ int buffer_read_int(struct buffer *buffer, int* int_out)
     return 0;
 }
 
-
 // Read long
-int buffer_read_long(struct buffer *buffer, long* long_out)
+int buffer_read_long(struct buffer *buffer, long *long_out)
 {
     if (buffer_read_bytes(buffer, long_out, sizeof(long)) < 0)
     {
@@ -194,10 +237,8 @@ int buffer_read_long(struct buffer *buffer, long* long_out)
     return 0;
 }
 
-
-
 // Read double
-int buffer_read_double(struct buffer *buffer, double* double_out)
+int buffer_read_double(struct buffer *buffer, double *double_out)
 {
     if (buffer_read_bytes(buffer, double_out, sizeof(double)) < 0)
     {
@@ -207,7 +248,7 @@ int buffer_read_double(struct buffer *buffer, double* double_out)
 }
 
 // Read float
-int buffer_read_float(struct buffer *buffer, float* float_out)
+int buffer_read_float(struct buffer *buffer, float *float_out)
 {
     if (buffer_read_bytes(buffer, float_out, sizeof(float)) < 0)
     {
@@ -216,7 +257,7 @@ int buffer_read_float(struct buffer *buffer, float* float_out)
     return 0;
 }
 
-char buffer_peek(struct buffer* buffer)
+char buffer_peek(struct buffer *buffer)
 {
     if (buffer->rindex >= buffer->len)
     {
@@ -226,7 +267,7 @@ char buffer_peek(struct buffer* buffer)
     return c;
 }
 
-void buffer_free(struct buffer* buffer)
+void buffer_free(struct buffer *buffer)
 {
     if (!(buffer->flags & BUFFER_FLAG_WRAPPED))
     {
@@ -234,7 +275,3 @@ void buffer_free(struct buffer* buffer)
     }
     free(buffer);
 }
-
-
-
-

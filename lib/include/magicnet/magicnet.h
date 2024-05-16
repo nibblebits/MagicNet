@@ -13,6 +13,13 @@
 #include "key.h"
 #include "buffer.h"
 
+struct magicnet_client;
+struct magicnet_buffer_stream_private_data
+{
+    struct magicnet_client* client;
+    // The buffer to write all data too after its been sent to the network
+    struct buffer* write_buf;
+};
 // Initialization flags for magicnet
 enum
 {
