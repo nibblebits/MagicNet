@@ -1366,6 +1366,13 @@ int magicnet_central_council_certificate_verify(struct magicnet_council_certific
 */
 int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct magicnet_council_certificate* certificate);
 
+
+/**
+ * Reads the council certificate data from the buffer
+ * 
+*/
+int magicnet_council_stream_read_certificate(struct buffer* buffer_in, struct magicnet_council_certificate* certificate);
+
 /**
  * Returns the certificates for the given council
  */

@@ -111,9 +111,7 @@ void buffer_printf_no_terminator(struct buffer *buffer, const char *fmt, ...)
 void buffer_write(struct buffer *buffer, char c)
 {
     buffer_need(buffer, sizeof(char));
-
-    buffer->data[buffer->len] = c;
-    buffer->len++;
+    buffer_write_bytes(buffer, &c, sizeof(char));
 }
 
 int buffer_write_bytes_default_handler(struct buffer *buffer, void *ptr, size_t amount)

@@ -1103,6 +1103,16 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
     return res;
 }
 
+/**
+ * This handler can be hooked by people creating buffers to effectively stream over the network when writing/reading
+ * for a particular buffer.
+*/
+int magicnet_read_bytes_buffer_handler(struct buffer* buffer, void* data, size_t amount)
+{
+    struct magicnet_buffer_stream_private_data* private_data = buffer_private_get(buffer);
+    return magicnet_read_bytes(private_data->client, data, amount, private_data->write_buf);
+}
+
 void magicnet_client_readjust_upload_speed(struct magicnet_client *client)
 {
     if (time(NULL) > client->reset_max_bytes_to_send_at)
@@ -1179,6 +1189,7 @@ int magicnet_write_bytes_buffer_handler(struct buffer* buffer, void* data, size_
     struct magicnet_buffer_stream_private_data* private_data = buffer_private_get(buffer);
     return magicnet_write_bytes(private_data->client, data, amount, private_data->write_buf);
 }
+
 
 int magicnet_write_int(struct magicnet_client *client, int value, struct buffer *store_in_buffer)
 {
@@ -1547,276 +1558,35 @@ out:
     return res;
 }
 
-int magicnet_client_read_council_certificate_transfer_vote_signed_data(struct magicnet_client *client, struct council_certificate_transfer_vote_signed_data *signed_data, struct buffer *write_buf)
-{
-    int res = 0;
 
-    res = magicnet_read_bytes(client, signed_data->certificate_to_transfer_hash, sizeof(signed_data->certificate_to_transfer_hash), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
 
-    signed_data->total_voters = magicnet_read_long(client, write_buf);
-    if (signed_data->total_voters < 0)
-    {
-        res = signed_data->total_voters;
-        goto out;
-    }
-
-    signed_data->total_for_vote = magicnet_read_long(client, write_buf);
-    if (signed_data->total_for_vote < 0)
-    {
-        res = signed_data->total_for_vote;
-        goto out;
-    }
-
-    signed_data->total_against_vote = magicnet_read_long(client, write_buf);
-    if (signed_data->total_against_vote < 0)
-    {
-        res = signed_data->total_against_vote;
-        goto out;
-    }
-
-    res = magicnet_read_bytes(client, &signed_data->new_owner_key, sizeof(signed_data->new_owner_key), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-    res = magicnet_read_bytes(client, &signed_data->winning_key, sizeof(signed_data->winning_key), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-out:
-    return res;
-}
-
-int magicnet_client_read_council_certificate_vote_signed_data(struct magicnet_client *client, struct council_certificate_transfer_vote_signed_data *signed_data, struct buffer *write_buf)
-{
-    int res = 0;
-    res = magicnet_read_bytes(client, signed_data->certificate_to_transfer_hash, sizeof(signed_data->certificate_to_transfer_hash), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    signed_data->total_voters = magicnet_read_long(client, write_buf);
-    if (signed_data->total_voters < 0)
-    {
-        res = signed_data->total_voters;
-        goto out;
-    }
-
-    signed_data->total_for_vote = magicnet_read_long(client, write_buf);
-    if (signed_data->total_for_vote < 0)
-    {
-        res = signed_data->total_for_vote;
-        goto out;
-    }
-
-    signed_data->total_against_vote = magicnet_read_long(client, write_buf);
-    if (signed_data->total_against_vote < 0)
-    {
-        res = signed_data->total_against_vote;
-        goto out;
-    }
-
-    // certificate expires at
-    signed_data->certificate_expires_at = magicnet_read_long(client, write_buf);
-    if (signed_data->certificate_expires_at < 0)
-    {
-        res = (int)signed_data->certificate_expires_at;
-        goto out;
-    }
-
-    // certificate valid from
-    signed_data->certificate_valid_from = magicnet_read_long(client, write_buf);
-    if (signed_data->certificate_valid_from < 0)
-    {
-        res = (int)signed_data->certificate_valid_from;
-        goto out;
-    }
-
-    res = magicnet_read_bytes(client, &signed_data->new_owner_key, sizeof(signed_data->new_owner_key), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-    res = magicnet_read_bytes(client, &signed_data->winning_key, sizeof(signed_data->winning_key), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-out:
-    return res;
-}
-
-int magicnet_client_read_council_certificate_vote(struct magicnet_client *client, struct council_certificate_transfer_vote *vote, struct buffer *write_buf)
-{
-    int res = 0;
-
-    res = magicnet_client_read_council_certificate_vote_signed_data(client, &vote->signed_data, write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    res = magicnet_read_bytes(client, vote->hash, sizeof(vote->hash), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    res = magicnet_read_bytes(client, &vote->signature, sizeof(vote->signature), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    vote->voter_certificate = magicnet_council_certificate_create();
-    res = magicnet_client_read_council_certificate(client, vote->voter_certificate, write_buf);
-    if (res < 0)
-    {
-        // Free the certificate
-        magicnet_council_certificate_free(vote->voter_certificate);
-        goto out;
-    }
-
-out:
-    return res;
-}
-int magicnet_client_read_council_certificate_transfer(struct magicnet_client *client, struct council_certificate_transfer *transfer, struct buffer *write_buf)
-{
-    int res = 0;
-
-    // Read byte to determine if we have certificate or not
-    int has_certificate = magicnet_read_int(client, write_buf);
-    if (has_certificate)
-    {
-        res = magicnet_client_read_council_certificate(client, transfer->certificate, write_buf);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
-    res = magicnet_read_bytes(client, &transfer->new_owner, sizeof(transfer->new_owner), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    // Read the total number of voters
-    res = magicnet_read_long(client, write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    transfer->total_voters = res;
-
-    transfer->voters = calloc(transfer->total_voters, sizeof(struct council_certificate_transfer_vote));
-    if (!transfer->voters)
-    {
-        res = -1;
-        goto out;
-    }
-    // Read all the vote
-    for (int i = 0; i < transfer->total_voters; i++)
-    {
-        res = magicnet_client_read_council_certificate_vote(client, &transfer->voters[i], write_buf);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
-
-out:
-    return res;
-}
-
-int magicnet_client_read_council_certificate_signed_data(struct magicnet_client *client, struct council_certificate_signed_data *signed_data, struct buffer *write_buf)
-{
-    int res = 0;
-
-    signed_data->id = magicnet_read_int(client, write_buf);
-    if (signed_data->id < 0)
-    {
-        res = signed_data->id;
-        goto out;
-    }
-
-    signed_data->flags = magicnet_read_int(client, write_buf);
-    if (signed_data->flags < 0)
-    {
-        res = signed_data->flags;
-        goto out;
-    }
-
-    res = magicnet_read_bytes(client, signed_data->council_id_hash, sizeof(signed_data->council_id_hash), write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    signed_data->expires_at = magicnet_read_long(client, write_buf);
-    if (signed_data->expires_at < 0)
-    {
-        res = (int)signed_data->expires_at;
-        goto out;
-    }
-
-    signed_data->valid_from = magicnet_read_long(client, write_buf);
-    if (signed_data->valid_from < 0)
-    {
-        res = (int)signed_data->valid_from;
-        goto out;
-    }
-
-    res = magicnet_client_read_council_certificate_transfer(client, &signed_data->transfer, write_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-out:
-    return res;
-}
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf)
 {
     int res = 0;
-
-    res = magicnet_read_bytes(client, certificate_out->hash, sizeof(certificate_out->hash), write_buf);
-    if (res < 0)
+    struct magicnet_buffer_stream_private_data* private_data = NULL;
+    struct buffer* buffer = buffer_create_with_handler(magicnet_write_bytes_buffer_handler, magicnet_read_bytes_buffer_handler);
+    if (!buffer)
     {
-        magicnet_log("%s error reading hash of council certificate\n", __FUNCTION__);
         goto out;
     }
 
-    res = magicnet_read_bytes(client, &certificate_out->owner_key, sizeof(certificate_out->owner_key), write_buf);
+    private_data = magicnet_buffer_stream_private_data_create(buffer, client);
+    buffer_private_set(buffer, private_data);
+
+
+    res = magicnet_council_stream_read_certificate(buffer, certificate_out);
     if (res < 0)
     {
-        magicnet_log("%s failed to read owner key\n", __FUNCTION__);
         goto out;
     }
 
-    res = magicnet_read_bytes(client, &certificate_out->signature, sizeof(certificate_out->signature), write_buf);
-    if (res < 0)
-    {
-        magicnet_log("%s failed to read the signature", __FUNCTION__);
-        goto out;
-    }
-
-    res = magicnet_client_read_council_certificate_signed_data(client, &certificate_out->signed_data, write_buf);
-    if (res < 0)
-    {
-        magicnet_log("%s failed to read certificate signed data\n", __FUNCTION__);
-        goto out;
-    }
 
 out:
+    if (private_data)
+    {
+        magicnet_buffer_stream_private_data_free(private_data);
+    }
+    buffer_free(buffer);
     return res;
 }
 

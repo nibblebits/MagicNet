@@ -260,20 +260,185 @@ int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct 
     return res;
 }
 
-
-int magicnet_council_stream_read_certificate(struct buffer* buffer_in, struct magicnet_council_certificate** certificate_out)
+int magicnet_council_stream_read_certificate_vote_signed_data(struct buffer* buffer_in, struct council_certificate_transfer_vote_signed_data* signed_data)
 {
-    int res = 0;    
-    struct magicnet_council_certificate* certificate = magicnet_council_certificate_create();
-    if (!certificate)
+    int res = 0;
+
+    res = buffer_read_bytes(buffer_in, signed_data->certificate_to_transfer_hash, sizeof(signed_data->certificate_to_transfer_hash));
+    if (res < 0)
+        return res;
+
+    res = buffer_read_long(buffer_in, &signed_data->total_voters);
+    if (res < 0)
+        return res;
+
+    res = buffer_read_long(buffer_in, &signed_data->total_for_vote);
+    if (res < 0)
+        return res;
+
+    res = buffer_read_long(buffer_in, &signed_data->total_against_vote);
+    if (res < 0)
+        return res;
+
+    res = buffer_read_long(buffer_in, &signed_data->certificate_expires_at);
+    if (res < 0)
+        return res;
+
+    res = buffer_read_long(buffer_in, &signed_data->certificate_valid_from);
+    if (res < 0)
+        return res;
+
+    res = buffer_read_bytes(buffer_in, &signed_data->new_owner_key, sizeof(signed_data->new_owner_key));
+    if (res < 0)
+        return res;
+
+    res = buffer_read_bytes(buffer_in, &signed_data->winning_key, sizeof(signed_data->winning_key));
+    if (res < 0)
+        return res;
+
+    return res;
+}
+
+int magicnet_council_stream_read_certificate_vote(struct buffer* buffer_in, struct council_certificate_transfer_vote* vote)
+{
+    int res = 0;
+
+    res = magicnet_council_stream_read_certificate_vote_signed_data(buffer_in, &vote->signed_data);
+    if (res < 0)
+        return res;
+
+    res = buffer_read_bytes(buffer_in, vote->hash, sizeof(vote->hash));
+    if (res < 0)
+        return res;
+
+    res = buffer_read_bytes(buffer_in, &vote->signature, sizeof(vote->signature));
+    if (res < 0)
+        return res;
+
+    res = magicnet_council_stream_read_certificate(buffer_in, vote->voter_certificate);
+    if (res < 0)
+        return res;
+
+    return res;
+}
+
+int magicnet_council_stream_read_certificate_transfer(struct buffer* buffer_in, struct council_certificate_transfer* transfer)
+{
+    int res = 0;
+
+    // Read byte to determine if we have certificate or not
+    int has_certificate = 0;
+    res = buffer_read_int(buffer_in, &has_certificate);
+    if (res < 0)
+        return res;
+
+    // If we have certificate, read it
+    if (has_certificate)
     {
-        res = -1;
-        goto out;
+        transfer->certificate = (struct magicnet_council_certificate*)malloc(sizeof(struct magicnet_council_certificate));
+        if (!transfer->certificate)
+            return -1; // Allocation failed
+
+        res = magicnet_council_stream_read_certificate(buffer_in, transfer->certificate);
+        if (res < 0)
+            return res;
+    }
+    else
+    {
+        transfer->certificate = NULL;
     }
 
+    // Read the new owner data
+    res = buffer_read_bytes(buffer_in, &transfer->new_owner, sizeof(transfer->new_owner));
+    if (res < 0)
+        return res;
+
+    // Read the total number of voters
+    res = buffer_read_long(buffer_in, &transfer->total_voters);
+    if (res < 0)
+        return res;
+
+    // Allocate memory for voters
+    transfer->voters = (struct council_certificate_transfer_vote*)malloc(transfer->total_voters * sizeof(struct council_certificate_transfer_vote));
+    if (!transfer->voters)
+        return -1; // Allocation failed
+
+    // Loop through and read all the votes
+    for (int i = 0; i < transfer->total_voters; i++)
+    {
+        res = magicnet_council_stream_read_certificate_vote(buffer_in, &transfer->voters[i]);
+        if (res < 0)
+            return res;
+    }
+
+    return res;
+}
+
+int magicnet_council_stream_read_certificate_signed_data(struct buffer* buffer_in, struct council_certificate_signed_data* signed_data)
+{
+    int res = 0;
+
+    // Read the ID
+    res = buffer_read_int(buffer_in, &signed_data->id);
+    if (res < 0)
+        return res;
+
+    // Read the flags
+    res = buffer_read_int(buffer_in, &signed_data->flags);
+    if (res < 0)
+        return res;
+
+    // Read the council ID hash
+    res = buffer_read_bytes(buffer_in, signed_data->council_id_hash, sizeof(signed_data->council_id_hash));
+    if (res < 0)
+        return res;
+
+    // Read the expiration timestamp
+    res = buffer_read_long(buffer_in, &signed_data->expires_at);
+    if (res < 0)
+        return res;
+
+    // Read the valid from timestamp
+    res = buffer_read_long(buffer_in, &signed_data->valid_from);
+    if (res < 0)
+        return res;
+
+    // Read the transfer data
+    res = magicnet_council_stream_read_certificate_transfer(buffer_in, &signed_data->transfer);
+    if (res < 0)
+        return res;
+
+    return res;
+}
+
+
+int magicnet_council_stream_read_certificate(struct buffer* buffer_in, struct magicnet_council_certificate* certificate)
+{
+    int res = 0;
+
+
+    // Read the hash of the council certificate
+    res = buffer_read_bytes(buffer_in, certificate->hash, sizeof(certificate->hash));
+    if (res < 0)
+        return res;
+
+    // Read the owner key
+    res = buffer_read_bytes(buffer_in, &certificate->owner_key, sizeof(certificate->owner_key));
+    if (res < 0)
+        return res;
+
+    // Read the signature
+    res = buffer_read_bytes(buffer_in, &certificate->signature, sizeof(certificate->signature));
+    if (res < 0)
+        return res;
+
+    // Read the certificate signed data
+    res = magicnet_council_stream_read_certificate_signed_data(buffer_in, &certificate->signed_data);
+    if (res < 0)
+        return res;
 
 out:
-    *certificate_out = certificate;
+
     return res;
 }
 
