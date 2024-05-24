@@ -1570,7 +1570,7 @@ int magicnet_client_read_council_certificate(struct magicnet_client *client, str
         goto out;
     }
 
-    private_data = magicnet_buffer_stream_private_data_create(buffer, client);
+    private_data = magicnet_buffer_stream_private_data_create(write_buf, client);
     buffer_private_set(buffer, private_data);
 
 
