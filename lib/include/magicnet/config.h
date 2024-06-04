@@ -53,6 +53,11 @@
 // Anyone who listens on this will get all packets regardless who they are.
 #define MAGICNET_LISTEN_ALL_PROGRAM "magicnet"
 
+// 1 Mb MAX
+#define MAGICNET_REQUEST_AND_RESPOND_INPUT_DATA_MAXIMUM_SIZE 1048576
+// Upto 1 GB because the data can be excessive that we are requesting
+// a better design may be to buffer this later on..
+#define MAGICNET_REQUEST_AND_RESPOND_OUTPUT_DATA_MAXIMUM_SIZE 1048576*1024
 
 #define MAGICNET_DATA_BASE_DIRECTORY_ENV "HOME"
 #define MAGICNET_DATA_BASE ".magicnet"

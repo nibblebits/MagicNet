@@ -157,14 +157,14 @@ int _magicnet_events_poll(struct magicnet_program *program, bool reconnect_if_ne
     magicnet_events_vector_clone_events_and_push(magicnet_signed_data(res_packet)->payload.events_poll_res.events, program->client->events);
 
 out:
-    magicnet_free_packet(res_packet);
+    magicnet_packet_free(res_packet);
     if (res < 0 && reconnect_if_neccessary)
     {
         magicnet_reconnect(program);
         // Lets try again..
         res = _magicnet_events_poll(program, false);
     }
-    magicnet_free_packet(poll_packet);
+    magicnet_packet_free(poll_packet);
     return res;
 }
 

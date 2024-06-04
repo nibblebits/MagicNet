@@ -456,7 +456,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
             strncpy(last_prev_hash, block->prev_hash, sizeof(last_prev_hash));
         }
         
-        magicnet_free_packet(super_download_response);
+        magicnet_packet_free(super_download_response);
         super_download_response = NULL;
     }
 
@@ -483,9 +483,9 @@ out:
 
     if (super_download_response)
     {
-        magicnet_free_packet(super_download_response);
+        magicnet_packet_free(super_download_response);
     }
-    magicnet_free_packet(req_packet);
+    magicnet_packet_free(req_packet);
     return 0;
 }
 

@@ -107,6 +107,22 @@ void magicnet_events_res_packet_free(struct magicnet_packet *packet)
     magicnet_events_vector_free(magicnet_signed_data(packet)->payload.events_poll_res.events);
 }
 
+void magicnet_reqres_req_packet_free(struct magicnet_packet *packet)
+{
+    if (magicnet_signed_data(packet)->payload.request_and_respond.input_data)
+    {
+        magicnet_reqres_input_data_free(magicnet_signed_data(packet)->payload.request_and_respond.input_data);
+    }
+}
+
+void magicnet_reqres_res_packet_free(struct magicnet_packet *packet)
+{
+    if (magicnet_signed_data(packet)->payload.request_and_respond_response.output_data)
+    {
+        magicnet_reqres_output_data_free(magicnet_signed_data(packet)->payload.request_and_respond_response.output_data);
+    }
+}
+
 void magicnet_free_packet_pointers(struct magicnet_packet *packet)
 {
     if (!packet)
@@ -164,6 +180,14 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
         magicnet_events_res_packet_free(packet);
         break;
 
+    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND:
+        magicnet_reqres_req_packet_free(packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
+        magicnet_reqres_res_packet_free(packet);
+        break;
+
     case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
 
         break;
@@ -177,7 +201,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
     }
 }
 
-void magicnet_free_packet(struct magicnet_packet *packet)
+void magicnet_packet_free(struct magicnet_packet *packet)
 {
     magicnet_free_packet_pointers(packet);
     free(packet);
@@ -271,7 +295,7 @@ out:
             res = _magicnet_make_transaction(program, type, data, size, false);
         }
     }
-    magicnet_free_packet(packet);
+    magicnet_packet_free(packet);
     return res;
 }
 
@@ -335,7 +359,48 @@ out:
     return res;
 }
 
-int magicnet_read_transaction_council_certificate_claim_request(struct block_transaction* transaction, struct block_transaction_council_certificate_claim_request* claim_req_out)
+int magicnet_council_request_certificate(struct magicnet_program *program, const char *council_certificate_hash, struct magicnet_council_certificate **certificate_out)
+{
+    int res = 0;
+    struct request_and_respond_input_data *input_data = magicnet_reqres_input_data_create((void*)council_certificate_hash, strlen(council_certificate_hash));
+    struct request_and_respond_output_data *output_data = NULL;
+    struct magicnet_council_certificate *certificate = NULL;
+    struct buffer *buffer = NULL;
+    *certificate_out = NULL;
+    res = magicnet_reqres_request(program->client, MAGICNET_REQRES_HANDLER_GET_COUNCIL_CERTIFICATE, input_data, &output_data);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    certificate = magicnet_council_certificate_create();
+
+    buffer = buffer_wrap(output_data->output, output_data->size);
+    res = magicnet_council_stream_read_certificate(buffer, certificate);
+    if (res < 0)
+    {
+        goto out;
+    }
+    
+    *certificate_out = certificate;
+
+out:
+    if (output_data)
+    {
+        magicnet_reqres_output_data_free(output_data);
+    }
+    if (input_data)
+    {
+        magicnet_reqres_input_data_free(input_data);
+    }
+    if (buffer)
+    {
+        buffer_free(buffer);
+    }
+    return res;
+}
+
+int magicnet_read_transaction_council_certificate_claim_request(struct block_transaction *transaction, struct block_transaction_council_certificate_claim_request *claim_req_out)
 {
     int res = 0;
     struct buffer *buffer = buffer_wrap(transaction->data.ptr, transaction->data.size);
@@ -536,8 +601,8 @@ out:
         magicnet_reconnect(program);
         res = _magicnet_next_packet(program, packet_out, false);
     }
-    magicnet_free_packet(packet);
-    magicnet_free_packet(packet_to_send);
+    magicnet_packet_free(packet);
+    magicnet_packet_free(packet_to_send);
     return res;
 }
 
@@ -690,8 +755,8 @@ struct magicnet_transactions *magicnet_transactions_request(struct magicnet_prog
     request_data->page++;
 
 out:
-    magicnet_free_packet(packet);
-    magicnet_free_packet(response_packet);
+    magicnet_packet_free(packet);
+    magicnet_packet_free(response_packet);
     return transactions;
 }
 

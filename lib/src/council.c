@@ -676,6 +676,57 @@ int magicnet_council_create_master()
 out:
     return res;
 }
+
+
+/**
+ * Gets a council certificate and writes it into the output
+*/
+int magicnet_council_reqres_handler(struct request_and_respond_input_data *input_data, struct request_and_respond_output_data **output_data_out)
+{
+    int res = 0;
+    struct request_and_respond_output_data *output_data = NULL;
+    struct buffer *buffer_out = buffer_create();
+    if (!buffer_out)
+    {
+        res = -1;
+        goto out;
+    }
+
+    struct magicnet_council_certificate *certificate = magicnet_council_certificate_load(input_data->input);
+    if (!certificate)
+    {
+        res = -1;
+        goto out;
+    }
+
+    res = magicnet_council_stream_write_certificate(buffer_out, certificate);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    output_data = magicnet_reqres_output_data_create(buffer_ptr(buffer_out), buffer_len(buffer_out));
+    if (!output_data)
+    {
+        res = -1;
+        goto out;
+    }
+
+out:
+    if (buffer_out)
+    {
+        buffer_free(buffer_out);
+    }
+
+    if (certificate)
+    {
+        magicnet_council_certificate_free(certificate);
+    }
+
+    *output_data_out = output_data;
+    return res;
+}
+
 int magicnet_council_init()
 {
     int res = 0;
@@ -686,6 +737,10 @@ int magicnet_council_init()
     {
         goto out;
     }
+
+    // We should register the request response handler to allow local clients to request council certificates
+    // from the local server instance.
+    reqres_register_handler(magicnet_council_reqres_handler, MAGICNET_REQRES_HANDLER_GET_COUNCIL_CERTIFICATE);
 
     if (magicnet_setting_exists(MAGICNET_MASTER_COUNCIL_NAME))
     {

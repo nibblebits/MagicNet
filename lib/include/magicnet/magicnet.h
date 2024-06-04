@@ -16,9 +16,9 @@
 struct magicnet_client;
 struct magicnet_buffer_stream_private_data
 {
-    struct magicnet_client* client;
+    struct magicnet_client *client;
     // The buffer to write all data too after its been sent to the network
-    struct buffer* write_buf;
+    struct buffer *write_buf;
 };
 // Initialization flags for magicnet
 enum
@@ -76,6 +76,10 @@ enum
     MAGICNET_PACKET_TYPE_EVENTS_POLL,
     MAGICNET_PACKET_TYPE_EVENTS_RES,
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
+
+    // Request some data and expect a response.
+    MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND,
+    MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE,
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
     MAGICNET_PACKET_TYPE_SERVER_SYNC = 200,
@@ -228,6 +232,18 @@ struct magicnet_transactions_request
     int page;
 };
 
+struct request_and_respond_input_data
+{
+    void *input;
+    size_t size;
+};
+
+struct request_and_respond_output_data
+{
+    void *output;
+    size_t size;
+};
+
 struct magicnet_packet
 {
 
@@ -305,6 +321,27 @@ struct magicnet_packet
                     // A vector of struct magicnet_event*
                     struct vector *events;
                 } events_poll_res;
+
+                struct request_and_respond
+                {
+                    // The numeric type of the particular request we are making
+                    int type;
+                    int flags;
+                    // The data that helps us locate the information we are requesting
+                    struct request_and_respond_input_data *input_data;
+
+                } request_and_respond;
+
+                struct request_and_respond_response
+                {
+                    // The numeric type of the request
+                    int type;
+                    int flags;
+
+                    struct request_and_respond_input_data *input_data;
+                    struct request_and_respond_output_data *output_data;
+
+                } request_and_respond_response;
 
                 struct sync
                 {
@@ -591,7 +628,7 @@ struct magicnet_server
     /**
      * The peer who in this cycle is authorized to send us a single block without us requesting.
      * This would be the certificate who won the last vote.
-     * 
+     *
      * All blocks sent to us from anyone other than this peer will be ignored.
      */
     struct authorized_block_creator
@@ -624,7 +661,6 @@ struct magicnet_server
     // THis is not something we choose, we either can receive traffic or we cannot. This boolean if it is true
     // means we have successfully tested that we are able to receive incoming connections.
     bool port_forwarded;
-
 };
 
 struct block_transaction_data
@@ -745,11 +781,11 @@ enum
 };
 /**
  * transaction for initiating a council certificate transfer, this is only a proposal and
- * is not a completed transfer until the votes are in. 
-*/
+ * is not a completed transfer until the votes are in.
+ */
 struct block_transaction_council_certificate_initiate_transfer_request
 {
-    
+
     // Flags about the transfer
     int flags;
 
@@ -760,12 +796,11 @@ struct block_transaction_council_certificate_initiate_transfer_request
     // The request expiry must not exceed eight days or it will be rejected.
     // If the transfer is not completed before this time the transfer is voided.
     time_t request_expires_at;
-
 };
 
 /**
  * This certificate claim request is used to claim a certificate that was won in a transfer vote.
-*/
+ */
 struct block_transaction_council_certificate_claim_request
 {
     char initiate_transfer_transaction_hash[SHA256_STRING_LENGTH];
@@ -1198,16 +1233,16 @@ int magicnet_make_transaction_using_buffer(struct magicnet_program *program, int
 int magicnet_money_transfer_data(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
 int magicnet_money_transfer_data_write(struct block_transaction *transaction, struct block_transaction_money_transfer *money_transfer);
 int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *council_certificate_transfer);
-int magicnet_read_transaction_council_certificate_claim_request(struct block_transaction* transaction, struct block_transaction_council_certificate_claim_request* claim_req_out);
+int magicnet_read_transaction_council_certificate_claim_request(struct block_transaction *transaction, struct block_transaction_council_certificate_claim_request *claim_req_out);
 /*
  *Called to claim transfers of council certificates.. This is only possible if the transfer was successful. As always
  * we will verify the request on our local server but only distribute the packet if we believe we are eligible
- * to claim a certificate transfer. 
-*/
+ * to claim a certificate transfer.
+ */
 int magicnet_certificate_transfer_claim(struct magicnet_program *program, const char *initiate_transfer_transaction_hash, const char *certificate_hash);
 
 int magicnet_send_pong(struct magicnet_client *client);
-void magicnet_free_packet(struct magicnet_packet *packet);
+void magicnet_packet_free(struct magicnet_packet *packet);
 void magicnet_free_packet_pointers(struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new();
 void magicnet_packet_make_new_id(struct magicnet_packet *packet);
@@ -1225,22 +1260,21 @@ struct magicnet_program *magicnet_program(const char *name);
  */
 int magicnet_make_money_transfer(struct magicnet_program *program, const char *to, double amount);
 
-
 /**
  * Initiates a transfer request of a council certificate to a new owner, the transaction is likely to be dropped
  * by receving peers if the signer of this transaction is not a council certificate holder in the council of the
  * certificate they are trying to transfer.
- * 
+ *
  * Transfer requests are not final and further steps need to be taken for them to be official such as proving you have
  * the right to transfer the certificate. Or through voting.
- * 
+ *
  * \param program The program to make the transaction with
  * \param flags The flags of the transfer
  * \param certificate_to_transfer_hash The hash of the certificate to transfer
  * \param new_owner_key The key of the new owner of the certificate
  * \return int 0 if the transaction was successfully created
-*/
-int magicnet_certificate_transfer_initiate(struct magicnet_program* program, int flags, const char* certificate_to_transfer_hash, struct key *new_owner_key);
+ */
+int magicnet_certificate_transfer_initiate(struct magicnet_program *program, int flags, const char *certificate_to_transfer_hash, struct key *new_owner_key);
 
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
@@ -1347,7 +1381,7 @@ int magicnet_council_verify(struct magicnet_council *council);
  * \param council The council to verify the certificate against
  * \param certificate The certificate to verify
  * \return 0 if the certificate is valid and apart of the council
-*/
+ */
 int magicnet_council_certificate_verify_for_council(struct magicnet_council *council, struct magicnet_council_certificate *certificate);
 
 /**
@@ -1363,15 +1397,14 @@ int magicnet_central_council_certificate_verify(struct magicnet_council_certific
  * \param buffer_out The buffer to write the data to
  * \param certificate The certificate to write
  * \return 0 if the certificate was written to the buffer
-*/
-int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct magicnet_council_certificate* certificate);
-
+ */
+int magicnet_council_stream_write_certificate(struct buffer *buffer_out, struct magicnet_council_certificate *certificate);
 
 /**
  * Reads the council certificate data from the buffer
- * 
-*/
-int magicnet_council_stream_read_certificate(struct buffer* buffer_in, struct magicnet_council_certificate* certificate);
+ *
+ */
+int magicnet_council_stream_read_certificate(struct buffer *buffer_in, struct magicnet_council_certificate *certificate);
 
 /**
  * Returns the certificates for the given council
@@ -1434,6 +1467,18 @@ void magicnet_council_certificate_many_free(struct magicnet_council_certificate 
 void magicnet_council_certificate_free(struct magicnet_council_certificate *certificate);
 int magicnet_council_certificate_verify_signature(struct magicnet_council_certificate *certificate);
 void magicnet_council_certificate_hash(struct magicnet_council_certificate *certificate, char *out_hash);
+
+
+/**
+ * Requests the certificate structure from the magicnet local server instance.
+ * \param program The program to request the certificate from
+ * \param council_certificate_hash The hash of the certificate to request
+ * \param certificate_out The certificate that was requested
+ * 
+ * \return 0 if the certificate was located successfully, otherwise below zero on error, in which case check the error code list
+*/
+int magicnet_council_request_certificate(struct magicnet_program *program, const char *council_certificate_hash, struct magicnet_council_certificate **certificate_out);
+
 
 /**
  * Transfeers the council certificate without the need of vote, this is only allowed if the certificate holds the
@@ -1512,4 +1557,25 @@ int magicnet_setting_get(const char *key, char *value_out);
 
 bool magicnet_setting_exists(const char *key);
 
+// Request response system, allowing local host clients to request information from the local server
+#define MAGICNET_REQRES_MAX_HANDLERS 200
+
+// For people writing modules for MagicNet Don't use any handler below 100 they are all reserved for internal system use
+// Public use above 100 please, bare in mind that other modules might use the same ID so ensure you
+// pick a completely random number
+enum
+{
+    MAGICNET_REQRES_HANDLER_GET_COUNCIL_CERTIFICATE = 0,
+};
+typedef int (*REQUEST_RESPONSE_HANDLER_FUNCTION)(struct request_and_respond_input_data *input_data, struct request_and_respond_output_data **output_data_out);
+
+int reqres_register_handler(REQUEST_RESPONSE_HANDLER_FUNCTION handler, int type);
+REQUEST_RESPONSE_HANDLER_FUNCTION reqres_get_handler(int type);
+int magicnet_reqres_request(struct magicnet_client *client, int type, struct request_and_respond_input_data *input_data, struct request_and_respond_output_data **output_data_out);
+void magicnet_reqres_input_data_free(struct request_and_respond_input_data *input_data);
+void magicnet_reqres_output_data_free(struct request_and_respond_output_data *output_data);
+struct request_and_respond_output_data *magicnet_reqres_output_data_clone(struct request_and_respond_output_data *output_data);
+struct request_and_respond_input_data *magicnet_reqres_input_data_clone(struct request_and_respond_input_data *input_data);
+struct request_and_respond_output_data *magicnet_reqres_output_data_create(void *output_data_ptr, size_t size);
+struct request_and_respond_input_data *magicnet_reqres_input_data_create(void *input_data_ptr, size_t size);
 #endif

@@ -14,8 +14,8 @@ int transfer_certificate_claim(struct magicnet_program *program, int argc, char 
         return -1;
     }
 
-    char* certificate_hash = argv[2];
-    char* transfer_transaction_hash = argv[3];
+    char *certificate_hash = argv[2];
+    char *transfer_transaction_hash = argv[3];
 
     res = magicnet_certificate_transfer_claim(program, transfer_transaction_hash, certificate_hash);
     printf("transfer claim request has been made await next block to confirm if you claimed correctly");
@@ -26,7 +26,7 @@ int transfer_certificate(struct magicnet_program *program, int argc, char **argv
 {
 
     // Extract the certificate hash
-    if (argc < 3)
+    if (argc < 4)
     {
         printf("USAGE: <type> <certificate_hash> <new_owner_key>\n");
         return -1;
@@ -52,6 +52,32 @@ int transfer_certificate(struct magicnet_program *program, int argc, char **argv
 
     return 0;
 }
+
+int certificate_show(struct magicnet_program *program, int argc, char **argv)
+{
+    int res = 0;
+    if (argc < 3)
+    {
+        printf("USAGE: show <certificate_hash> \n");
+        return -1;
+    }
+
+    struct magicnet_council_certificate* certificate = NULL;
+    const char* certificate_hash = argv[2];
+    res = magicnet_council_request_certificate(program, certificate_hash, &certificate);
+    if (res < 0)
+    {
+        printf("Unable to find the certificate in our local server instance, its possible its not known to us yet\n");
+        goto out;
+    }
+
+out:
+    if (certificate)
+    {
+        magicnet_council_certificate_free(certificate);
+    }
+    return res;
+}
 int main(int argc, char **argv)
 {
     // Usage command type
@@ -76,10 +102,14 @@ int main(int argc, char **argv)
     {
         return transfer_certificate(decentralized_program, argc, argv);
     }
-    else if(strcmp(type, "claim") == 0)
+    else if (strcmp(type, "claim") == 0)
     {
         return transfer_certificate_claim(decentralized_program, argc, argv);
-    }   
+    }
+    else if (strcmp(type, "show") == 0)
+    {
+        return certificate_show(decentralized_program, argc, argv);
+    }
     else
     {
         printf("Unknown command type\n");

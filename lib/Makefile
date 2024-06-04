@@ -1,4 +1,4 @@
-OBJECTS= ./build/vector.o ./build/magicnet.o ./build/council.o ./build/events.o ./build/init.o ./build/block.o ./build/log.o ./build/settings.o ./build/network.o ./build/peer.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/wallet.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
+OBJECTS= ./build/vector.o ./build/magicnet.o ./build/council.o ./build/reqres.o ./build/events.o ./build/init.o ./build/block.o ./build/log.o ./build/settings.o ./build/network.o ./build/peer.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/wallet.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
 INCLUDES= -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector
 ADDITIONAL_FLAGS= -g -fPIC
 all: ${OBJECTS}
@@ -13,6 +13,9 @@ all: ${OBJECTS}
 
 ./build/council.o:./src/council.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/council.c -c -o ./build/council.o 
+
+./build/reqres.o:./src/reqres.c
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/reqres.c -c -o ./build/reqres.o 
 
 ./build/init.o:./src/init.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/init.c -c -o ./build/init.o 
