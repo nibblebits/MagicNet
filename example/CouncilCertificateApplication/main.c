@@ -67,8 +67,17 @@ int certificate_show(struct magicnet_program *program, int argc, char **argv)
     res = magicnet_council_request_certificate(program, certificate_hash, &certificate);
     if (res < 0)
     {
-        printf("Unable to find the certificate in our local server instance, its possible its not known to us yet\n");
-        goto out;
+        if (res == MAGICNET_ERROR_NOT_FOUND)
+        {
+            printf("Unable to find the certificate with that hash\n");
+            goto out;
+        }
+        else
+        {
+            printf("Failed to request the certificate, unknown error occured.\n");
+            goto out;
+        }
+
     }
 
 out:

@@ -16,26 +16,45 @@ static REQUEST_RESPONSE_HANDLER_FUNCTION request_response_handlers[MAGICNET_REQR
 struct request_and_respond_input_data *magicnet_reqres_input_data_create(void *input_data_ptr, size_t size)
 {
     struct request_and_respond_input_data *input_data = calloc(1, sizeof(struct request_and_respond_input_data));
+    if (input_data_ptr == NULL || size == 0)
+    {
+        return input_data;
+    }
     input_data->input = calloc(size, sizeof(char));
+    input_data->size = size;
     memcpy(input_data->input, input_data_ptr, size);
     return input_data;
 }
 
 struct request_and_respond_input_data *magicnet_reqres_input_data_clone(struct request_and_respond_input_data *input_data)
 {
+    if (!input_data)
+    {
+        return magicnet_reqres_input_data_create(NULL, 0);
+    }
     return magicnet_reqres_input_data_create(input_data->input, input_data->size);
 }
 
 struct request_and_respond_output_data *magicnet_reqres_output_data_create(void *output_data_ptr, size_t size)
 {
     struct request_and_respond_output_data *output_data = calloc(1, sizeof(struct request_and_respond_output_data));
+    if (output_data_ptr == NULL || size == 0)
+    {
+        return output_data;
+    }
+
     output_data->output = calloc(size, sizeof(char));
+    output_data->size = size;
     memcpy(output_data->output, output_data_ptr, size);
     return output_data;
 }
 
 struct request_and_respond_output_data *magicnet_reqres_output_data_clone(struct request_and_respond_output_data *output_data)
 {
+    if (!output_data)
+    {
+        return magicnet_reqres_output_data_create(NULL, 0);
+    }
     return magicnet_reqres_output_data_create(output_data->output, output_data->size);
 }
 
@@ -90,7 +109,6 @@ int magicnet_reqres_request(struct magicnet_client *client, int type, struct req
     magicnet_signed_data(req_packet)->type = MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND;
     magicnet_signed_data(req_packet)->payload.request_and_respond.type = type;
     magicnet_signed_data(req_packet)->payload.request_and_respond.input_data = magicnet_reqres_input_data_clone(input_data);
-    magicnet_signed_data(req_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
 
     // We will send the packet therefore requesting the given information from the client
     // Let's not forget we can be ignored by remote clients for such requests like this
@@ -109,6 +127,11 @@ int magicnet_reqres_request(struct magicnet_client *client, int type, struct req
         goto out;
     }
 
+    if (magicnet_signed_data(res_packet)->type == MAGICNET_PACKET_TYPE_NOT_FOUND)
+    {
+        res = MAGICNET_ERROR_NOT_FOUND;
+        goto out;
+    }
     // Now we will check the response packet to see if it is the correct type
     if (magicnet_signed_data(res_packet)->type != MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE)
     {
@@ -124,7 +147,7 @@ int magicnet_reqres_request(struct magicnet_client *client, int type, struct req
         goto out;
     }
 
-    // Now we will set the output data to the output data from the response packet
+
     *output_data_out = magicnet_reqres_output_data_clone(magicnet_signed_data(res_packet)->payload.request_and_respond_response.output_data);
 
 out:

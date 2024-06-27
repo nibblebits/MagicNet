@@ -1130,13 +1130,13 @@ void magicnet_client_readjust_upload_speed(struct magicnet_client *client)
         client->send_delay = 0;
     }
 }
-int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
+int magicnet_write_bytes(struct magicnet_client *client, void *ptr_in, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
     size_t amount_written = 0;
     while (amount_written < amount)
     {
-        res = write(client->sock, ptr_out + amount_written, amount - amount_written);
+        res = write(client->sock, ptr_in + amount_written, amount - amount_written);
         if (res <= 0)
         {
             res = -1;
@@ -1146,7 +1146,7 @@ int magicnet_write_bytes(struct magicnet_client *client, void *ptr_out, size_t a
         // Sometimes we are to store the result in a buffer for debugging and validation purposes..
         if (store_in_buffer)
         {
-            buffer_write_bytes(store_in_buffer, ptr_out + amount_written, amount - amount_written);
+            buffer_write_bytes(store_in_buffer, ptr_in + amount_written, amount - amount_written);
         }
 
         magicnet_client_readjust_upload_speed(client);
@@ -2111,13 +2111,13 @@ bool magicnet_client_buffer_overflow(size_t amount)
  * \param write_to_buf Should be a pointer to a buffer that you want us to write the network data that we have read too. NULL if you are not interested
  * \return 0 on success, negative on error
  */
-int magicnet_client_read_unknown_bytes(struct magicnet_client *client, const char **data_out, size_t **data_size_out, size_t max_size, struct buffer *write_to_buf)
+int magicnet_client_read_unknown_bytes(struct magicnet_client *client, char **data_out, size_t *data_size_out, size_t max_size, struct buffer *write_to_buf)
 {
     int res = 0;
     size_t data_size = 0;
-    const char *data = NULL;
+    char *data = NULL;
     *data_out = NULL;
-    *data_size_out = NULL;
+    *data_size_out = 0;
     res = magicnet_read_int(client, write_to_buf);
     if (res < 0)
     {
@@ -2155,7 +2155,7 @@ int magicnet_client_read_request_and_respond_output_data(struct magicnet_client 
 {
     int res = 0;
     struct request_and_respond_output_data *req_res_output_data = NULL;
-    const char *output_data_ptr = NULL;
+    char *output_data_ptr = NULL;
     size_t output_len = 0;
     *output_data_out = NULL;
     res = magicnet_client_read_unknown_bytes(client, &output_data_ptr, &output_len, MAGICNET_REQUEST_AND_RESPOND_OUTPUT_DATA_MAXIMUM_SIZE, store_in_buf);
@@ -2164,13 +2164,9 @@ int magicnet_client_read_request_and_respond_output_data(struct magicnet_client 
         goto out;
     }
 
-    req_res_output_data = magicnet_reqres_output_data_create(output_data_ptr, output_len);
+    req_res_output_data = magicnet_reqres_output_data_create((void *)output_data_ptr, output_len);
     *output_data_out = req_res_output_data;
 out:
-    if (output_data_out)
-    {
-        free(output_data_out);
-    }
     return res;
 }
 
@@ -2178,8 +2174,8 @@ int magicnet_client_read_request_and_respond_input_data(struct magicnet_client *
 {
     int res = 0;
     struct request_and_respond_input_data *req_res_input_data = NULL;
-    const char *input_data_ptr = NULL;
-    int input_data_len = 0;
+    char *input_data_ptr = NULL;
+    size_t input_data_len = 0;
     *input_data_out = NULL;
     res = magicnet_client_read_unknown_bytes(client, &input_data_ptr, &input_data_len, MAGICNET_REQUEST_AND_RESPOND_INPUT_DATA_MAXIMUM_SIZE, store_in_buf);
     if (res < 0)
@@ -2187,7 +2183,7 @@ int magicnet_client_read_request_and_respond_input_data(struct magicnet_client *
         goto out;
     }
 
-    req_res_input_data = magicnet_reqres_input_data_create(input_data_ptr, input_data_len);
+    req_res_input_data = magicnet_reqres_input_data_create((void *)input_data_ptr, input_data_len);
     *input_data_out = req_res_input_data;
 out:
     if (input_data_ptr)
@@ -2381,6 +2377,14 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         }
         break;
 
+    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
+        res = magicnet_client_read_request_and_respond_response_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s request and respond response packet failed\n", __FUNCTION__);
+        }
+        break;
+
     case MAGICNET_PACKET_TYPE_EVENTS_RES:
         res = magicnet_client_read_events_res_packet(client, packet_out);
         if (res < 0)
@@ -2519,9 +2523,10 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     /**
      * @brief Here unsigned packets provided by a LOCALHOST connection will be signed with our local key
      * this is okay because this is the local machine therefore it is the authority of this server instance
-     * to sign all packets
+     * to sign all packets. Still only if we have a server instance on the client can we sign because
+     * the server is responsible for the keys. So local clients outside of the server cannot sign their own packets.
      */
-    if (!has_signature && client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST)
+    if (!has_signature && client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST && client->server)
     {
         // Since we have no signature let us create our own this is allowed since we have confimed
         // that we are localhost and by default localhost packets have no signatures.
@@ -2545,14 +2550,16 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         has_signature = true;
     }
 
-    // Now the packet is constructed lets verify its contents if it has been signed.
-    res = magicnet_client_verify_packet_was_signed(packet_out);
-    if (res < 0)
+    if (has_signature)
     {
-        magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
-        return res;
+        // Now the packet is constructed lets verify its contents if it has been signed.
+        res = magicnet_client_verify_packet_was_signed(packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
+            return res;
+        }
     }
-
     // We have seen this packet now.
     if (client->server)
     {
@@ -3132,6 +3139,136 @@ out:
     return res;
 }
 
+int magicnet_client_write_known_bytes(struct magicnet_client *client, const char *data_in, size_t data_size, struct buffer *write_to_buf)
+{
+    int res = 0;
+    res = magicnet_write_int(client, (int)data_size, write_to_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    res = magicnet_write_bytes(client, (void *)data_in, data_size, write_to_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
+    return res;
+}
+
+int magicnet_client_write_request_and_respond_output_data(struct magicnet_client *client, struct request_and_respond_output_data *output_data, struct buffer *store_in_buf)
+{
+    int res = 0;
+
+    res = magicnet_write_int(client, output_data->size, store_in_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+    res = magicnet_client_write_known_bytes(client, output_data->output, output_data->size, store_in_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
+    return res;
+}
+
+int magicnet_client_write_request_and_respond_input_data(struct magicnet_client *client, struct request_and_respond_input_data *input_data, struct buffer *store_in_buf)
+{
+    int res = 0;
+
+    res = magicnet_client_write_known_bytes(client, input_data->input, input_data->size, store_in_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
+int magicnet_client_write_packet_request_and_respond(struct magicnet_client *client, struct magicnet_packet *packet_in)
+{
+    int res = 0;
+
+    // Lets check theirs an input data to send
+    if (!magicnet_signed_data(packet_in)->payload.request_and_respond.input_data)
+    {
+        magicnet_log("%s no input data provided\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Write the request type
+    res = magicnet_write_int(client, magicnet_signed_data(packet_in)->payload.request_and_respond.type, packet_in->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the flags
+    res = magicnet_write_int(client, magicnet_signed_data(packet_in)->payload.request_and_respond.flags, packet_in->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the input data
+    res = magicnet_client_write_request_and_respond_input_data(client, magicnet_signed_data(packet_in)->payload.request_and_respond.input_data, packet_in->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
+int magicnet_client_write_packet_request_and_respond_response(struct magicnet_client *client, struct magicnet_packet *packet_in)
+{
+    int res = 0;
+    // First things first lets validate that theirs an actual request input and output to send
+    if (!magicnet_signed_data(packet_in)->payload.request_and_respond_response.input_data || !magicnet_signed_data(packet_in)->payload.request_and_respond_response.output_data)
+    {
+        magicnet_log("%s no input or output data provided\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Write the request type
+    res = magicnet_write_int(client, magicnet_signed_data(packet_in)->payload.request_and_respond_response.type, packet_in->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the flags
+    res = magicnet_write_int(client, magicnet_signed_data(packet_in)->payload.request_and_respond_response.flags, packet_in->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write input data
+    res = magicnet_client_write_request_and_respond_input_data(client, magicnet_signed_data(packet_in)->payload.request_and_respond_response.input_data, packet_in->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Write the output data
+    res = magicnet_client_write_request_and_respond_output_data(client, magicnet_signed_data(packet_in)->payload.request_and_respond_response.output_data, packet_in->not_sent.tmp_buf);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -3188,6 +3325,14 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
     case MAGICNET_PACKET_TYPE_POLL_PACKETS:
         res = magicnet_client_write_packet_poll_packets(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND:
+        res = magicnet_client_write_packet_request_and_respond(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
+        res = magicnet_client_write_packet_request_and_respond_response(client, packet);
         break;
 
     case MAGICNET_PACKET_TYPE_EVENTS_POLL:
@@ -4289,7 +4434,7 @@ int magicnet_client_process_request_and_respond(struct magicnet_client *client, 
     {
 
         res = handler(magicnet_signed_data(packet)->payload.request_and_respond.input_data, &output_data);
-        if (res < 0)
+        if (res >= 0 && output_data)
         {
             response_received = true;
         }
