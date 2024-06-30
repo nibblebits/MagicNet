@@ -1105,7 +1105,7 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
  * This handler can be hooked by people creating buffers to effectively stream over the network when writing/reading
  * for a particular buffer.
  */
-int magicnet_read_bytes_buffer_handler(struct buffer *buffer, void *data, size_t amount)
+int magicnet_network_read_bytes_buffer_handler(struct buffer *buffer, void *data, size_t amount)
 {
     struct magicnet_buffer_stream_private_data *private_data = buffer_private_get(buffer);
     return magicnet_read_bytes(private_data->client, data, amount, private_data->write_buf);
@@ -1182,7 +1182,7 @@ void magicnet_buffer_stream_private_data_free(struct magicnet_buffer_stream_priv
  * This handler can be hooked by people creating buffers to effectively stream over the network when writing/reading
  * for a particular buffer.
  */
-int magicnet_write_bytes_buffer_handler(struct buffer *buffer, void *data, size_t amount)
+int magicnet_network_write_bytes_buffer_handler(struct buffer *buffer, void *data, size_t amount)
 {
     struct magicnet_buffer_stream_private_data *private_data = buffer_private_get(buffer);
     return magicnet_write_bytes(private_data->client, data, amount, private_data->write_buf);
@@ -1559,7 +1559,7 @@ int magicnet_client_read_council_certificate(struct magicnet_client *client, str
 {
     int res = 0;
     struct magicnet_buffer_stream_private_data *private_data = NULL;
-    struct buffer *buffer = buffer_create_with_handler(magicnet_write_bytes_buffer_handler, magicnet_read_bytes_buffer_handler);
+    struct buffer *buffer = buffer_create_with_handler(magicnet_network_write_bytes_buffer_handler, magicnet_network_read_bytes_buffer_handler);
     if (!buffer)
     {
         goto out;
@@ -2268,7 +2268,7 @@ int magicnet_client_read_request_and_respond_response_packet(struct magicnet_cli
     magicnet_signed_data(packet_out)->payload.request_and_respond.type = type;
     magicnet_signed_data(packet_out)->payload.request_and_respond.flags = flags;
     magicnet_signed_data(packet_out)->payload.request_and_respond.input_data = input_data;
-
+    magicnet_signed_data(packet_out)->payload.request_and_respond_response.output_data = output_data;
 out:
     return res;
 }
@@ -2671,7 +2671,7 @@ int magicnet_client_write_council_certificate(struct magicnet_client *client, st
     int res = 0;
     struct magicnet_buffer_stream_private_data *private_data = NULL;
     // We will create the buffer so that it streams directly to the network
-    struct buffer *buffer = buffer_create_with_handler(magicnet_write_bytes_buffer_handler, NULL);
+    struct buffer *buffer = buffer_create_with_handler(magicnet_network_write_bytes_buffer_handler, NULL);
     if (!buffer)
     {
         return -1;
@@ -3161,11 +3161,6 @@ int magicnet_client_write_request_and_respond_output_data(struct magicnet_client
 {
     int res = 0;
 
-    res = magicnet_write_int(client, output_data->size, store_in_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
     res = magicnet_client_write_known_bytes(client, output_data->output, output_data->size, store_in_buf);
     if (res < 0)
     {

@@ -374,6 +374,11 @@ int magicnet_council_request_certificate(struct magicnet_program *program, const
     }
 
     certificate = magicnet_council_certificate_create();
+    if (!output_data->output || output_data->size <= 0)
+    {
+        res = MAGICNET_ERROR_DATA_NO_LONGER_AVAILABLE;
+        goto out;
+    }
 
     buffer = buffer_wrap(output_data->output, output_data->size);
     res = magicnet_council_stream_read_certificate(buffer, certificate);
@@ -382,6 +387,7 @@ int magicnet_council_request_certificate(struct magicnet_program *program, const
         goto out;
     }
     
+
     *certificate_out = certificate;
 
 out:

@@ -74,12 +74,15 @@ int certificate_show(struct magicnet_program *program, int argc, char **argv)
         }
         else
         {
-            printf("Failed to request the certificate, unknown error occured.\n");
+            printf("Failed to request the certificate, unknown error occured. res=%i\n", res);
             goto out;
         }
 
     }
 
+    printf("Certificate Hash: %s, Owner key: %s\n",
+           certificate->hash,
+           certificate->owner_key.key);
 out:
     if (certificate)
     {
