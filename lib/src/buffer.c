@@ -36,6 +36,7 @@ struct buffer *buffer_wrap(void *data, size_t size)
     buf->data = data;
     buf->len = size;
     buf->msize = size;
+    buf->read_bytes = buffer_read_bytes_default_handler;
     buf->flags |= BUFFER_FLAG_WRAPPED;
     return buf;
 }
