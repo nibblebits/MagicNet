@@ -3860,7 +3860,6 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         magicnet_signed_data(packet_out)->payload.transaction_send.transaction = block_transaction_clone(magicnet_signed_data(packet_in)->payload.transaction_send.transaction);
         break;
 
-    
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         magicnet_copy_packet_block_send(packet_out, packet_in);
         break;
@@ -4218,7 +4217,7 @@ out:
     return res;
 }
 
-int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction* transaction)
+int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction *transaction)
 {
     int res = 0;
 
@@ -4228,36 +4227,41 @@ int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction* 
     struct block_transaction_council_certificate_initiate_transfer_request council_certificate_transfer;
     magicnet_log("%s rebuilding certificate transfer transaction\n", __FUNCTION__);
     res = magicnet_read_transaction_council_certificate_initiate_transfer_data(transaction, &council_certificate_transfer);
-    if (res < 0) {
+    if (res < 0)
+    {
         goto out;
     }
 
-    if (!council_certificate_transfer.current_certificate) {
+    if (!council_certificate_transfer.current_certificate)
+    {
         magicnet_log("%s current certificate object to transfer was not provided so we will resolve it on our local server\n", __FUNCTION__);
-        struct magicnet_council_certificate* certificate = magicnet_council_certificate_load(council_certificate_transfer.certificate_to_transfer_hash);
-        if (!certificate) {
+        struct magicnet_council_certificate *certificate = magicnet_council_certificate_load(council_certificate_transfer.certificate_to_transfer_hash);
+        if (!certificate)
+        {
             magicnet_log("%s failed to load certificate to transfer\n", __FUNCTION__);
             res = -1;
             goto out;
         }
         council_certificate_transfer.current_certificate = certificate;
         built_our_certificate = true;
-
-        // DO we own the certificate
-        if (key_cmp(&certificate->owner_key, MAGICNET_public_key())) {
-            magicnet_log("%s certificate to transfer is not owned by us\n", __FUNCTION__);
-            res = -1;
-            goto out;
-        }
-
     }
 
-    if (!council_certificate_transfer.new_unsigned_certificate) {
+    // DO we own the certificate
+    if (key_cmp(&council_certificate_transfer.current_certificate->owner_key, MAGICNET_public_key()))
+    {
+        magicnet_log("%s certificate to transfer is not owned by us\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    if (!council_certificate_transfer.new_unsigned_certificate)
+    {
         magicnet_log("%s new unsigned certificate  was not provided so we will generate one \n", __FUNCTION__);
-        struct magicnet_council_certificate* new_certificate = NULL;
+        struct magicnet_council_certificate *new_certificate = NULL;
         // We want to make a self transfer signed by us to transfer the certificate to the new owner
         res = magicnet_council_certificate_self_transfer(council_certificate_transfer.current_certificate, &new_certificate, &council_certificate_transfer.new_owner_key, time(NULL), time(NULL) + MAGICNET_DEFAULT_COUNCIL_CERTIFICATE_LIFETIME);
-        if (res < 0) {
+        if (res < 0)
+        {
             magicnet_log("%s failed to generate new certificate\n", __FUNCTION__);
             goto out;
         }
@@ -4268,15 +4272,18 @@ int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction* 
     // Let's write the data back to the transaction data
     res = magicnet_certificate_transfer_data_write(transaction, &council_certificate_transfer);
 out:
-    if (res < 0 ) {
+    if (res < 0)
+    {
         magicnet_log("%s failed to rebuild certificate transfer transaction\n", __FUNCTION__);
         // free the certificate objects if we provided them
-        if (built_our_certificate && 
-                council_certificate_transfer.current_certificate) {
+        if (built_our_certificate &&
+            council_certificate_transfer.current_certificate)
+        {
             magicnet_council_certificate_free(council_certificate_transfer.current_certificate);
         }
-        if(built_our_unsigned_certificate && 
-                council_certificate_transfer.new_unsigned_certificate) {
+        if (built_our_unsigned_certificate &&
+            council_certificate_transfer.new_unsigned_certificate)
+        {
             magicnet_council_certificate_free(council_certificate_transfer.new_unsigned_certificate);
         }
     }
@@ -5385,10 +5392,10 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
 
         if (client->server->authorized_block_creator.was_block_received)
         {
-            #warning "come back to this as its buggy"
-           // magicnet_log("%s although the block was authorized to be sent we have already received a block from this verifier this time round\n", __FUNCTION__);
-           // magicnet_server_unlock(client->server);
-            //return -1;
+#warning "come back to this as its buggy"
+            // magicnet_log("%s although the block was authorized to be sent we have already received a block from this verifier this time round\n", __FUNCTION__);
+            // magicnet_server_unlock(client->server);
+            // return -1;
         }
 
         // Its a valid block so mark it as received.
