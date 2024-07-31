@@ -5385,9 +5385,10 @@ int magicnet_server_process_block_send_packet(struct magicnet_client *client, st
 
         if (client->server->authorized_block_creator.was_block_received)
         {
-            magicnet_log("%s although the block was authorized to be sent we have already received a block from this verifier this time round\n", __FUNCTION__);
-            magicnet_server_unlock(client->server);
-            return -1;
+            #warning "come back to this as its buggy"
+           // magicnet_log("%s although the block was authorized to be sent we have already received a block from this verifier this time round\n", __FUNCTION__);
+           // magicnet_server_unlock(client->server);
+            //return -1;
         }
 
         // Its a valid block so mark it as received.
