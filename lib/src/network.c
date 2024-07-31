@@ -4247,7 +4247,7 @@ int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction *
     }
 
     // DO we own the certificate
-    if (key_cmp(&council_certificate_transfer.current_certificate->owner_key, MAGICNET_public_key()))
+    if (!key_cmp(&council_certificate_transfer.current_certificate->owner_key, MAGICNET_public_key()))
     {
         magicnet_log("%s certificate to transfer is not owned by us\n", __FUNCTION__);
         res = -1;
