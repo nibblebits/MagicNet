@@ -3859,6 +3859,8 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
     case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
         magicnet_signed_data(packet_out)->payload.transaction_send.transaction = block_transaction_clone(magicnet_signed_data(packet_in)->payload.transaction_send.transaction);
         break;
+
+    
     case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         magicnet_copy_packet_block_send(packet_out, packet_in);
         break;
@@ -4250,7 +4252,6 @@ int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction* 
 
     }
 
-
     if (!council_certificate_transfer.new_unsigned_certificate) {
         magicnet_log("%s new unsigned certificate  was not provided so we will generate one \n", __FUNCTION__);
         struct magicnet_council_certificate* new_certificate = NULL;
@@ -4264,6 +4265,8 @@ int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction* 
         built_our_unsigned_certificate = true;
     }
 
+    // Let's write the data back to the transaction data
+    res = magicnet_certificate_transfer_data_write(transaction, &council_certificate_transfer);
 out:
     if (res < 0 ) {
         magicnet_log("%s failed to rebuild certificate transfer transaction\n", __FUNCTION__);

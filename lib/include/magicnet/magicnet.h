@@ -1256,6 +1256,7 @@ int magicnet_read_transaction_council_certificate_claim_request(struct block_tra
  * to claim a certificate transfer.
  */
 int magicnet_certificate_transfer_claim(struct magicnet_program *program, const char *initiate_transfer_transaction_hash, const char *certificate_hash);
+int magicnet_certificate_transfer_data_write(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *transfer_request);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_packet_free(struct magicnet_packet *packet);

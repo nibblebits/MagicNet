@@ -386,8 +386,6 @@ int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct 
                 goto out;
             }
         }
-
-  
     }
 
 out:
@@ -536,6 +534,15 @@ int magicnet_money_transfer_data_write(struct block_transaction *transaction, st
 {
     struct buffer *buffer = buffer_create();
     magicnet_money_transfer_data_write_to_buffer(buffer, money_transfer);
+    magicnet_update_transaction_payload(transaction, buffer->data, buffer->len);
+    buffer_free(buffer);
+    return 0;
+}
+
+int magicnet_certificate_transfer_data_write(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *transfer_request)
+{
+    struct buffer *buffer = buffer_create();
+    magicnet_write_transaction_council_certificate_initiate_transfer_data_to_buffer(buffer, transfer_request);
     magicnet_update_transaction_payload(transaction, buffer->data, buffer->len);
     buffer_free(buffer);
     return 0;
