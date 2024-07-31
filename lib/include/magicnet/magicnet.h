@@ -778,6 +778,13 @@ enum
 {
     // Only possible when the flag MAGICNET_COUNCIL_CERTIFICATE_FLAG_TRANSFERABLE_WITHOUT_VOTE is set in a council certificate.
     COUNCIL_CERTIFICATE_TRANSFER_FLAG_TRANSFER_WITHOUT_VOTE = 0b00000001,
+
+    // Flag is set if the actual certificate object is provided with the transaction
+    // All remote peers should reject the transaction if this flag isnt set.
+    // Only local clients to the server are allowed to provide no certificate object.
+    COUNCIL_CERTIFICATE_TRANSFER_FLAG_INCLUDES_CURRENT_CERTIFICATE = 0b00000010,
+    // Can contain the new certificate, can be unsigned or signed
+    COUNCIL_CERTIFICATE_TRANSFER_FLAG_INCLUDES_NEW_CERTIFICATE = 0b00000100,
 };
 /**
  * transaction for initiating a council certificate transfer, this is only a proposal and
@@ -796,6 +803,15 @@ struct block_transaction_council_certificate_initiate_transfer_request
     // The request expiry must not exceed eight days or it will be rejected.
     // If the transfer is not completed before this time the transfer is voided.
     time_t request_expires_at;
+    
+    // The current certificate that is being transferred. Holding the hash of certificate_to_transfer_hash
+    struct magicnet_council_certificate* current_certificate;
+
+    // The new_unsigned_certificate will be set to the new certificate that
+    // needs to be signed by the peer who won the transfer vote.
+    // For now self transfers only exist.
+    struct magicnet_council_certificate* new_unsigned_certificate;
+
 };
 
 /**
@@ -1374,6 +1390,7 @@ struct magicnet_council *magicnet_council_create(const char *name, size_t total_
 void magicnet_council_free(struct magicnet_council *council);
 int magicnet_council_save(struct magicnet_council *council);
 int magicnet_council_verify(struct magicnet_council *council);
+int magicnet_council_stream_alloc_and_read_certificate(struct buffer *buffer_in, struct magicnet_council_certificate **certificate);
 
 /**
  *  Verifies that the council certificate is valid and apart of the council
@@ -1453,12 +1470,21 @@ int magicnet_council_certificate_verify_signed_data(struct magicnet_council_cert
  */
 int magicnet_council_certificate_save(struct magicnet_council_certificate *certificate);
 
+enum
+{
+    // Before certificates are claimed they are unsigned
+    // in such cases you may want to pass this flag to the magicnet_council_certificate_verify functioon
+    // wwhicch will validate everything except the signature as its currently unsigned.
+    // All transfer votes will be validated and all transfer rules everything except signature.
+    MAGICNET_COUNCIL_CERTIFICATE_VERIFY_FLAG_IGNORE_FINAL_SIGNATURE = 0b00000001
+};
+
 /**
  * Verifies that the council certificate is valid
  *
  * \param certificate The certificate to verify
  */
-int magicnet_council_certificate_verify(struct magicnet_council_certificate *certificate);
+int magicnet_council_certificate_verify(struct magicnet_council_certificate *certificate, int flags);
 
 struct magicnet_council_certificate *magicnet_council_certificate_create();
 struct magicnet_council_certificate *magicnet_council_certificate_create_many(size_t total);

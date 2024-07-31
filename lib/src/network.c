@@ -4216,6 +4216,69 @@ out:
     return res;
 }
 
+int magicnet_transaction_rebuild_certificate_transfer(struct block_transaction* transaction)
+{
+    int res = 0;
+
+    // These two will be true later on if the certificate objects were provided by us rather than the transaction passed to this function
+    bool built_our_certificate = false;
+    bool built_our_unsigned_certificate = false;
+    struct block_transaction_council_certificate_initiate_transfer_request council_certificate_transfer;
+    magicnet_log("%s rebuilding certificate transfer transaction\n", __FUNCTION__);
+    res = magicnet_read_transaction_council_certificate_initiate_transfer_data(transaction, &council_certificate_transfer);
+    if (res < 0) {
+        goto out;
+    }
+
+    if (!council_certificate_transfer.current_certificate) {
+        magicnet_log("%s current certificate object to transfer was not provided so we will resolve it on our local server\n", __FUNCTION__);
+        struct magicnet_council_certificate* certificate = magicnet_council_certificate_load(council_certificate_transfer.certificate_to_transfer_hash);
+        if (!certificate) {
+            magicnet_log("%s failed to load certificate to transfer\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+        council_certificate_transfer.current_certificate = certificate;
+        built_our_certificate = true;
+
+        // DO we own the certificate
+        if (key_cmp(&certificate->owner_key, MAGICNET_public_key())) {
+            magicnet_log("%s certificate to transfer is not owned by us\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+
+    }
+
+
+    if (!council_certificate_transfer.new_unsigned_certificate) {
+        magicnet_log("%s new unsigned certificate  was not provided so we will generate one \n", __FUNCTION__);
+        struct magicnet_council_certificate* new_certificate = NULL;
+        // We want to make a self transfer signed by us to transfer the certificate to the new owner
+        res = magicnet_council_certificate_self_transfer(council_certificate_transfer.current_certificate, &new_certificate, &council_certificate_transfer.new_owner_key, time(NULL), time(NULL) + MAGICNET_DEFAULT_COUNCIL_CERTIFICATE_LIFETIME);
+        if (res < 0) {
+            magicnet_log("%s failed to generate new certificate\n", __FUNCTION__);
+            goto out;
+        }
+        council_certificate_transfer.new_unsigned_certificate = new_certificate;
+        built_our_unsigned_certificate = true;
+    }
+
+out:
+    if (res < 0 ) {
+        magicnet_log("%s failed to rebuild certificate transfer transaction\n", __FUNCTION__);
+        // free the certificate objects if we provided them
+        if (built_our_certificate && 
+                council_certificate_transfer.current_certificate) {
+            magicnet_council_certificate_free(council_certificate_transfer.current_certificate);
+        }
+        if(built_our_unsigned_certificate && 
+                council_certificate_transfer.new_unsigned_certificate) {
+            magicnet_council_certificate_free(council_certificate_transfer.new_unsigned_certificate);
+        }
+    }
+    return res;
+}
 /**
  * This function rebuilds the transaction packet making changes where needed. It only rebuilds it
  * for built in transaction types built into the protocol such as money transfers.
@@ -4228,6 +4291,9 @@ int magicnet_transaction_rebuild(struct block_transaction *transaction)
     {
     case MAGICNET_TRANSACTION_TYPE_COIN_SEND:
         res = magicnet_transaction_packet_coin_send_rebuild(transaction);
+        break;
+    case MAGICNET_TRANSACTION_TYPE_INITIATE_CERTIFICATE_TRANSFER:
+        res = magicnet_transaction_rebuild_certificate_transfer(transaction);
         break;
     }
 

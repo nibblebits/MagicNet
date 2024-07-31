@@ -41,7 +41,6 @@ int transfer_certificate(struct magicnet_program *program, int argc, char **argv
     struct key new_owner_key = MAGICNET_key_from_string(new_owner_key_data);
 
     int res = magicnet_certificate_transfer_initiate(program, COUNCIL_CERTIFICATE_TRANSFER_FLAG_TRANSFER_WITHOUT_VOTE, certificate_hash, &new_owner_key);
-
     if (res < 0)
     {
         printf("Failed to create the certificate transfer initiate request\n");

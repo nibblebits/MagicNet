@@ -28,7 +28,8 @@ struct loaded_council_vector
 
 void magicnet_council_certificate_free(struct magicnet_council_certificate *certificate);
 void magicnet_council_certificate_free_data(struct magicnet_council_certificate *certificate);
-int magicnet_council_stream_write_certificate_transfer(struct buffer* buffer_out, struct council_certificate_transfer* transfer);
+int magicnet_council_stream_write_certificate_transfer(struct buffer *buffer_out, struct council_certificate_transfer *transfer);
+struct magicnet_council_certificate* magicnet_council_certificate_create();
 
 int magicnet_council_certificate_verify_signed_data(struct magicnet_council_certificate *certificate, struct signature *signature, const char *hash)
 {
@@ -94,7 +95,7 @@ int magicnet_council_vector_add(struct magicnet_council *council)
 
     return res;
 }
-int magicnet_council_stream_write_certificate_vote_signed_data(struct buffer* buffer_out, struct council_certificate_transfer_vote_signed_data* signed_data)
+int magicnet_council_stream_write_certificate_vote_signed_data(struct buffer *buffer_out, struct council_certificate_transfer_vote_signed_data *signed_data)
 {
     int res = 0;
 
@@ -133,7 +134,7 @@ int magicnet_council_stream_write_certificate_vote_signed_data(struct buffer* bu
     return res;
 }
 
-int magicnet_council_stream_write_certificate_vote(struct buffer* buffer_out, struct council_certificate_transfer_vote* vote)
+int magicnet_council_stream_write_certificate_vote(struct buffer *buffer_out, struct council_certificate_transfer_vote *vote)
 {
     int res = 0;
 
@@ -156,8 +157,7 @@ int magicnet_council_stream_write_certificate_vote(struct buffer* buffer_out, st
     return res;
 }
 
-
-int magicnet_council_stream_write_certificate_signed_data(struct buffer* buffer_out, struct council_certificate_signed_data* signed_data)
+int magicnet_council_stream_write_certificate_signed_data(struct buffer *buffer_out, struct council_certificate_signed_data *signed_data)
 {
     int res = 0;
 
@@ -193,7 +193,7 @@ int magicnet_council_stream_write_certificate_signed_data(struct buffer* buffer_
 
     return res;
 }
-int magicnet_council_stream_write_certificate_transfer(struct buffer* buffer_out, struct council_certificate_transfer* transfer)
+int magicnet_council_stream_write_certificate_transfer(struct buffer *buffer_out, struct council_certificate_transfer *transfer)
 {
     int res = 0;
 
@@ -232,8 +232,7 @@ int magicnet_council_stream_write_certificate_transfer(struct buffer* buffer_out
     return res;
 }
 
-
-int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct magicnet_council_certificate* certificate)
+int magicnet_council_stream_write_certificate(struct buffer *buffer_out, struct magicnet_council_certificate *certificate)
 {
     int res = 0;
 
@@ -260,7 +259,7 @@ int magicnet_council_stream_write_certificate(struct buffer* buffer_out, struct 
     return res;
 }
 
-int magicnet_council_stream_read_certificate_vote_signed_data(struct buffer* buffer_in, struct council_certificate_transfer_vote_signed_data* signed_data)
+int magicnet_council_stream_read_certificate_vote_signed_data(struct buffer *buffer_in, struct council_certificate_transfer_vote_signed_data *signed_data)
 {
     int res = 0;
 
@@ -299,7 +298,7 @@ int magicnet_council_stream_read_certificate_vote_signed_data(struct buffer* buf
     return res;
 }
 
-int magicnet_council_stream_read_certificate_vote(struct buffer* buffer_in, struct council_certificate_transfer_vote* vote)
+int magicnet_council_stream_read_certificate_vote(struct buffer *buffer_in, struct council_certificate_transfer_vote *vote)
 {
     int res = 0;
 
@@ -322,7 +321,7 @@ int magicnet_council_stream_read_certificate_vote(struct buffer* buffer_in, stru
     return res;
 }
 
-int magicnet_council_stream_read_certificate_transfer(struct buffer* buffer_in, struct council_certificate_transfer* transfer)
+int magicnet_council_stream_read_certificate_transfer(struct buffer *buffer_in, struct council_certificate_transfer *transfer)
 {
     int res = 0;
 
@@ -335,7 +334,7 @@ int magicnet_council_stream_read_certificate_transfer(struct buffer* buffer_in, 
     // If we have certificate, read it
     if (has_certificate)
     {
-        transfer->certificate = (struct magicnet_council_certificate*)malloc(sizeof(struct magicnet_council_certificate));
+        transfer->certificate = (struct magicnet_council_certificate *)malloc(sizeof(struct magicnet_council_certificate));
         if (!transfer->certificate)
             return -1; // Allocation failed
 
@@ -359,7 +358,7 @@ int magicnet_council_stream_read_certificate_transfer(struct buffer* buffer_in, 
         return res;
 
     // Allocate memory for voters
-    transfer->voters = (struct council_certificate_transfer_vote*)malloc(transfer->total_voters * sizeof(struct council_certificate_transfer_vote));
+    transfer->voters = (struct council_certificate_transfer_vote *)malloc(transfer->total_voters * sizeof(struct council_certificate_transfer_vote));
     if (!transfer->voters)
         return -1; // Allocation failed
 
@@ -374,7 +373,7 @@ int magicnet_council_stream_read_certificate_transfer(struct buffer* buffer_in, 
     return res;
 }
 
-int magicnet_council_stream_read_certificate_signed_data(struct buffer* buffer_in, struct council_certificate_signed_data* signed_data)
+int magicnet_council_stream_read_certificate_signed_data(struct buffer *buffer_in, struct council_certificate_signed_data *signed_data)
 {
     int res = 0;
 
@@ -411,11 +410,9 @@ int magicnet_council_stream_read_certificate_signed_data(struct buffer* buffer_i
     return res;
 }
 
-
-int magicnet_council_stream_read_certificate(struct buffer* buffer_in, struct magicnet_council_certificate* certificate)
+int magicnet_council_stream_read_certificate(struct buffer *buffer_in, struct magicnet_council_certificate *certificate)
 {
     int res = 0;
-
 
     // Read the hash of the council certificate
     res = buffer_read_bytes(buffer_in, certificate->hash, sizeof(certificate->hash));
@@ -440,6 +437,15 @@ int magicnet_council_stream_read_certificate(struct buffer* buffer_in, struct ma
 out:
 
     return res;
+}
+
+int magicnet_council_stream_alloc_and_read_certificate(struct buffer *buffer_in, struct magicnet_council_certificate **certificate)
+{
+    *certificate = magicnet_council_certificate_create();
+    if (!*certificate)
+        return -1; // Allocation failed
+    
+    return magicnet_council_stream_read_certificate(buffer_in, *certificate);
 }
 
 int magicnet_council_load(const char *council_id_hash, struct magicnet_council **council_out)
@@ -677,10 +683,9 @@ out:
     return res;
 }
 
-
 /**
  * Gets a council certificate and writes it into the output
-*/
+ */
 int magicnet_council_reqres_handler(struct request_and_respond_input_data *input_data, struct request_and_respond_output_data **output_data_out)
 {
     int res = 0;
@@ -811,7 +816,7 @@ out:
 int magicnet_council_certificate_save(struct magicnet_council_certificate *certificate)
 {
     int res = 0;
-    res = magicnet_council_certificate_verify(certificate);
+    res = magicnet_council_certificate_verify(certificate, 0);
     if (res < 0)
     {
         magicnet_log("%s council certificate verification failed for hash %s, certificate is invalid\n", __FUNCTION__, certificate->hash);
@@ -851,10 +856,6 @@ struct magicnet_council_certificate *magicnet_council_certificate_create_many(si
     return calloc(total, sizeof(struct magicnet_council_certificate));
 }
 
-struct magicnet_council_certificate *magicnet_council_certificate_create()
-{
-    return magicnet_council_certificate_create_many(1);
-}
 
 void magincet_council_certificate_vote_free_data(struct council_certificate_transfer_vote *certificate_vote)
 {
@@ -921,7 +922,7 @@ bool magicnet_council_certificate_exists(const char *certificate_hash)
 
 struct magicnet_council_certificate *magicnet_council_certificate_load(const char *certificate_hash)
 {
-    struct magicnet_council_certificate *certificate = calloc(1, sizeof(struct magicnet_council_certificate));
+    struct magicnet_council_certificate *certificate = magicnet_council_certificate_create();
     if (!certificate)
     {
         return NULL;
@@ -1037,7 +1038,7 @@ int magicnet_council_certificate_transfer_vote_verify(struct magicnet_council_ce
     }
 
     // Verify the voting certificate
-    res = magicnet_council_certificate_verify(vote->voter_certificate);
+    res = magicnet_council_certificate_verify(vote->voter_certificate, 0);
     if (res < 0)
     {
         magicnet_log("%s council certificate transfer vote verification failed for hash %s, voting certificate is invalid\n", __FUNCTION__, hash);
@@ -1124,7 +1125,7 @@ int magicnet_council_certificate_transfer_verify(struct magicnet_council_certifi
     // Verify the previous certificate is valid
     if (transfer->certificate)
     {
-        res = magicnet_council_certificate_verify(transfer->certificate);
+        res = magicnet_council_certificate_verify(transfer->certificate, 0);
         if (res < 0)
         {
             magicnet_log("%s council certificate transfer verification failed for hash %s, certificate is invalid\n", __FUNCTION__, transfer->certificate->hash);
@@ -1169,6 +1170,13 @@ int magicnet_council_certificate_transfer_verify(struct magicnet_council_certifi
             magicnet_log("%s council certificate transfer verification failed for hash %s, vote is invalid\n", __FUNCTION__, transfer->certificate->hash);
             goto out;
         }
+    }
+
+    if (total_found_for_votes != transfer->total_voters || total_found_for_votes < total_found_against_votes)
+    {
+        magicnet_log("%s The owner of this certificate appears to be a fraud. cert_hash=%s\n", __FUNCTION__, transfer->certificate->hash);
+        res = -1;
+        goto out;
     }
 out:
 
@@ -1227,7 +1235,7 @@ int magicnet_council_certificate_verify_for_council(struct magicnet_council *cou
         return -1;
     }
 
-    return magicnet_council_certificate_verify(certificate);
+    return magicnet_council_certificate_verify(certificate, 0);
 }
 
 int magicnet_central_council_certificate_verify(struct magicnet_council_certificate *certificate)
@@ -1235,7 +1243,7 @@ int magicnet_central_council_certificate_verify(struct magicnet_council_certific
     return magicnet_council_certificate_verify_for_council(central_council, certificate);
 }
 
-int magicnet_council_certificate_verify(struct magicnet_council_certificate *certificate)
+int magicnet_council_certificate_verify(struct magicnet_council_certificate *certificate, int flags)
 {
     int res = 0;
     if (certificate->memory_flags & MAGICNET_COUNCIL_CERTIFICATE_MEMORY_FLAG_VERIFIED)
@@ -1279,10 +1287,15 @@ int magicnet_council_certificate_verify(struct magicnet_council_certificate *cer
         goto out;
     }
 
-    res = magicnet_council_certificate_verify_signature(certificate);
-    if (res < 0)
+    // If the ignore signature verification flag isnt set then we must
+    // verify the signature.
+    if (!(flags & MAGICNET_COUNCIL_CERTIFICATE_VERIFY_FLAG_IGNORE_FINAL_SIGNATURE))
     {
-        goto out;
+        res = magicnet_council_certificate_verify_signature(certificate);
+        if (res < 0)
+        {
+            goto out;
+        }
     }
 
     certificate->memory_flags |= MAGICNET_COUNCIL_CERTIFICATE_MEMORY_FLAG_VERIFIED;
@@ -1296,7 +1309,7 @@ int magicnet_council_certificates_verify(struct magicnet_council *council)
     int res = 0;
     for (int i = 0; i < council->signed_data.id_signed_data.total_certificates; i++)
     {
-        res = magicnet_council_certificate_verify(&council->signed_data.certificates[i]);
+        res = magicnet_council_certificate_verify(&council->signed_data.certificates[i], 0);
         if (res < 0)
         {
             goto out;
@@ -1382,9 +1395,15 @@ void magicnet_council_certificate_clone_signed_data(struct magicnet_council_cert
     magicnet_council_certificate_transfer_votes_clone(certificate_in, certificate_out);
 }
 
+struct magicnet_council_certificate* magicnet_council_certificate_create()
+{
+    return magicnet_council_certificate_create_many(1);
+}
+
 struct magicnet_council_certificate *magicnet_council_certificate_clone(struct magicnet_council_certificate *certificate)
 {
-    struct magicnet_council_certificate *certificate_out = calloc(1, sizeof(struct magicnet_council_certificate));
+    struct magicnet_council_certificate *certificate_out = magicnet_council_certificate_create();
+
     if (!certificate_out)
     {
         goto out;
@@ -1492,7 +1511,7 @@ int magicnet_council_certificate_self_transfer_claim(struct magicnet_council_cer
     }
 
     // Lets verify everything went okay
-    res = magicnet_council_certificate_verify(certificate_to_claim);
+    res = magicnet_council_certificate_verify(certificate_to_claim, 0);
     if (res < 0)
     {
         goto out;

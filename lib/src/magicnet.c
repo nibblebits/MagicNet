@@ -1,6 +1,7 @@
 #include "magicnet/magicnet.h"
 #include "magicnet/config.h"
 #include "magicnet/vector.h"
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -355,6 +356,40 @@ int magicnet_read_transaction_council_certificate_initiate_transfer_data(struct 
         goto out;
     }
 
+    if (council_certificate_transfer->flags & COUNCIL_CERTIFICATE_TRANSFER_FLAG_INCLUDES_CURRENT_CERTIFICATE)
+    {
+        // Read the current certificate
+        res = magicnet_council_stream_alloc_and_read_certificate(buffer, &council_certificate_transfer->current_certificate);
+        if (res < 0)
+        {
+            magicnet_log("Failed to read the current certificate\n");
+            goto out;
+        }
+
+        // If we are self transfering also read the new self signed certificate
+        if (council_certificate_transfer->flags & COUNCIL_CERTIFICATE_TRANSFER_FLAG_TRANSFER_WITHOUT_VOTE)
+        {
+
+            res = magicnet_council_stream_alloc_and_read_certificate(buffer, &council_certificate_transfer->new_unsigned_certificate);
+            if (res < 0)
+            {
+                magicnet_log("Failed to read the new unsigned certificate\n");
+                goto out;
+            }
+
+            // We should validate the certificate transfer, we cant validate the
+            // certificate yet as its not sigend
+            res = magicnet_council_certificate_verify(council_certificate_transfer->new_unsigned_certificate, MAGICNET_COUNCIL_CERTIFICATE_VERIFY_FLAG_IGNORE_FINAL_SIGNATURE);
+            if (res < 0)
+            {
+                magicnet_log("Failed to verify the new unsigned certificate\n");
+                goto out;
+            }
+        }
+
+  
+    }
+
 out:
     return res;
 }
@@ -362,7 +397,7 @@ out:
 int magicnet_council_request_certificate(struct magicnet_program *program, const char *council_certificate_hash, struct magicnet_council_certificate **certificate_out)
 {
     int res = 0;
-    struct request_and_respond_input_data *input_data = magicnet_reqres_input_data_create((void*)council_certificate_hash, strlen(council_certificate_hash));
+    struct request_and_respond_input_data *input_data = magicnet_reqres_input_data_create((void *)council_certificate_hash, strlen(council_certificate_hash));
     struct request_and_respond_output_data *output_data = NULL;
     struct magicnet_council_certificate *certificate = NULL;
     struct buffer *buffer = NULL;
@@ -386,7 +421,6 @@ int magicnet_council_request_certificate(struct magicnet_program *program, const
     {
         goto out;
     }
-    
 
     *certificate_out = certificate;
 
@@ -432,6 +466,17 @@ void magicnet_write_transaction_council_certificate_initiate_transfer_data_to_bu
     buffer_write_int(buffer, council_certificate_transfer->flags);
     buffer_write_bytes(buffer, council_certificate_transfer->certificate_to_transfer_hash, sizeof(council_certificate_transfer->certificate_to_transfer_hash));
     buffer_write_bytes(buffer, &council_certificate_transfer->new_owner_key, sizeof(council_certificate_transfer->new_owner_key));
+
+    // If we have the certificate we should write it
+    if (council_certificate_transfer->flags & COUNCIL_CERTIFICATE_TRANSFER_FLAG_INCLUDES_CURRENT_CERTIFICATE)
+    {
+        magicnet_council_stream_write_certificate(buffer, council_certificate_transfer->current_certificate);
+    }
+
+    if (council_certificate_transfer->flags & COUNCIL_CERTIFICATE_TRANSFER_FLAG_INCLUDES_NEW_CERTIFICATE)
+    {
+        magicnet_council_stream_write_certificate(buffer, council_certificate_transfer->new_unsigned_certificate);
+    }
 }
 
 void magicnet_write_transaction_council_certificate_claim_request_data_to_buffer(struct buffer *buffer, struct block_transaction_council_certificate_claim_request *claim_req)

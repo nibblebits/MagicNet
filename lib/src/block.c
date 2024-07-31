@@ -323,6 +323,38 @@ int block_transaction_initiate_certificate_transfer_valid(struct block_transacti
         }
     }
 
+    // We expect there to be certificates sent
+    if (!initiate_transfer_req.current_certificate) {
+        magicnet_log("%s the current certificate is not provided\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    if  (!initiate_transfer_req.new_unsigned_certificate) {
+        magicnet_log("%s the new certificate is not provided\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+
+    // Verify the current certificate
+    if (magicnet_council_certificate_verify(initiate_transfer_req.current_certificate, 0) < 0)
+    {
+        magicnet_log("%s the current certificate is invalid\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    // Verify the unsigned certificate but not the final signature as its not signed yet
+    if (magicnet_council_certificate_verify(initiate_transfer_req.new_unsigned_certificate, MAGICNET_COUNCIL_CERTIFICATE_VERIFY_FLAG_IGNORE_FINAL_SIGNATURE) < 0)
+    {
+        magicnet_log("%s the new certificate is invalid\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
+    
+
 out:
     if (certificate)
     {
