@@ -4,6 +4,7 @@
 #include "magicnet/init.h"
 #include "magicnet/log.h"
 #include "magicnet/signaling.h"
+#include "magicnet/nthread.h"
 #include <memory.h>
 #include <time.h>
 #include <stdio.h>
@@ -76,13 +77,39 @@ void *sig_int_listener_thread(void *ptr)
         sleep(1);
     }
 }
+int test_poll(struct magicnet_nthread_action* action)
+{
+    int res = 0;
 
+    printf("Poll test\n");
+
+    return res;
+}
+
+void test_free(struct magicnet_nthread_action* action, void* private_data)
+{
+    printf("Action was freed\n");
+}
 int main(int argc, char **argv)
 {
     int res = 0;
     printf("Starting MagicNet server\n");
 
+
     magicnet_init(0);
+
+    // let's jsut test the thread functionality stuff..
+    // Two threads to test..
+    magicnet_threads_init(2);
+
+    // lets try and make an action to see if all works
+    struct magicnet_nthread_action* action
+        =  magicnet_threads_action_new(test_poll, NULL, test_free);
+
+    magicnet_threads_push_action(action);
+
+    while(1) {}
+    return 0;
     
     sigset_t set;
     sigemptyset(&set);

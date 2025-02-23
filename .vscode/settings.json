@@ -32,7 +32,8 @@
         "memory": "c",
         "system_error": "c",
         "variant": "c",
-        "database.h": "c"
+        "database.h": "c",
+        "vector.h": "c"
     },
     "cmake.sourceDirectory": "${workspaceFolder}/qt-chain-admin/ChainAdmin"
 }
