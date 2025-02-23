@@ -9,7 +9,7 @@ extern "C" {
 MagicNetClientThread::MagicNetClientThread(QObject *parent)
     : QObject{parent}
 {
-    magicnet_init(0);
+    magicnet_init(0, 0);
 
 }
 

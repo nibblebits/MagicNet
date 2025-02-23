@@ -1,5 +1,6 @@
 #include "nthread.h"
 #include "vector.h"
+#include "magicnet/nthread.h"
 #include <stdio.h>
 #include <stdlib.h>
 struct magicnet_nthread *nthread = NULL;

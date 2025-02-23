@@ -98,7 +98,7 @@ int main(int argc, char **argv)
         return -1;
     }
 
-    magicnet_init(0);
+    magicnet_init(0, 0);
 
     struct magicnet_program *decentralized_program = magicnet_program("council-certificate-app");
     if (!decentralized_program)

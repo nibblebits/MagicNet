@@ -1,6 +1,7 @@
 #include "magicnet/magicnet.h"
 #include "magicnet/config.h"
 #include "magicnet/vector.h"
+#include "magicnet/nthread.h"
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,12 +23,19 @@ struct magicnet_transactions *magicnet_transactions_new(struct vector *block_tra
 
 int mn_set_flags;
 
-int magicnet_init(int flags)
+int magicnet_init(int flags, int t_threads)
 {
     structure_vec = vector_create(sizeof(struct magicnet_registered_structure));
     program_vec = vector_create(sizeof(struct magicnet_program));
     srand(time(NULL));
     mn_set_flags = flags;
+
+    if (t_threads > 0)
+    {
+        // Let's get those threads going.
+        magicnet_threads_init(t_threads);
+    }
+
     return 0;
 }
 

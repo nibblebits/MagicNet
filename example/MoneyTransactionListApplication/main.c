@@ -16,7 +16,7 @@ int main(int argc, char** argv)
         return -1;
     }
 
-    magicnet_init(MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING | MAGICNET_INIT_FLAG_NO_STDOUT_GENERAL_LOGGING);
+    magicnet_init(MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING | MAGICNET_INIT_FLAG_NO_STDOUT_GENERAL_LOGGING, 0);
     struct magicnet_program *decentralized_program = magicnet_program("money-app");
     if (!decentralized_program)
     {
