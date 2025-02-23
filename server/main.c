@@ -4,7 +4,6 @@
 #include "magicnet/init.h"
 #include "magicnet/log.h"
 #include "magicnet/signaling.h"
-#include "magicnet/nthread.h"
 #include <memory.h>
 #include <time.h>
 #include <stdio.h>
@@ -96,20 +95,12 @@ int main(int argc, char **argv)
     printf("Starting MagicNet server\n");
 
 
-    magicnet_init(0);
+    // We wil use two threads
+    // but compute the cpu count next time
+    // divide by half and thats what
+    // we will use...
+    magicnet_init(0, 2);
 
-    // let's jsut test the thread functionality stuff..
-    // Two threads to test..
-    magicnet_threads_init(2);
-
-    // lets try and make an action to see if all works
-    struct magicnet_nthread_action* action
-        =  magicnet_threads_action_new(test_poll, NULL, test_free);
-
-    magicnet_threads_push_action(action);
-
-    while(1) {}
-    return 0;
     
     sigset_t set;
     sigemptyset(&set);
