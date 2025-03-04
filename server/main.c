@@ -175,8 +175,8 @@ int main(int argc, char **argv)
         struct magicnet_client *client = magicnet_accept(server);
         if (client)
         {
-            // Start the client thread.
-            magicnet_client_thread_start(client);
+            magicnet_client_push(client);
+           
         }
 
         usleep(1000);

@@ -70,6 +70,9 @@ int buffer_write_double(struct buffer *buffer, double value);
 int buffer_write_float(struct buffer *buffer, float value);
 void buffer_free(struct buffer* buffer);
 
+void buffer_shift_right_at_position(struct buffer* buffer, int index, int amount);
+int buffer_insert(struct buffer* buffer, int index, void* data, size_t len);
+
 /**
  * @brief Set the private data for the buffer, this can be used to store data related to the person who created the buffer
  * 

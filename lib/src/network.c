@@ -28,6 +28,7 @@
 #include "magicnet/database.h"
 #include "magicnet/config.h"
 #include "magicnet/magicnet.h"
+#include "magicnet/nthread.h"
 #include "magicnet/log.h"
 #include "key.h"
 #include "misc.h"
@@ -45,6 +46,8 @@ void magicnet_server_update_our_transaction_states(struct magicnet_server *serve
 int magicnet_server_push_event(struct magicnet_server *server, struct magicnet_event *event);
 int magicnet_client_write_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate, struct buffer *write_buf);
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf);
+int magicnet_client_unread_bytes_count(struct magicnet_client *client);
+int magicnet_client_insert_bytes(struct magicnet_client *client, void *ptr_in, size_t amount, size_t offset_index);
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
@@ -147,10 +150,21 @@ int magicnet_packet_resign_on_send(struct magicnet_packet *packet)
 
 struct magicnet_client *magicnet_client_new()
 {
-    return calloc(1, sizeof(struct magicnet_client));
+    struct magicnet_client *client = calloc(1, sizeof(struct magicnet_client));
+    if (!client)
+    {
+        return NULL;
+    }
+
+    client->unflushed_data = buffer_create();
 }
 void magicnet_client_free(struct magicnet_client *client)
 {
+    if (client->unflushed_data)
+    {
+        buffer_free(client->unflushed_data);
+        client->unflushed_data = NULL;
+    }
     free(client);
 }
 
@@ -914,8 +928,8 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         return NULL;
     }
 
-    // Set back to blocking mode as necessary
-    fcntl(sockfd, F_SETFL, flags);
+    // We wont restore the flag to blocking mode as each client is no longer
+    // on a seperate thread.
 
     // Proceed with initialization if connection succeeded
     magicnet_server_lock(server);
@@ -976,6 +990,24 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     }
 
     magicnet_log("Received connection from %s:%d\n", inet_ntoa(client.sin_addr), ntohs(client.sin_port));
+
+    int flags = fcntl(connfd, F_GETFL, 0);
+    if (flags == -1)
+    {
+        magicnet_log("%s issue getting flags of socket\n", __FUNCTION__);
+        fclose(connfd);
+        return NULL;
+    }
+
+#warning "TOO MUCH REPETITION MAKE A CLEANUP LABEL FURTHER DOWN AND MOVE THE LOGIC TODO"
+
+    // Let's make sure it remains non-blocking
+    if (fcntl(connfd, F_SETFL, flags | O_NONBLOCK) == -1)
+    {
+        magicnet_log("%s issue setting sockedt to non-blocking\n", __FUNCTION__);
+        fclose(connfd);
+        return NULL;
+    }
 
     struct timeval timeout;
     timeout.tv_sec = MAGICNET_CLIENT_TIMEOUT_SECONDS;
@@ -1073,6 +1105,20 @@ void magicnet_client_readjust_download_speed(struct magicnet_client *client)
     }
 }
 
+/**
+ * Total amount of bytes on the network buffer waiting to be read
+ *
+ */
+int magicnet_client_unread_bytes_count(struct magicnet_client *client)
+{
+    int bytes_available = 0;
+    if (ioctl(client->sock, FIONREAD, &bytes_available) == -1)
+    {
+        return -1;
+    }
+
+    return bytes_available;
+}
 int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
@@ -1130,32 +1176,62 @@ void magicnet_client_readjust_upload_speed(struct magicnet_client *client)
         client->send_delay = 0;
     }
 }
+
+
+// Okay thqanks for watching ill stream again soon goodnight
+
+int magicnet_client_flush(struct magicnet_client *client)
+{
+    int res = 0;
+
+    struct buffer *unflushed_data_buf = client->unflushed_data;
+    size_t total_bytes = buffer_count(unflushed_data_buf);
+
+    void *ptr_in = buffer_data(unflushed_data_buf);
+    size_t amount_written = 0;
+    while (amount_written < total_bytes)
+    {
+        // Flush directly to the socket
+        res = write(client->sock, ptr_in + amount_written, total_bytes - amount_written);
+        if (res <= 0)
+        {
+            res = -1;
+            goto out;
+        }
+
+        amount_written += res;
+        client->total_bytes_sent += res;
+    }
+
+out:
+    return res;
+}
+
+size_t magicnet_client_unflushed_bytes(struct magicnet_client* client)
+{
+    return buffer_count(client->unflushed_data);
+}
+
+int magicnet_client_insert_bytes(struct magicnet_client *client, void *ptr_in, size_t amount, size_t offset_index)
+{
+    int res = 0;
+    res = buffer_insert(client->unflushed_data, offset_index, ptr_in, amount);
+    return res;
+}
+
 int magicnet_write_bytes(struct magicnet_client *client, void *ptr_in, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
     size_t amount_written = 0;
-    while (amount_written < amount)
+
+    // New design no longer flushes directly to the socket
+    // now we store it in memory incase we need to count it later on ;)
+    buffer_write_bytes(client->unflushed_data, ptr_in, amount);
+    // Sometimes we are to store the result in a buffer for debugging and validation purposes..
+    if (store_in_buffer)
     {
-        res = write(client->sock, ptr_in + amount_written, amount - amount_written);
-        if (res <= 0)
-        {
-            res = -1;
-            break;
-        }
-
-        // Sometimes we are to store the result in a buffer for debugging and validation purposes..
-        if (store_in_buffer)
-        {
-            buffer_write_bytes(store_in_buffer, ptr_in + amount_written, amount - amount_written);
-        }
-
-        magicnet_client_readjust_upload_speed(client);
-
-        amount_written += res;
-        client->total_bytes_sent += res;
-        usleep(client->send_delay);
+        buffer_write_bytes(store_in_buffer, ptr_in, amount);
     }
-
     return res;
 }
 
@@ -1190,6 +1266,7 @@ int magicnet_network_write_bytes_buffer_handler(struct buffer *buffer, void *dat
 
 int magicnet_write_int(struct magicnet_client *client, int value, struct buffer *store_in_buffer)
 {
+
     // Preform bit manipulation for big-endianness todo later...
     if (magicnet_write_bytes(client, &value, sizeof(value), store_in_buffer) < 0)
     {
@@ -1651,6 +1728,7 @@ int magicnet_client_read_block(struct magicnet_client *client, struct block **bl
         goto out;
     }
 
+    // Council certificates seem okay for the new implementation.. no io issue..
     block->certificate = magicnet_council_certificate_create();
     res = magicnet_client_read_council_certificate(client, block->certificate, write_buf);
     if (res < 0)
@@ -2280,8 +2358,9 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     int packet_type = 0;
     int packet_flags = 0;
 
-    packet_out->not_sent.tmp_buf = buffer_create();
+#warning "WE NEED A WAY TO KNOW THE AMOUNT OF BYTES SENT BEFORE WE SENT THEM"
 
+    packet_out->not_sent.tmp_buf = buffer_create();
     packet_id = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_id < 0)
     {
@@ -2296,20 +2375,21 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         magicnet_server_unlock(client->server);
         if (seen_packet)
         {
-            magicnet_signed_data(packet_out)->id = packet_id;
-            magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
-            //  magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
-            res = magicnet_write_int(client, MAGICNET_ERROR_RECEIVED_PACKET_BEFORE, packet_out->not_sent.tmp_buf);
-            goto out;
+            // magicnet_signed_data(packet_out)->id = packet_id;
+            // magicnet_signed_data(packet_out)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
+            // //  magicnet_log("%s we received a packet that we already saw so we aren't going to read it further. ID=%i", __FUNCTION__, packet_id);
+            // res = magicnet_write_int(client, MAGICNET_ERROR_RECEIVED_PACKET_BEFORE, packet_out->not_sent.tmp_buf);
+            // goto out;
         }
     }
 
+#warning "DIRECT WRITE AFTER READ IS NOT ALLOWED ANYMORE, WE NEED A STATE SYSTEM OF SOME KIND"
     // Since we are okay to proceed with reading the packet we should make that clear.
-    res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY, packet_out->not_sent.tmp_buf);
-    if (res < 0)
-    {
-        goto out;
-    }
+    // res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY, packet_out->not_sent.tmp_buf);
+    // if (res < 0)
+    // {
+    //     goto out;
+    // }
 
     packet_type = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_type < 0)
@@ -2343,143 +2423,145 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         }
     }
 
-    switch (packet_type)
-    {
+#warning "disabled all the packets we will re-enable them individually and test each one"
 
-    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
-        res = magicnet_client_read_packet_empty(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s read empty packet failed\n", __FUNCTION__);
-        }
-        break;
-    case MAGICNET_PACKET_TYPE_USER_DEFINED:
-        res = magicnet_client_read_user_defined_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s user defined packet failed\n", __FUNCTION__);
-        }
-        break;
+    // switch (packet_type)
+    // {
 
-    case MAGICNET_PACKET_TYPE_EVENTS_POLL:
-        res = magicnet_client_read_events_poll_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s event poll packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+    //     res = magicnet_client_read_packet_empty(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s read empty packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
+    // case MAGICNET_PACKET_TYPE_USER_DEFINED:
+    //     res = magicnet_client_read_user_defined_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s user defined packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND:
-        res = magicnet_client_read_request_and_respond_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s request and respond packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_EVENTS_POLL:
+    //     res = magicnet_client_read_events_poll_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s event poll packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
-        res = magicnet_client_read_request_and_respond_response_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s request and respond response packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND:
+    //     res = magicnet_client_read_request_and_respond_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s request and respond packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_EVENTS_RES:
-        res = magicnet_client_read_events_res_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s events res packet failed\n", __FUNCTION__);
-        }
-        break;
-    case MAGICNET_PACKET_TYPE_POLL_PACKETS:
-        res = magicnet_client_read_poll_packets_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s poll packets failed", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
+    //     res = magicnet_client_read_request_and_respond_response_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s request and respond response packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-        res = magicnet_client_read_server_sync_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s sync packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_EVENTS_RES:
+    //     res = magicnet_client_read_events_res_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s events res packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
+    // case MAGICNET_PACKET_TYPE_POLL_PACKETS:
+    //     res = magicnet_client_read_poll_packets_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s poll packets failed", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
-        res = magicnet_client_read_verifier_signup_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s read signup packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+    //     res = magicnet_client_read_server_sync_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s sync packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
-        res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s read verifier packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+    //     res = magicnet_client_read_verifier_signup_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s read signup packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
-        res = magicnet_client_read_tansaction_send_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s read transaction send packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+    //     res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s read verifier packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
-        res = magicnet_client_read_request_block_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s failed to read block request packet\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+    //     res = magicnet_client_read_tansaction_send_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s read transaction send packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
-        res = magicnet_client_read_request_block_response_packet(client, packet_out);
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
+    //     res = magicnet_client_read_request_block_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s failed to read block request packet\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_BLOCK_SEND:
-        res = magicnet_client_read_block_send_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s read block send packet failed\n", __FUNCTION__);
-        }
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
+    //     res = magicnet_client_read_request_block_response_packet(client, packet_out);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
-        res = magicnet_client_read_make_new_connection_packet(client, packet_out);
-        break;
+    // case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+    //     res = magicnet_client_read_block_send_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s read block send packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
-        res = magicnet_client_read_block_super_download_request_packet(client, packet_out);
-        break;
+    // case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
+    //     res = magicnet_client_read_make_new_connection_packet(client, packet_out);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
-        res = magicnet_client_read_transaction_list_request_packet(client, packet_out);
-        break;
+    // case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
+    //     res = magicnet_client_read_block_super_download_request_packet(client, packet_out);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
-        res = magicnet_client_read_transaction_list_response_packet(client, packet_out);
-        break;
+    // case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
+    //     res = magicnet_client_read_transaction_list_request_packet(client, packet_out);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_NOT_FOUND:
-        res = magicnet_client_read_not_found_packet(client, packet_out);
-        if (res < 0)
-        {
-            magicnet_log("%s read not found packet failed\n", __FUNCTION__);
-        }
-        break;
-    default:
-        magicnet_log("%s unexpected packet was provided %i\n", __FUNCTION__, packet_type);
-        res = -1;
-        break;
-    }
+    // case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
+    //     res = magicnet_client_read_transaction_list_response_packet(client, packet_out);
+    //     break;
+
+    // case MAGICNET_PACKET_TYPE_NOT_FOUND:
+    //     res = magicnet_client_read_not_found_packet(client, packet_out);
+    //     if (res < 0)
+    //     {
+    //         magicnet_log("%s read not found packet failed\n", __FUNCTION__);
+    //     }
+    //     break;
+    // default:
+    //     magicnet_log("%s unexpected packet was provided %i\n", __FUNCTION__, packet_type);
+    //     res = -1;
+    //     break;
+    // }
 
     // Has the packet failed to be read?
     if (res < 0)
@@ -3268,18 +3350,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 {
     int res = 0;
     packet->not_sent.tmp_buf = buffer_create();
+
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
     if (res < 0)
     {
-        goto out;
-    }
-
-    // Lets see if the client wishes to proceed now they know the packet we want to send
-    res = magicnet_read_int(client, packet->not_sent.tmp_buf);
-    if (res < 0)
-    {
-        // Yeah we sent this packet already lets go but htis isnt an error.
-        res = 0;
         goto out;
     }
 
@@ -3311,83 +3385,86 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         }
     }
 
-    switch (magicnet_signed_data(packet)->type)
-    {
+#warning "all packets are disabled for this significant change"
+    // we will -renable them manually each one tested on its own
 
-    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
-        res = magicnet_client_write_packet_empty(client, packet);
+    // switch (magicnet_signed_data(packet)->type)
+    // {
 
-        break;
-    case MAGICNET_PACKET_TYPE_POLL_PACKETS:
-        res = magicnet_client_write_packet_poll_packets(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+    //     res = magicnet_client_write_packet_empty(client, packet);
 
-    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND:
-        res = magicnet_client_write_packet_request_and_respond(client, packet);
-        break;
+    //     break;
+    // case MAGICNET_PACKET_TYPE_POLL_PACKETS:
+    //     res = magicnet_client_write_packet_poll_packets(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
-        res = magicnet_client_write_packet_request_and_respond_response(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND:
+    //     res = magicnet_client_write_packet_request_and_respond(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_EVENTS_POLL:
-        res = magicnet_client_write_packet_events_poll(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
+    //     res = magicnet_client_write_packet_request_and_respond_response(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_EVENTS_RES:
-        res = magicnet_client_write_packet_events_res(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_EVENTS_POLL:
+    //     res = magicnet_client_write_packet_events_poll(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_USER_DEFINED:
-        res = magicnet_client_write_packet_user_defined(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_EVENTS_RES:
+    //     res = magicnet_client_write_packet_events_res(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_NOT_FOUND:
-        res = magicnet_client_write_packet_not_found(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_USER_DEFINED:
+    //     res = magicnet_client_write_packet_user_defined(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
-        res = magicnet_client_write_packet_verifier_signup(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_NOT_FOUND:
+    //     res = magicnet_client_write_packet_not_found(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
-        res = magicnet_client_write_packet_vote_for_verifier(client, packet);
-        break;
-    case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-        res = magicnet_client_write_packet_server_poll(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+    //     res = magicnet_client_write_packet_verifier_signup(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
-        res = magicnet_client_write_packet_transaction_send(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+    //     res = magicnet_client_write_packet_vote_for_verifier(client, packet);
+    //     break;
+    // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+    //     res = magicnet_client_write_packet_server_poll(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
-        res = magicnet_client_write_packet_request_block(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+    //     res = magicnet_client_write_packet_transaction_send(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
-        res = magicnet_client_write_packet_request_block_response(client, packet);
-        break;
-    case MAGICNET_PACKET_TYPE_BLOCK_SEND:
-        res = magicnet_client_write_packet_block_send(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
+    //     res = magicnet_client_write_packet_request_block(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
-        res = magicnet_client_write_packet_make_new_connection(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
+    //     res = magicnet_client_write_packet_request_block_response(client, packet);
+    //     break;
+    // case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+    //     res = magicnet_client_write_packet_block_send(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
-        res = magicnet_client_write_packet_block_super_download_request(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
+    //     res = magicnet_client_write_packet_make_new_connection(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
-        res = magicnet_client_write_packet_transaction_list_request(client, packet);
-        break;
+    // case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
+    //     res = magicnet_client_write_packet_block_super_download_request(client, packet);
+    //     break;
 
-    case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
-        res = magicnet_client_write_packet_transaction_list_response(client, packet);
-        break;
-    }
+    // case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_REQUEST:
+    //     res = magicnet_client_write_packet_transaction_list_request(client, packet);
+    //     break;
+
+    // case MAGICNET_PACKET_TYPE_TRANSACTION_LIST_RESPONSE:
+    //     res = magicnet_client_write_packet_transaction_list_response(client, packet);
+    //     break;
+    // }
 
     // Okay we have a buffer of all the data we sent to the peer, lets get it and hash it so that
     // we can prove who signed this packet later on..
@@ -3456,6 +3533,28 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
         goto out;
     }
+
+    // We must write the size of the data of the packet
+    // so the receving peer knows how much to listen for.
+    // This will be checked on the peers end to ensure no manipulation is taking place
+    // i.e no buffer overflows, or excessive sending wont be allowed.
+
+    // lets insert it at the start of the buffer stream, this will be the size
+    // then we can flush and its on the way to the peer
+    int packet_size = (int)magicnet_client_unflushed_bytes(client);
+    // We insert directly at the first byte of the stream
+    // as the reading peer expects the first 4 bytes to be the total
+    // size of the packet that is to be sent
+    res = magicnet_client_insert_bytes(client, &packet_size, &packet_size, 0);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Finally flush it to the peer
+    magicnet_client_flush(client);
+
+    // data is on its way..
 
 out:
     if (res < 0)
@@ -4890,108 +4989,6 @@ out:
     buffer_free(send_buf);
     return res;
 }
-int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
-{
-    struct magicnet_server *server = client->server;
-    int res = 0;
-
-    int signature = magicnet_read_int(client, NULL);
-    if (signature != MAGICNET_ENTRY_SIGNATURE)
-    {
-        magicnet_log("%s somebody connected to us but doesnt understand our protocol.. Probably some accidental connection.. Dropping\n", __FUNCTION__);
-        goto out;
-    }
-
-    // Read the signal id
-    int signal_id = magicnet_read_int(client, NULL);
-    if (signal_id < 0)
-    {
-        // Show error message then goto out
-        magicnet_log("%s failed to read signal id\n", __FUNCTION__);
-        goto out;
-    }
-
-    int communication_flags = magicnet_read_int(client, NULL);
-    if (communication_flags < 0)
-    {
-        magicnet_log("%s failed to read  valid comminciation flags\n", __FUNCTION__);
-        goto out;
-    }
-
-    // We need to find out what they are listening too before we can accept them.
-    // What is the program they are subscribing too, lets read it.
-    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
-    res = magicnet_read_bytes(client, program_name, sizeof(program_name), NULL);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    memcpy(client->program_name, program_name, sizeof(client->program_name));
-    res = magicnet_write_int(client, MAGICNET_ENTRY_SIGNATURE, NULL);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
-    if (res < 0)
-    {
-        magicnet_log("%s failed to read my ip address from the client peer\n", __FUNCTION__);
-        goto out;
-    }
-
-    const char *client_ip = inet_ntoa(client->client_info.sin_addr);
-    char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
-    strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
-    // Lets tell the client what his IP is
-    res = magicnet_write_bytes(client, client_ip_buf, sizeof(client_ip_buf), NULL);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    int peer_info_state = -1;
-    res = magicnet_read_peer_info(client, &peer_info_state);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    if (peer_info_state == MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED)
-    {
-        res = magicnet_save_peer_info(&client->peer_info);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
-    res = magicnet_write_peer_info(client);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    res = magicnet_client_entry_protocol_read_known_clients(client);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    res = magicnet_client_entry_protocol_write_known_clients(client);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    client->communication_flags = communication_flags;
-    client->signal_id = signal_id;
-    client->flags |= MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED;
-    // Entry protocol read completed
-    magicnet_log("%s entry protocol read completed\n", __FUNCTION__);
-out:
-    return res;
-}
 
 int magicnet_server_get_all_connected_clients(struct magicnet_server *server, struct vector *vector_out)
 {
@@ -5078,6 +5075,91 @@ out:
     }
     return res;
 }
+
+bool magicnet_client_login_protocol_completed(struct magicnet_client *client)
+{
+    return (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL) && (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL);
+}
+
+int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
+{
+    int res = 0;
+    // Now lets see if we got the signature back
+    int signature = 0;
+    int signal_id = 0;
+    int communication_flags = 0;
+    signature = magicnet_read_int(client, NULL);
+    if (signature < 0)
+    {
+        res = -1;
+        goto out;
+    }
+
+    if (signature != MAGICNET_ENTRY_SIGNATURE)
+    {
+        // Bad signature
+        res = -1;
+        goto out;
+    }
+
+    // Is there a signal we need to invoke
+    signal_id = magicnet_read_int(client, NULL);
+    if (signal_id < 0)
+    {
+        res = signal_id;
+        goto out;
+    }
+
+    communication_flags = magicnet_read_int(client, NULL);
+    if (communication_flags < 0)
+    {
+        res = communication_flags;
+        goto out;
+    }
+
+    // We need to find out what they are listening too before we can accept them.
+    // What is the program they are subscribing too, lets read it.
+    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
+    res = magicnet_read_bytes(client, program_name, sizeof(program_name), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Lets read what the client says our ip address is.
+    res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    int peer_info_state = -1;
+    res = magicnet_read_peer_info(client, &peer_info_state);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    if (peer_info_state == MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED && client->server)
+    {
+        res = magicnet_save_peer_info(&client->peer_info);
+        if (res < 0)
+        {
+            goto out;
+        }
+    }
+
+    res = magicnet_client_entry_protocol_read_known_clients(client);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // The peer successfully authenticated themselves to us.
+    client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL;
+out:
+    return res;
+}
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id)
 {
     int res = 0;
@@ -5108,34 +5190,11 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
         goto out;
     }
 
-    // Now lets see if we got the signature back
-    int sig = 0;
-    sig = magicnet_read_int(client, NULL);
-    if (sig < 0)
-    {
-        res = -1;
-        goto out;
-    }
-
-    if (sig != MAGICNET_ENTRY_SIGNATURE)
-    {
-        // Bad signature
-        res = -1;
-        goto out;
-    }
-
     const char *client_ip = inet_ntoa(client->client_info.sin_addr);
     char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
     strncpy(client_ip_buf, client_ip, sizeof(client_ip_buf));
     // Lets tell the client what his IP is
     res = magicnet_write_bytes(client, client_ip_buf, sizeof(client_ip_buf), NULL);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    // Lets read what the client says our ip address is.
-    res = magicnet_read_bytes(client, &client->my_ip_address_to_client, sizeof(client->my_ip_address_to_client), NULL);
     if (res < 0)
     {
         goto out;
@@ -5148,22 +5207,6 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
         goto out;
     }
 
-    int peer_info_state = -1;
-    res = magicnet_read_peer_info(client, &peer_info_state);
-    if (res < 0)
-    {
-        goto out;
-    }
-
-    if (peer_info_state == MAGICNET_ENTRY_PROTOCOL_PEER_INFO_PROVIDED && client->server)
-    {
-        res = magicnet_save_peer_info(&client->peer_info);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
-
     // // Okay let us send the ip addresses we are aware of
     res = magicnet_client_entry_protocol_write_known_clients(client);
     if (res < 0)
@@ -5171,13 +5214,14 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
         goto out;
     }
 
-    res = magicnet_client_entry_protocol_read_known_clients(client);
+    // lets flush it, mandatory in this new design
+    res = magicnet_client_flush(client);
     if (res < 0)
     {
         goto out;
     }
 
-    client->flags |= MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED;
+    client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL;
 out:
     return res;
 }
@@ -5479,6 +5523,37 @@ out:
 
 void *magicnet_server_client_thread(void *_client);
 
+// int (*MAGICNET_NTHREAD_POLL_FUNCTION)(struct magicnet_nthread_action* action)
+
+int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
+{
+    struct magicnet_client *client = (struct magicnet_client *)action->private;
+
+    // Check here if theirs data on the stream or not..
+    int available_bytes = magicnet_client_unread_bytes_count(client);
+    if (available_bytes < 0)
+    {
+        // Error, that cant be good
+        magicnet_close(client);
+
+        // Return -1 so we are removed from the thread pool and no longer polled
+        return -1;
+    }
+
+    if (available_bytes > 0)
+    {
+        // We have bytes.. but we dont know if the packet has finished being sent yet.
+    }
+    // We return zero so that it will call us again in a few cycles..
+    return 0;
+}
+
+int magicnet_client_push(struct magicnet_client *client)
+{
+    int res = 0;
+    res = magicnet_threads_action_new(magicnet_client_thread_poll, client, NULL);
+    return res;
+}
 int magicnet_server_process_make_new_connection_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -5494,8 +5569,8 @@ int magicnet_server_process_make_new_connection_packet(struct magicnet_client *c
     struct magicnet_client *new_client = magicnet_tcp_network_connect_for_ip_for_server(client->server, ip, MAGICNET_SERVER_PORT, program_name, magicnet_signed_data(packet)->payload.new_connection.entry_id);
     if (new_client)
     {
-        // Start the new client thread
-        magicnet_client_thread_start(new_client);
+        // Push the new client to the thread pool for regular polling.
+        magicnet_client_push(new_client);
     }
 
     magicnet_log("%s new server thread is running that will handle this new connection\n", __FUNCTION__);
@@ -5602,39 +5677,42 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
 {
     int res = 0;
 
+#warning "Not all packets will work correctly without a seperate thread for the client"
+    // so we have disabled the functionality for the time being.
+    // direct read after write is a problem in non-blocking mode.
     switch (magicnet_signed_data(packet)->type)
     {
-    case MAGICNET_PACKET_TYPE_USER_DEFINED:
-        res = magicnet_server_poll_process_user_defined_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_USER_DEFINED:
+        //     res = magicnet_server_poll_process_user_defined_packet(client, packet);
+        //     break;
 
-    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
-        res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        //     res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
+        //     break;
 
-    case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
-        res = magicnet_server_process_vote_for_verifier_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+        //     res = magicnet_server_process_vote_for_verifier_packet(client, packet);
+        //     break;
 
-    case MAGICNET_PACKET_TYPE_BLOCK_SEND:
-        res = magicnet_server_process_block_send_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_BLOCK_SEND:
+        //     res = magicnet_server_process_block_send_packet(client, packet);
+        //     break;
 
-    case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
-        res = magicnet_server_process_transaction_send_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
+        //     res = magicnet_server_process_transaction_send_packet(client, packet);
+        //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
-        res = magicnet_client_process_request_block_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_REQUEST_BLOCK:
+        //     res = magicnet_client_process_request_block_packet(client, packet);
+        //     break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
-        res = magicnet_client_process_request_block_response_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_REQUEST_BLOCK_RESPONSE:
+        //     res = magicnet_client_process_request_block_response_packet(client, packet);
+        //     break;
 
-    case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
-        res = magicnet_server_process_make_new_connection_packet(client, packet);
-        break;
+        // case MAGICNET_PACKET_TYPE_MAKE_NEW_CONNECTION:
+        //     res = magicnet_server_process_make_new_connection_packet(client, packet);
+        //     break;
     };
 
     magicnet_server_lock(client->server);
@@ -5730,6 +5808,8 @@ out:
 }
 void *magicnet_client_thread(void *_client)
 {
+
+#warning "DO NOT USE THIS FUNCTION ITS DEPRECATED"
     int res = 0;
     bool server_shutting_down = false;
     struct magicnet_client *client = _client;
@@ -5806,16 +5886,6 @@ out:
         }
     }
     return NULL;
-}
-int magicnet_client_thread_start(struct magicnet_client *client)
-{
-    pthread_t threadId;
-    if (pthread_create(&threadId, NULL, &magicnet_client_thread, client))
-    {
-        return -1;
-    }
-
-    return 0;
 }
 
 bool magicnet_server_is_accepted_connection_connected(struct magicnet_server *server, const char *ip_address)

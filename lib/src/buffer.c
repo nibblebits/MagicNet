@@ -115,6 +115,30 @@ void buffer_write(struct buffer *buffer, char c)
     buffer_write_bytes(buffer, &c, sizeof(char));
 }
 
+void buffer_shift_right_at_position(struct buffer* buffer, int index, int amount)
+{
+    int bytes_needed = (buffer->len - index) + amount;
+    buffer_need(buffer, bytes_needed);
+
+    char* new_move_position = &buffer->data[index+amount];
+    // Now we need to memcpy the memory region and shift it to the right
+    memcpy(&buffer->data[index], new_move_position, amount);
+
+    // Now null the existing region for debugging purposes
+    memset(&buffer->data[index], 0x00, amount);
+}
+
+int buffer_insert(struct buffer* buffer, int index, void* data, size_t len)
+{
+    // Make memory for the insertation.
+    buffer_shift_right_at_position(buffer, index, len);
+
+    // Move the data into the region
+    memcpy(&buffer->data[index], data, len);
+
+    return 0;
+}
+
 int buffer_write_bytes_default_handler(struct buffer *buffer, void *ptr, size_t amount)
 {
     int res = 0;

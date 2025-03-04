@@ -456,6 +456,14 @@ struct magicnet_peer_blockchain_info
     int blockchain_id;
 };
 
+enum
+{
+    // Peer sent us login protocol and completed it correctly
+    MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL = 0b00000001,
+    // We sent login protocol correctly to the peer.
+    MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL = 0b00000010,
+};
+
 struct magicnet_client
 {
     int sock;
@@ -532,6 +540,15 @@ struct magicnet_client
 
     struct magicnet_peer_information peer_info;
     struct magicnet_server *server;
+
+    struct
+    {
+        int flags;
+    } states;
+
+    // New design we will store all data in memory will not be sent to the client
+    // until its flushed.
+    struct buffer* unflushed_data;
 };
 
 // This is the network vote structure to vote for the next block creator
@@ -803,15 +820,14 @@ struct block_transaction_council_certificate_initiate_transfer_request
     // The request expiry must not exceed eight days or it will be rejected.
     // If the transfer is not completed before this time the transfer is voided.
     time_t request_expires_at;
-    
+
     // The current certificate that is being transferred. Holding the hash of certificate_to_transfer_hash
-    struct magicnet_council_certificate* current_certificate;
+    struct magicnet_council_certificate *current_certificate;
 
     // The new_unsigned_certificate will be set to the new certificate that
     // needs to be signed by the peer who won the transfer vote.
     // For now self transfers only exist.
-    struct magicnet_council_certificate* new_unsigned_certificate;
-
+    struct magicnet_council_certificate *new_unsigned_certificate;
 };
 
 /**
@@ -1159,7 +1175,8 @@ enum
     // True if this client is an outgoing connection made with connect()
     MAGICNET_CLIENT_FLAG_IS_OUTGOING_CONNECTION = 0b00001000,
     // True if this client has completed the protocol exchange.
-    MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00010000,
+    // DEPRECATED DO NOT USE! USE THE STATES IN THE CLIENT.
+    //MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00010000,
     MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION = 0b00100000,
 
 };
@@ -1180,6 +1197,13 @@ void magicnet_server_unlock(struct magicnet_server *server);
 void magicnet_server_shutdown_server_instance(struct magicnet_server *server);
 struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
 struct magicnet_client *magicnet_client_new();
+
+/**
+ * Returns true if the login protocol has been completed from both sides, our clients side
+ * and the server completed his side too.
+ */
+bool magicnet_client_login_protocol_completed(struct magicnet_client* client);
+
 void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
@@ -1221,6 +1245,11 @@ int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
+
+/**
+ * Pushes the client to the thread pool so it can be polled frequently
+ */
+int magicnet_client_push(struct magicnet_client *client);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
@@ -1477,7 +1506,7 @@ enum
     // in such cases you may want to pass this flag to the magicnet_council_certificate_verify functioon
     // wwhicch will validate everything except the signature as its currently unsigned.
     // All transfer votes will be validated and all transfer rules everything except signature.
-    MAGICNET_COUNCIL_CERTIFICATE_VERIFY_FLAG_IGNORE_FINAL_SIGNATURE = 0b00000001
+    MAGICNET_COUNCIL_CERTIFICATE_VERIFY_FLAG_IGNORE_FINAL_SIGNATURE = 0b00000001,
 };
 
 /**
@@ -1495,17 +1524,15 @@ void magicnet_council_certificate_free(struct magicnet_council_certificate *cert
 int magicnet_council_certificate_verify_signature(struct magicnet_council_certificate *certificate);
 void magicnet_council_certificate_hash(struct magicnet_council_certificate *certificate, char *out_hash);
 
-
 /**
  * Requests the certificate structure from the magicnet local server instance.
  * \param program The program to request the certificate from
  * \param council_certificate_hash The hash of the certificate to request
  * \param certificate_out The certificate that was requested
- * 
+ *
  * \return 0 if the certificate was located successfully, otherwise below zero on error, in which case check the error code list
-*/
+ */
 int magicnet_council_request_certificate(struct magicnet_program *program, const char *council_certificate_hash, struct magicnet_council_certificate **certificate_out);
-
 
 /**
  * Transfeers the council certificate without the need of vote, this is only allowed if the certificate holds the
