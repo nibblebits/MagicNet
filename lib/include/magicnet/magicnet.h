@@ -111,7 +111,8 @@ enum
     MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING = 0b00000010,
     MAGICNET_PACKET_FLAG_MUST_BE_SIGNED = 0b00000100,
     // The below flag is set if the packet has been signed by a council member who has provided his certificate.
-    MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE = 0b00001000
+    MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE = 0b00001000,
+
 };
 
 #define MAGICNET_PACKET_PRIVATE_FLAGS (MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE | MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING | MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
@@ -157,6 +158,8 @@ enum
     MAGICNET_ERROR_END_OF_STREAM = -1009,
     MAGICNET_DATA_SENT_BEFORE = -1010,
     MAGICNET_ERROR_OUT_OF_BOUNDS = -1011,
+    MAGICNET_ERROR_TRY_AGAIN = -1012,
+    MAGICNET_ERROR_OUT_OF_MEMORY = -1013,
 
     // Critical errors will terminate connections when received be cautious..
     // You may not send a critical error over the network it will be ignored and changed to an unknown error
@@ -274,6 +277,10 @@ struct magicnet_packet
          * sent to the client in regards to this packet.
          */
         struct buffer *tmp_buf;
+
+        // The total read bytes of this packet, when it is >= expected_size
+        // then the packet is ready for processing
+        int total_read_bytes;
     } not_sent;
 
     struct signed_data
@@ -282,6 +289,11 @@ struct magicnet_packet
         int id;
         // The type of this packet see above.
         int type;
+        // The expected size of the packet, this is the data that needs to be read or was read
+        // to complete the craft of the packet, not neccessarily the amount of data
+        // that the packet uses in memory.
+        int expected_size;
+
         int flags;
 
         // When a packet is sent from someone who holds a council certificate, they should
@@ -464,6 +476,17 @@ enum
     MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL = 0b00000010,
 };
 
+enum
+{
+    MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_READ = 1,
+    MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_WRITE = 2,
+    MAGICNET_CLIENT_STATE_IDLE_WAIT   = 3,
+    MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW = 4,
+    MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING = 5,
+};
+
+typedef int magicnet_client_state;
+
 struct magicnet_client
 {
     int sock;
@@ -549,6 +572,12 @@ struct magicnet_client
     // New design we will store all data in memory will not be sent to the client
     // until its flushed.
     struct buffer* unflushed_data;
+
+
+    // The current unloaded/incomplete packet that we are waiting for from the peer
+    // it may have been partially sent at this point. this is an unblocked protocol
+    // so we need to be sure the packet is ready before processing.
+    struct magicnet_packet* packet_in_loading;
 };
 
 // This is the network vote structure to vote for the next block creator

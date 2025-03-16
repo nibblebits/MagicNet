@@ -30,6 +30,8 @@
 #include "magicnet/magicnet.h"
 #include "magicnet/nthread.h"
 #include "magicnet/log.h"
+#include "magicnet/buffer.h"
+#include "magicnet/error.h"
 #include "key.h"
 #include "misc.h"
 
@@ -48,6 +50,12 @@ int magicnet_client_write_council_certificate(struct magicnet_client *client, st
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf);
 int magicnet_client_unread_bytes_count(struct magicnet_client *client);
 int magicnet_client_insert_bytes(struct magicnet_client *client, void *ptr_in, size_t amount, size_t offset_index);
+
+size_t magicnet_client_unflushed_bytes(struct magicnet_client *client);
+struct buffer *magicnet_client_unflushed_bytes_buffer(struct magicnet_client *client)
+{
+    return client->unflushed_data;
+}
 
 void magicnet_server_get_thread_ids(struct magicnet_server *server, struct vector *thread_id_vec_out)
 {
@@ -103,6 +111,11 @@ void magicnet_server_remove_thread(struct magicnet_server *server, pthread_t thr
 struct signed_data *magicnet_signed_data(struct magicnet_packet *packet)
 {
     return &packet->signed_data;
+}
+
+bool magicnet_packet_ready_for_processing(struct magicnet_packet *packet)
+{
+    return !(magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_PACKET_DOWNLOAD_INCOMPLETE);
 }
 
 void magicnet_packet_make_new_id(struct magicnet_packet *packet)
@@ -995,7 +1008,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     if (flags == -1)
     {
         magicnet_log("%s issue getting flags of socket\n", __FUNCTION__);
-        fclose(connfd);
+        close(connfd);
         return NULL;
     }
 
@@ -1005,7 +1018,7 @@ struct magicnet_client *magicnet_accept(struct magicnet_server *server)
     if (fcntl(connfd, F_SETFL, flags | O_NONBLOCK) == -1)
     {
         magicnet_log("%s issue setting sockedt to non-blocking\n", __FUNCTION__);
-        fclose(connfd);
+        close(connfd);
         return NULL;
     }
 
@@ -1177,18 +1190,15 @@ void magicnet_client_readjust_upload_speed(struct magicnet_client *client)
     }
 }
 
-
-// Okay thqanks for watching ill stream again soon goodnight
-
 int magicnet_client_flush(struct magicnet_client *client)
 {
     int res = 0;
 
-    struct buffer *unflushed_data_buf = client->unflushed_data;
-    size_t total_bytes = buffer_count(unflushed_data_buf);
+    struct buffer *unflushed_data_buf = magicnet_client_unflushed_bytes_buffer(client);
+    int total_bytes = magicnet_client_unflushed_bytes(client);
 
-    void *ptr_in = buffer_data(unflushed_data_buf);
-    size_t amount_written = 0;
+    void *ptr_in = buffer_ptr(unflushed_data_buf);
+    int amount_written = 0;
     while (amount_written < total_bytes)
     {
         // Flush directly to the socket
@@ -1207,9 +1217,9 @@ out:
     return res;
 }
 
-size_t magicnet_client_unflushed_bytes(struct magicnet_client* client)
+size_t magicnet_client_unflushed_bytes(struct magicnet_client *client)
 {
-    return buffer_count(client->unflushed_data);
+    return buffer_len(client->unflushed_data);
 }
 
 int magicnet_client_insert_bytes(struct magicnet_client *client, void *ptr_in, size_t amount, size_t offset_index)
@@ -2351,16 +2361,72 @@ out:
     return res;
 }
 
-int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+int magicnet_client_read_new_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = 0;
+
+    int total_size = 0;
+    packet_out->not_sent.tmp_buf = buffer_create();
+
+    // DO we have at least two bytes? it is required
+    int unread_stream_bytes = magicnet_client_unread_bytes_count(client);
+    if (unread_stream_bytes < 2)
+    {
+        // our peer SHould come back later and try again
+        res = MAGICNET_ERROR_TRY_AGAIN;
+        goto out;
+    }
+
+    total_size = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    if (total_size < 0)
+    {
+        res = total_size;
+        goto out;
+    }
+
+    magicnet_signed_data(packet_out)->expected_size = total_size;
+    client->packet_in_loading = packet_out;
+
+out:
+    return res;
+}
+
+bool magicnet_client_has_incomplete_packet(struct magicnet_client *client)
+{
+    return client->packet_in_loading != NULL;
+}
+
+bool magicnet_client_no_packet_loading(struct magicnet_client *client)
+{
+    return !magicnet_client_has_incomplete_packet(client);
+}
+bool magicnet_client_packet_loaded(struct magicnet_packet* packet)
+{
+    return packet->not_sent.total_read_bytes >= magicnet_signed_data(packet)->expected_size;
+}
+
+int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     int packet_id = 0;
     int packet_type = 0;
     int packet_flags = 0;
 
-#warning "WE NEED A WAY TO KNOW THE AMOUNT OF BYTES SENT BEFORE WE SENT THEM"
+    if (!packet_out)
+    {
+        res = MAGICNET_ERROR_CRITICAL_ERROR;
+        goto out;
+    }
 
-    packet_out->not_sent.tmp_buf = buffer_create();
+    // Do we have enough bytes to read the incomplete packet?
+    int total_unread_stream_bytes = magicnet_client_unread_bytes_count(client);
+    if (total_unread_stream_bytes < magicnet_signed_data(packet_out)->expected_size)
+    {
+        // Yes we dont have enough bytes we will fail the function and come back later
+        res = MAGICNET_ERROR_TRY_AGAIN;
+        goto out;
+    }
+
     packet_id = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_id < 0)
     {
@@ -2642,6 +2708,10 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
             return res;
         }
     }
+
+    // Change this so it works in real time or remove and deprecate it..
+    packet_out->not_sent.total_read_bytes = magicnet_signed_data(packet_out)->expected_size;
+
     // We have seen this packet now.
     if (client->server)
     {
@@ -2651,9 +2721,54 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     }
 
 out:
+
+    // Now the packet has been loaded or (failed to load) we can remove it from the loading packet
+    // in the client.
+    client->packet_in_loading = NULL;
+
     buffer_free(packet_out->not_sent.tmp_buf);
     packet_out->not_sent.tmp_buf = NULL;
 
+    return res;
+}
+int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = 0;
+
+    /**
+     * Is there no packet currently waiting to be finished laoding?
+     * then this is a fresh packet, lets begin reading its size..
+     */
+    if (magicnet_client_no_packet_loading(client))
+    {
+        res = magicnet_client_read_new_packet(client, packet_out);
+        if (res < 0)
+        {
+            // problem
+            goto out;
+        }
+    }
+
+    // Do we have enough data to read the entirrrrrrrre packet now or do we have
+    // to come back another time
+
+    int unread_bytes = magicnet_client_unread_bytes_count(client);
+    if (unread_bytes < magicnet_signed_data(packet_out)->expected_size)
+    {
+        // Yes we don't have enough data on stream to load the packet
+        // we will need to try again later, this is a non blockijng protocol
+        res = MAGICNET_ERROR_TRY_AGAIN;
+        goto out;
+    }
+
+    // Alright we have enough lets finish loading that packet
+    res = magicnet_client_read_incomplete_packet(client, packet_out);
+    if (res < 0)
+    {
+        goto out;
+    }
+    // Packet has finished loading and can be processed later..
+out:
     return res;
 }
 
@@ -5076,9 +5191,20 @@ out:
     return res;
 }
 
+bool magicnet_client_login_protocol_sent(struct magicnet_client *client)
+{
+    return (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL);
+}
+
+bool magicnet_client_login_protocol_received(struct magicnet_client *client)
+{
+    return client->states.flags & MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL;
+}
+
 bool magicnet_client_login_protocol_completed(struct magicnet_client *client)
 {
-    return (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL) && (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL);
+    return magicnet_client_login_protocol_sent(client) &&
+           magicnet_client_login_protocol_received(client);
 }
 
 int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client)
@@ -5525,27 +5651,191 @@ void *magicnet_server_client_thread(void *_client);
 
 // int (*MAGICNET_NTHREAD_POLL_FUNCTION)(struct magicnet_nthread_action* action)
 
+magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
+{
+    magicnet_client_state state = MAGICNET_CLIENT_STATE_IDLE_WAIT;
+    if (!magicnet_client_login_protocol_sent(client))
+    {
+        state = MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_WRITE;
+        goto out;
+    }
+    else if (!magicnet_client_login_protocol_received(client))
+    {
+        state = MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_READ;
+        goto out;
+    }
+
+    // Do we have any bytes? If so maybe we can start reading a new packet
+    bool requires_new_packet = magicnet_client_no_packet_loading(client);
+    int total_bytes_on_stream = magicnet_client_unread_bytes_count(client);
+    if (total_bytes_on_stream < 0)
+    {
+        // I/O error..
+        res = total_bytes_on_stream;
+        goto out;
+    }
+
+    if (requires_new_packet)
+    {
+        if (total_bytes_on_stream < sizeof(magicnet_signed_data(client)->expected_size))
+        {
+            // We still dont have enough bytes yet so we going to maintain the idle state
+            state = MAGICNET_CLIENT_STATE_IDLE_WAIT;
+            goto out;
+        }
+
+        // Okay we have enough to start reading the packet
+        state = MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW;
+        goto out;
+    }
+
+    // We don't require a new packet?
+    // the nwe must already be in the process of loading one
+    // lets set the state to finish loading but only when the packet is ready to be loaded
+    if (total_bytes_on_stream < magicnet_signed_data(client)->expected_size)
+    {
+        // We still dont have enough bytes yet so we going to maintain the idle state
+        // when the packt is ready to read the state will accomodate that.
+        state = MAGICNET_CLIENT_STATE_IDLE_WAIT;
+        goto out;
+    }
+    state = MAGICNET_CLIENT_STATE_PACKET_READ_A_PARTIAL_PACKET;
+
+out:
+    return state;
+}
+
+int magicnet_client_thread_poll_login_protocol_write(struct magicnet_nthread_action *action, struct magicnet_client *client)
+{
+    int res = 0;
+    // Let's write our login protocol straight to the peer
+    res = magicnet_client_preform_entry_protocol_write(client, client->program_name, 0, 0);
+    return res;
+}
+
+int magicnet_client_thread_poll_login_protocol_read(struct magicnet_nthread_action* action, struct magicnet_client* client)
+{
+    int res = 0;
+    res = magicnet_client_preform_entry_protocol_read(client);
+    return res;
+}
+
+
+int magicnet_client_thread_poll_read_packet_new(struct magicnet_nthread_action* action, struct magicnet_client* client)
+{
+    int res = 0;
+
+    // We need to create a new packet 
+    struct magicnet_packet* packet = magicnet_packet_new();
+    if (!packet)
+    {
+        res = MAGICNET_ERROR_OUT_OF_MEMORY;
+        goto out;
+    }
+    res = magicnet_client_read_packet(client, &packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:   
+    if (res < 0)
+    {
+        magicnet_packet_free(packet);
+        packet = NULL;
+    }
+    return res;
+}
+
+int magicnet_client_thread_poll_read_packet_finish_reading_and_process(struct magicnet_nthread_action* action, struct magicnet_client* client)
+{
+    int res = 0;
+    if (!client->packet_in_loading)
+    {
+        res = MAGICNET_CRITICAL_ERROR;
+        goto out;
+    }
+
+    // Must make it local as it can be changed when packet is loaded
+    struct magicnet_packet* packet = client->packet_in_loading;
+    res = magicnet_client_read_packet(client, &packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    if (!magicnet_client_packet_loaded(packet))
+    {
+        // Strange erorr packet was read but isnt loaded?
+        res = MAGICNET_CRITICAL_ERROR;
+        goto out;
+    }
+
+
+    // Finally we can now process the loaded packet
+    res = magicnet_server_poll_process(client, packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+out:
+    return res;
+}
 int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
 {
+    int res = 0;
     struct magicnet_client *client = (struct magicnet_client *)action->private;
 
-    // Check here if theirs data on the stream or not..
-    int available_bytes = magicnet_client_unread_bytes_count(client);
-    if (available_bytes < 0)
+    magicnet_client_state state = magicnet_client_get_state(client);
+    if (state < 0)
     {
-        // Error, that cant be good
-        magicnet_close(client);
-
-        // Return -1 so we are removed from the thread pool and no longer polled
-        return -1;
+        res = state;
+        goto out;
     }
 
-    if (available_bytes > 0)
+    // One state per cycle shall be ran.
+    switch (state)
     {
-        // We have bytes.. but we dont know if the packet has finished being sent yet.
+    case MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_WRITE:
+        res = magicnet_client_thread_poll_login_protocol_write(action, client);
+        break;
+
+    case MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_READ:
+        res = magicnet_client_thread_poll_login_protocol_read(action, client);
+        break;
+
+    case MAGICNET_CLIENT_STATE_IDLE_WAIT:
+        // Do nothinbg we are instructed to wait
+        break;
+    
+    case MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW:
+        res = magicnet_client_thread_poll_read_packet_new(action, client);
+    break;
+    case MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING:
+        res = magicnet_client_thread_poll_read_packet_finish_reading_and_process(action, client);
+        break;
+
+    default:
+        magicnet_log("%s unknown state or potential error %i\n", __FUNCTION__, (int)state);
+    }
+
+    if (res == MAGICNET_ERROR_TRY_AGAIN)
+    {
+        // Normal error, means we dont have enough bytes on the stream yet we can ignore it
+        res = 0;
+        // but we can't do anything more right now..
+        goto out;
+    }
+
+
+out:
+    if (res < 0)
+    {
+        // destruct the client
+        magicnet_close(client);
     }
     // We return zero so that it will call us again in a few cycles..
-    return 0;
+    return res;
 }
 
 int magicnet_client_push(struct magicnet_client *client)
@@ -5671,13 +5961,12 @@ out:
 }
 
 /**
- * Only called by clients that connected to a server, not called by server at all.
+ * Called ONLY by clients that have been pushed to the server thread pool
  */
 int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
 
-#warning "Not all packets will work correctly without a seperate thread for the client"
     // so we have disabled the functionality for the time being.
     // direct read after write is a problem in non-blocking mode.
     switch (magicnet_signed_data(packet)->type)
@@ -5810,81 +6099,81 @@ void *magicnet_client_thread(void *_client)
 {
 
 #warning "DO NOT USE THIS FUNCTION ITS DEPRECATED"
-    int res = 0;
-    bool server_shutting_down = false;
-    struct magicnet_client *client = _client;
+    //     int res = 0;
+    //     bool server_shutting_down = false;
+    //     struct magicnet_client *client = _client;
 
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGINT);
-    pthread_sigmask(SIG_BLOCK, &set, NULL);
+    //     sigset_t set;
+    //     sigemptyset(&set);
+    //     sigaddset(&set, SIGINT);
+    //     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
-    if (client->server)
-    {
-        magicnet_server_lock(client->server);
-        magicnet_server_add_thread(client->server, pthread_self());
-        magicnet_server_unlock(client->server);
-    }
+    //     if (client->server)
+    //     {
+    //         magicnet_server_lock(client->server);
+    //         magicnet_server_add_thread(client->server, pthread_self());
+    //         magicnet_server_unlock(client->server);
+    //     }
 
-    if (!(client->flags & MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED))
-    {
-        res = magicnet_client_preform_entry_protocol_read(client);
-        if (res < 0)
-        {
-            // entry protocol failed.. illegal client!
-            goto out;
-        }
-    }
+    //     if (!(client->flags & MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED))
+    //     {
+    //         res = magicnet_client_preform_entry_protocol_read(client);
+    //         if (res < 0)
+    //         {
+    //             // entry protocol failed.. illegal client!
+    //             goto out;
+    //         }
+    //     }
 
-    if (client->signal_id)
-    {
-        magicnet_signal_post_for_signal(client->signal_id, "connect-again-signal", client, sizeof(struct magicnet_client), 0);
-        // Now the waiting thread is in charge of the client we will leave this thread and let the waiting thread take over being sure not
-        // to free the memory of the client
-        goto out;
-    }
+    //     if (client->signal_id)
+    //     {
+    //         magicnet_signal_post_for_signal(client->signal_id, "connect-again-signal", client, sizeof(struct magicnet_client), 0);
+    //         // Now the waiting thread is in charge of the client we will leave this thread and let the waiting thread take over being sure not
+    //         // to free the memory of the client
+    //         goto out;
+    //     }
 
-    if (client->server)
-    {
-        magicnet_server_lock(client->server);
-        magicnet_server_recalculate_my_ip(client->server);
-        magicnet_server_unlock(client->server);
-    }
+    //     if (client->server)
+    //     {
+    //         magicnet_server_lock(client->server);
+    //         magicnet_server_recalculate_my_ip(client->server);
+    //         magicnet_server_unlock(client->server);
+    //     }
 
-    while (res != MAGICNET_ERROR_CRITICAL_ERROR && !server_shutting_down)
-    {
-        res = magicnet_client_manage_next_packet(client);
-        if (client->server)
-        {
-            magicnet_server_lock(client->server);
-            server_shutting_down = client->server->shutdown;
-            if (server_shutting_down)
-            {
-                magicnet_log("%s the server is shutting down suspending client\n", __FUNCTION__);
-            }
-            magicnet_server_unlock(client->server);
-        }
-    }
-out:
-    if (client->server)
-    {
-        magicnet_server_lock(client->server);
-        // Only when theirs no signal who has taken over this client will we free the client
-        if (!client->signal_id)
-        {
-            magicnet_close(client);
-        }
-        magicnet_server_remove_thread(client->server, pthread_self());
-        magicnet_server_unlock(client->server);
-    }
-    else
-    {
-        // Only when theirs no signal who has taken over this client will we free the client
-        if (!client->signal_id)
-        {
-            magicnet_close(client);
-        }
-    }
+    //     while (res != MAGICNET_ERROR_CRITICAL_ERROR && !server_shutting_down)
+    //     {
+    //         res = magicnet_client_manage_next_packet(client);
+    //         if (client->server)
+    //         {
+    //             magicnet_server_lock(client->server);
+    //             server_shutting_down = client->server->shutdown;
+    //             if (server_shutting_down)
+    //             {
+    //                 magicnet_log("%s the server is shutting down suspending client\n", __FUNCTION__);
+    //             }
+    //             magicnet_server_unlock(client->server);
+    //         }
+    //     }
+    // out:
+    //     if (client->server)
+    //     {
+    //         magicnet_server_lock(client->server);
+    //         // Only when theirs no signal who has taken over this client will we free the client
+    //         if (!client->signal_id)
+    //         {
+    //             magicnet_close(client);
+    //         }
+    //         magicnet_server_remove_thread(client->server, pthread_self());
+    //         magicnet_server_unlock(client->server);
+    //     }
+    //     else
+    //     {
+    //         // Only when theirs no signal who has taken over this client will we free the client
+    //         if (!client->signal_id)
+    //         {
+    //             magicnet_close(client);
+    //         }
+    //     }
     return NULL;
 }
 
