@@ -31,7 +31,6 @@
 #include "magicnet/nthread.h"
 #include "magicnet/log.h"
 #include "magicnet/buffer.h"
-#include "magicnet/error.h"
 #include "key.h"
 #include "misc.h"
 
@@ -115,7 +114,7 @@ struct signed_data *magicnet_signed_data(struct magicnet_packet *packet)
 
 bool magicnet_packet_ready_for_processing(struct magicnet_packet *packet)
 {
-    return !(magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_PACKET_DOWNLOAD_INCOMPLETE);
+    return (magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING);
 }
 
 void magicnet_packet_make_new_id(struct magicnet_packet *packet)
@@ -5653,6 +5652,7 @@ void *magicnet_server_client_thread(void *_client);
 
 magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
 {
+    int res = 0;
     magicnet_client_state state = MAGICNET_CLIENT_STATE_IDLE_WAIT;
     if (!magicnet_client_login_protocol_sent(client))
     {
@@ -5690,7 +5690,7 @@ magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
     }
 
     // We don't require a new packet?
-    // the nwe must already be in the process of loading one
+    // then we must already be in the process of loading one
     // lets set the state to finish loading but only when the packet is ready to be loaded
     if (total_bytes_on_stream < magicnet_signed_data(client)->expected_size)
     {
@@ -5699,7 +5699,7 @@ magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
         state = MAGICNET_CLIENT_STATE_IDLE_WAIT;
         goto out;
     }
-    state = MAGICNET_CLIENT_STATE_PACKET_READ_A_PARTIAL_PACKET;
+    state = MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING;
 
 out:
     return state;
@@ -5752,7 +5752,7 @@ int magicnet_client_thread_poll_read_packet_finish_reading_and_process(struct ma
     int res = 0;
     if (!client->packet_in_loading)
     {
-        res = MAGICNET_CRITICAL_ERROR;
+        res = MAGICNET_ERROR_CRITICAL_ERROR;
         goto out;
     }
 
@@ -5767,7 +5767,7 @@ int magicnet_client_thread_poll_read_packet_finish_reading_and_process(struct ma
     if (!magicnet_client_packet_loaded(packet))
     {
         // Strange erorr packet was read but isnt loaded?
-        res = MAGICNET_CRITICAL_ERROR;
+        res = MAGICNET_ERROR_CRITICAL_ERROR;
         goto out;
     }
 

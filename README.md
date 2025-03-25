@@ -26,3 +26,13 @@ this time. Nobody knows the best way to do things yet because decentralized tech
 
 Theirs still a lot of mistakes and rewards to discover in this field. We are at the stone wheel. Perhaps this project will help change things.
 Star it!
+
+
+# Dependencies
+
+sudo apt install gcc gdb make 
+sudo apt install sqlite3 libsqlite3-dev
+sudo apt install libssl-dev
+sudo apt install libminiupnpc-dev libzip-dev
+
+
