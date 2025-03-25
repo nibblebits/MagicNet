@@ -13,6 +13,8 @@
 #include "key.h"
 #include "buffer.h"
 
+#define PACKET_PACKET_SIZE_FIELD_SIZE sizeof(int)
+
 struct magicnet_client;
 struct magicnet_buffer_stream_private_data
 {
@@ -72,6 +74,7 @@ struct magicnet_program
 enum
 {
     MAGICNET_PACKET_TYPE_EMPTY_PACKET,
+    MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET,
     MAGICNET_PACKET_TYPE_USER_DEFINED,
     MAGICNET_PACKET_TYPE_EVENTS_POLL,
     MAGICNET_PACKET_TYPE_EVENTS_RES,
@@ -306,6 +309,29 @@ struct magicnet_packet
         {
             union
             {
+
+                struct login_protocol_identification
+                {
+
+                    // NOTE: NOT VERIFIED UNTIL THE PACKET WAS PROCESSED!
+                    // BELIEVE EVERYTHIGN TO BE FALSE UNTIL THEN
+                    
+                    // COME BACK AND TRY ABSTRACT THIS OUT...
+                    struct login_protocol_identification_peer_info
+                    {
+                        struct magicnet_peer_information info;
+                        struct signature signature;
+                        // Hash of the info..
+                        char hash_of_info[SHA256_STRING_LENGTH];
+                    } peer_info;
+
+
+                    // Vector of struct magicnet_peer_information*
+                    // these peers are known by the peer who signed this packet.
+                    // we can connect to them later expanding our network.
+                    struct vector* known_peers;
+
+                } login_protocol_iden;
                 struct user_defined
                 {
                     // This is a predetermined packet type, determined by the application using the network
@@ -480,7 +506,7 @@ enum
 {
     MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_READ = 1,
     MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_WRITE = 2,
-    MAGICNET_CLIENT_STATE_IDLE_WAIT   = 3,
+    MAGICNET_CLIENT_STATE_IDLE_WAIT = 3,
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW = 4,
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING = 5,
 };
@@ -501,7 +527,7 @@ struct magicnet_client
 
     // Communication flags are set in the entry protocol they determine the type of packets this peer is willing to accept.
     int communication_flags;
-    time_t last_contact;
+    time_t last_packet_received;
 
     time_t connection_began;
 
@@ -571,13 +597,12 @@ struct magicnet_client
 
     // New design we will store all data in memory will not be sent to the client
     // until its flushed.
-    struct buffer* unflushed_data;
-
+    struct buffer *unflushed_data;
 
     // The current unloaded/incomplete packet that we are waiting for from the peer
     // it may have been partially sent at this point. this is an unblocked protocol
     // so we need to be sure the packet is ready before processing.
-    struct magicnet_packet* packet_in_loading;
+    struct magicnet_packet *packet_in_loading;
 };
 
 // This is the network vote structure to vote for the next block creator
@@ -1205,9 +1230,9 @@ enum
     MAGICNET_CLIENT_FLAG_IS_OUTGOING_CONNECTION = 0b00001000,
     // True if this client has completed the protocol exchange.
     // DEPRECATED DO NOT USE! USE THE STATES IN THE CLIENT.
-    //MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00010000,
+    // MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00010000,
     MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION = 0b00100000,
-
+    MAGICNET_CLIENT_FLAG_MUST_BLOCK = 0b01000000,
 };
 
 enum
@@ -1231,11 +1256,20 @@ struct magicnet_client *magicnet_client_new();
  * Returns true if the login protocol has been completed from both sides, our clients side
  * and the server completed his side too.
  */
-bool magicnet_client_login_protocol_completed(struct magicnet_client* client);
+bool magicnet_client_login_protocol_completed(struct magicnet_client *client);
 
 void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
+
+/**
+ * To be called to enhance the client to the next stage, such as moving forward
+ * in the login protocol, or reading part or all of a packet.
+ *
+ * For server threads, they will call this function, for single threaded applications
+ * you are responsible.
+ */
+int magicnet_client_poll(struct magicnet_client *client);
 
 void magicnet_reconnect(struct magicnet_program *program);
 
@@ -1642,6 +1676,9 @@ bool magicnet_setting_exists(const char *key);
 
 // Request response system, allowing local host clients to request information from the local server
 #define MAGICNET_REQRES_MAX_HANDLERS 200
+
+// 65k for now, work the real value out later..
+#define MAGICNET_MAX_LOGIN_PROTOCOL_ENTRY_BYTES 65000
 
 // For people writing modules for MagicNet Don't use any handler below 100 they are all reserved for internal system use
 // Public use above 100 please, bare in mind that other modules might use the same ID so ensure you

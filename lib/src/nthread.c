@@ -1,6 +1,7 @@
 #include "nthread.h"
 #include "vector.h"
 #include "magicnet/nthread.h"
+#include "magicnet/log.h"
 #include <stdio.h>
 #include <stdlib.h>
 struct magicnet_nthread *nthread = NULL;
@@ -121,6 +122,7 @@ int magicnet_threads_init(int t_threads)
     res = magicnet_threads_nthread_init();
     if (res < 0)
     {
+        magicnet_log("%s issue initilising the threads\n", __FUNCTION__);
         goto out;
     }
 
@@ -128,6 +130,7 @@ int magicnet_threads_init(int t_threads)
     res = magicnet_threads_begin(t_threads);
     if (res < 0)
     {
+        magicnet_log("%s problem starting the threads\n");
         goto out;
     }
 out:

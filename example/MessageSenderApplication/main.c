@@ -26,7 +26,7 @@ int main()
     struct chat_packet packet;
     strncpy(packet.message, "Hello world", strlen("Hello world"));
     
-
+    // Send the message to all people listening on the chat-app.
     magicnet_send_packet(decentralized_program, CHAT_PACKET, &packet);
     while (1)
     {

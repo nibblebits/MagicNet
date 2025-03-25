@@ -294,7 +294,10 @@ void buffer_free(struct buffer *buffer)
 {
     if (!(buffer->flags & BUFFER_FLAG_WRAPPED))
     {
-        free(buffer->data);
+        if (buffer->data)
+        {
+            free(buffer->data);
+        }
     }
     free(buffer);
 }

@@ -705,7 +705,12 @@ struct magicnet_program *magicnet_program(const char *name)
     // We must register the program
 
     program = magicnet_program_new();
-
+    if (!program)
+    {
+        res = -1;
+        goto out;
+    }
+    
     struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, name);
     if (!client)
     {
