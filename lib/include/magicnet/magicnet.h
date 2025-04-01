@@ -250,6 +250,24 @@ struct request_and_respond_output_data
     size_t size;
 };
 
+struct magicnet_peer_information
+{
+    char ip_address[MAGICNET_MAX_IP_STRING_SIZE];
+    struct key key;
+    char name[MAGICNET_MAX_NAME_SIZE];
+    char email[MAGICNET_MAX_EMAIL_SIZE];
+    int found_out;
+};
+
+
+struct login_protocol_identification_peer_info
+{
+    struct magicnet_peer_information info;
+    struct signature signature;
+    // Hash of the info..
+    char hash_of_info[SHA256_STRING_LENGTH];
+} peer_info;
+
 struct magicnet_packet
 {
 
@@ -317,14 +335,11 @@ struct magicnet_packet
                     // BELIEVE EVERYTHIGN TO BE FALSE UNTIL THEN
                     
                     // COME BACK AND TRY ABSTRACT THIS OUT...
-                    struct login_protocol_identification_peer_info
-                    {
-                        struct magicnet_peer_information info;
-                        struct signature signature;
-                        // Hash of the info..
-                        char hash_of_info[SHA256_STRING_LENGTH];
-                    } peer_info;
-
+                    struct login_protocol_identification_peer_info peer_info;
+                    
+                    char program_name[MAGICNET_PROGRAM_NAME_SIZE];
+                    int communication_flags;
+                    int signal_id;
 
                     // Vector of struct magicnet_peer_information*
                     // these peers are known by the peer who signed this packet.
@@ -474,14 +489,7 @@ struct magicnet_packet
     } signed_data;
 };
 
-struct magicnet_peer_information
-{
-    char ip_address[MAGICNET_MAX_IP_STRING_SIZE];
-    struct key key;
-    char name[MAGICNET_MAX_NAME_SIZE];
-    char email[MAGICNET_MAX_EMAIL_SIZE];
-    int found_out;
-};
+
 
 /**
  * @brief The magicnet_peer_blockchain_info struct to describe peer information relating to a particular blockchain
@@ -504,8 +512,8 @@ enum
 
 enum
 {
-    MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_READ = 1,
-    MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PROTOCOL_WRITE = 2,
+    MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PACKET_MUST_READ = 1,
+    MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PACKET_MUST_WRITE = 2,
     MAGICNET_CLIENT_STATE_IDLE_WAIT = 3,
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW = 4,
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING = 5,
@@ -1316,7 +1324,7 @@ int magicnet_client_push(struct magicnet_client *client);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
-int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client);
+int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client, struct magicnet_packet* packet);
 int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *client);
 struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key);
 int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magicnet_packet *packet);
@@ -1387,7 +1395,7 @@ int magicnet_certificate_transfer_initiate(struct magicnet_program *program, int
 
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
-struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id);
+struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id, int flags);
 
 void magicnet_server_free(struct magicnet_server *server);
 /**
