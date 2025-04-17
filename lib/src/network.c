@@ -35,6 +35,7 @@
 #include "misc.h"
 
 void magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in);
+int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client, struct magicnet_packet *packet);
 
 // not the same as free, the memory of client isnt freed.
 // only its internals.
@@ -929,6 +930,9 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
     struct timeval timeout;
     fd_set fdset;
 
+    // Packet will be used for authentication with the peer its connecting too.
+    struct magicnet_packet *auth_packet = NULL;
+
     // Initialize server address structure
     memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
@@ -1016,6 +1020,21 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
     }
 
+    // Let's prepare the authentication packet
+    auth_packet = magicnet_packet_new();
+    if (!auth_packet)
+    {
+        res = -ENOMEM;
+        goto out;
+    }
+
+    // DOn't forget the identification packet type!!
+    magicnet_signed_data(auth_packet)->type = MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET;
+
+    // Let's fill the authentication packet
+    strncpy(magicnet_signed_data(auth_packet)->payload.login_protocol_iden.program_name, program_name, sizeof(magicnet_signed_data(auth_packet)->payload.login_protocol_iden.program_name));
+    magicnet_signed_data(auth_packet)->payload.login_protocol_iden.signal_id = signal_id;
+
     res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, signal_id);
     if (res < 0)
     {
@@ -1029,6 +1048,13 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         mclient = NULL;
     }
 
+out:
+    if (auth_packet)
+    {
+        // We are done with the authentication packet now
+        magicnet_packet_free(auth_packet);
+        auth_packet = NULL;
+    }
     return mclient;
 }
 
@@ -3505,6 +3531,10 @@ out:
     return res;
 }
 
+/**
+ * WARNING: NOT FOR PACKET RELAY, DO NOT RELAY SOMEONE ELSES IDENTIFICATION PACKET
+ * FORBIDDEN!!!
+ */
 int magicnet_client_write_login_protocol_identification_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -3561,6 +3591,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
     }
 
+    
 #warning "all packets are disabled for this significant change"
     // we will -renable them manually each one tested on its own
 
@@ -4120,8 +4151,7 @@ void magicnet_copy_packet_verifier_signup(struct magicnet_packet *packet_out, st
     magicnet_signed_data(packet_out)->payload.verifier_signup.certificate = magicnet_council_certificate_clone(magicnet_signed_data(packet_in)->payload.verifier_signup.certificate);
 }
 
-
-void magicnet_copy_packet_login_protocol_identification_packet(struct magicnet_packet* packet_out, struct magicnet_packet* packet_in)
+void magicnet_copy_packet_login_protocol_identification_packet(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
     if (magicnet_signed_data(packet_in)->type != MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET)
     {
@@ -4132,10 +4162,10 @@ void magicnet_copy_packet_login_protocol_identification_packet(struct magicnet_p
 
     // let's start with a simple memcpy and we will fill in the pointers later
     memcpy(&magicnet_signed_data(packet_out)->payload.login_protocol_iden, &magicnet_signed_data(packet_in)->payload.login_protocol_iden, sizeof(&magicnet_signed_data(packet_out)->payload.login_protocol_iden));
-    
+
     // All has been copied except hte peers
-    struct vector* known_peers_in = magicnet_signed_data(packet_in)->payload.login_protocol_iden.known_peers;
-    struct vector* new_peer_vec = vector_create(sizeof(struct magicnet_peer_information*));
+    struct vector *known_peers_in = magicnet_signed_data(packet_in)->payload.login_protocol_iden.known_peers;
+    struct vector *new_peer_vec = vector_create(sizeof(struct magicnet_peer_information *));
     if (!new_peer_vec)
     {
         magicnet_log("%s out of memory!\n", __FUNCTION__);
@@ -4143,10 +4173,10 @@ void magicnet_copy_packet_login_protocol_identification_packet(struct magicnet_p
     }
 
     vector_set_peek_pointer(known_peers_in, 0);
-    struct magicnet_peer_information* peer_in = vector_peek_ptr(known_peers_in);
-    while(peer_in)
+    struct magicnet_peer_information *peer_in = vector_peek_ptr(known_peers_in);
+    while (peer_in)
     {
-        struct magicnet_peer_information* peer_out = calloc(1, sizeof(struct magicnet_peer_information));
+        struct magicnet_peer_information *peer_out = calloc(1, sizeof(struct magicnet_peer_information));
         if (!peer_out)
         {
             magicnet_log("%s out of memory\n", __FUNCTION__);
@@ -4158,10 +4188,9 @@ void magicnet_copy_packet_login_protocol_identification_packet(struct magicnet_p
         vector_push(new_peer_vec, &peer_out);
         peer_in = vector_peek_ptr(known_peers_in);
     }
-    
 
     // Great we have the duplicate vector, lets assign to the packet out
-    magicnet_signed_data(packet_out)->payload.login_protocol_iden.known_peers  = new_peer_vec;
+    magicnet_signed_data(packet_out)->payload.login_protocol_iden.known_peers = new_peer_vec;
 
     // DONE!
 }
@@ -5314,8 +5343,8 @@ bool magicnet_client_login_protocol_completed(struct magicnet_client *client)
 
 bool magicnet_peer_information_null(struct magicnet_peer_information *peer_info)
 {
-    struct magicnet_peer_information *null_peer_info = {0};
-    return memcmp(peer_info, &null_peer_info, sizeof(*peer_info)) == 0;
+    struct magicnet_peer_information null_peer_info = {0};
+    return memcmp(peer_info, &null_peer_info, sizeof(struct magicnet_peer_information)) == 0;
 }
 
 int magicnet_client_preform_entry_protocol_post_read_process_peer(struct magicnet_client *client, struct login_protocol_identification_peer_info *iden_peer_info)
@@ -5339,7 +5368,7 @@ int magicnet_client_preform_entry_protocol_post_read_process_peer(struct magicne
         magicnet_log("%s the data provided was not signed by the public key given to us.\n", __FUNCTION__);
         goto out;
     }
-out:
+
     if (strlen(peer_info->name) == 0)
     {
         // No name provided then this peer is anonymous.
@@ -5390,23 +5419,36 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
         // therefore lets setup that client information so hes identifiyable for his session
         memcpy(&client->peer_info, peer_info, sizeof(client->peer_info));
 
-        // Peer info now copied into the client so hes identifyable throughout
-        // the session..
+        // Peer doesn't get to choose his own IP we will use the one we know to be true
+        // based on the connected socket.
+        char *ip_address = inet_ntoa(client->client_info.sin_addr);
+        strncpy(client->peer_info.ip_address, ip_address, sizeof(client->peer_info.ip_address));
     }
+
+    // Peer info now copied into the client so hes identifyable throughout
+    // the session..
 
     // let's loop through the peers they have told us about, to expand our own network
     struct vector *peer_vector = magicnet_signed_data(packet)->payload.login_protocol_iden.known_peers;
     vector_set_peek_pointer(peer_vector, 0);
-    struct magicnet_peer_information *peer_info = vector_peek_ptr(peer_vector);
-    while (peer_info)
+    struct magicnet_peer_information *vec_peer_info = vector_peek_ptr(peer_vector);
+    while (vec_peer_info)
     {
         // Let's save this peer..
-        magicnet_save_peer_info(peer_info);
+        magicnet_save_peer_info(vec_peer_info);
         // We won't check for errors, as theres plenty of others that may save correctlyl.
         peer_info = vector_peek_ptr(peer_vector);
     }
 
 out:
+    if (res >= 0)
+    {
+        // All okay? then the peer completed the login protocol on our side
+        // The peer successfully authenticated themselves to us.
+        client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL;
+
+        magicnet_log("%s peer has completed his side of the login protocol\n", __FUNCTION__);
+    }
     return res;
 }
 int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client, struct magicnet_packet *packet)
@@ -5483,9 +5525,8 @@ int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client, 
         goto out;
     }
 
-    // The peer successfully authenticated themselves to us.
-    client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL;
 out:
+
     return res;
 }
 
@@ -5544,6 +5585,7 @@ int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client,
     }
 
     client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL;
+    magicnet_log("%s magic net entry protocol was written\n", __FUNCTION__);
 out:
     return res;
 }
@@ -5857,11 +5899,6 @@ magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
         state = MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PACKET_MUST_WRITE;
         goto out;
     }
-    else if (!magicnet_client_login_protocol_received(client))
-    {
-        state = MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PACKET_MUST_READ;
-        goto out;
-    }
 
     // Do we have any bytes? If so maybe we can start reading a new packet
     bool requires_new_packet = magicnet_client_no_packet_loading(client);
@@ -5982,6 +6019,47 @@ out:
     return res;
 }
 
+int magicnet_client_poll_write_identification(struct magicnet_client* client)
+{
+    int res = 0;
+    // Null for security, otherwise we risk sending sensitive memory
+    // thats on the stack
+    char program_name[MAGICNET_PROGRAM_NAME_SIZE] = {0};
+    strncpy(program_name, "RECEIVER", strlen("RECEIVER"));
+
+    // Let's craft the packet
+    struct magicnet_packet* auth_iden_packet = magicnet_packet_new();
+    if (!auth_iden_packet)
+    {
+        res = -1; //magicno no good, change it..
+        goto out;
+    }
+
+    // Set the type don't forget
+    magicnet_signed_data(auth_iden_packet)->type = MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET;
+
+    // Copy the program name to the packet data.
+    strncpy(magicnet_signed_data(auth_iden_packet)->payload.login_protocol_iden.program_name, program_name, sizeof(magicnet_signed_data(auth_iden_packet)->payload.login_protocol_iden.program_name));
+
+    // Let's send the packet now
+    res = magicnet_client_write_packet(client, auth_iden_packet, 0);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    magicnet_log("%s Login protocol identification was sent to the connected peer\n", __FUNCTION__);
+    // 
+
+out:
+
+    if (auth_iden_packet)
+    {
+        magicnet_packet_free(auth_iden_packet);
+        auth_iden_packet = NULL;
+    }
+    return res;
+}
 /**
  * Must be called to poll and enhance potential client state
  * , through single thread or through thread pool it doesnt matter
@@ -6026,7 +6104,12 @@ int magicnet_client_poll(struct magicnet_client *client)
     {
     case MAGICNET_CLIENT_STATE_IDLE_WAIT:
         // Do nothinbg we are instructed to wait
-        printf("%s IDLE WAIT STATE\n", __FUNCTION__);
+        magicnet_log("%s IDLE WAIT STATE\n", __FUNCTION__);
+        break;
+
+    case MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PACKET_MUST_WRITE:
+        // System requires us to identify ourselves
+        res = magicnet_client_poll_write_identification(client);
         break;
 
     case MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW:

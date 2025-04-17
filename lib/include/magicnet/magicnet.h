@@ -266,7 +266,7 @@ struct login_protocol_identification_peer_info
     struct signature signature;
     // Hash of the info..
     char hash_of_info[SHA256_STRING_LENGTH];
-} peer_info;
+};
 
 struct magicnet_packet
 {
