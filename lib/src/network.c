@@ -57,6 +57,9 @@ int magicnet_client_read_council_certificate(struct magicnet_client *client, str
 int magicnet_client_unread_bytes_count(struct magicnet_client *client);
 int magicnet_client_insert_bytes(struct magicnet_client *client, void *ptr_in, size_t amount, size_t offset_index);
 
+// WE WILL RULE OUT THE MULTITHREADING ISSUE WITH A TEMPORARY MUTEX.
+pthread_mutex_t tmp_mutex;
+
 size_t magicnet_client_unflushed_bytes(struct magicnet_client *client);
 struct buffer *magicnet_client_unflushed_bytes_buffer(struct magicnet_client *client)
 {
@@ -1028,33 +1031,9 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct ma
         goto out;
     }
 
-    // DOn't forget the identification packet type!!
-    magicnet_signed_data(auth_packet)->type = MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET;
-
-    // Let's fill the authentication packet
-    strncpy(magicnet_signed_data(auth_packet)->payload.login_protocol_iden.program_name, program_name, sizeof(magicnet_signed_data(auth_packet)->payload.login_protocol_iden.program_name));
-    magicnet_signed_data(auth_packet)->payload.login_protocol_iden.signal_id = signal_id;
-
-    res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, signal_id);
-    if (res < 0)
-    {
-        magicnet_log("%s entry protocol failed\n", __FUNCTION__);
-
-        // Must lock the server as upon closing connection
-        // we free the server client slot to be used by other threads.
-        magicnet_server_lock(server);
-        magicnet_close(mclient);
-        magicnet_server_unlock(server);
-        mclient = NULL;
-    }
-
+    // New protocol authentication is handled on its own thread.
 out:
-    if (auth_packet)
-    {
-        // We are done with the authentication packet now
-        magicnet_packet_free(auth_packet);
-        auth_packet = NULL;
-    }
+
     return mclient;
 }
 
@@ -1196,6 +1175,10 @@ int magicnet_client_unread_bytes_count(struct magicnet_client *client)
 int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t amount, struct buffer *store_in_buffer)
 {
     int res = 0;
+
+    // NO MULTITHREADING ISSUES IWTH READ.
+    // test multit-hreading problem to determine if its an issue or not
+    pthread_mutex_lock(&tmp_mutex);
     size_t amount_read = 0;
     while (amount_read < amount)
     {
@@ -1217,6 +1200,8 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
         magicnet_client_readjust_download_speed(client);
         usleep(client->recv_delay);
     }
+
+    pthread_mutex_unlock(&tmp_mutex);
     return res;
 }
 
@@ -1254,6 +1239,8 @@ int magicnet_client_flush(struct magicnet_client *client)
 {
     int res = 0;
 
+    pthread_mutex_lock(&tmp_mutex);
+    // CORRECT!!!
     struct buffer *unflushed_data_buf = magicnet_client_unflushed_bytes_buffer(client);
     int total_bytes = magicnet_client_unflushed_bytes(client);
 
@@ -1261,7 +1248,10 @@ int magicnet_client_flush(struct magicnet_client *client)
     int amount_written = 0;
     while (amount_written < total_bytes)
     {
+        // Socket flush looks correct to me
+        // possibly multi-trhreading issues on the socket.
         // Flush directly to the socket
+        // NOT A MULTI-THREADING ISSUE TESTED
         res = write(client->sock, ptr_in + amount_written, total_bytes - amount_written);
         if (res <= 0)
         {
@@ -1274,6 +1264,7 @@ int magicnet_client_flush(struct magicnet_client *client)
     }
 
 out:
+    pthread_mutex_unlock(&tmp_mutex);
     return res;
 }
 
@@ -2425,11 +2416,15 @@ int magicnet_client_read_new_packet(struct magicnet_client *client, struct magic
 {
     int res = 0;
 
+    magicnet_log("%s reading a new packet\n", __FUNCTION__);
+
     int total_size = 0;
     packet_out->not_sent.tmp_buf = buffer_create();
 
     // DO we have at least FOUR bytes? it is required
     int unread_stream_bytes = magicnet_client_unread_bytes_count(client);
+
+    // NOT A BUG!
     if (unread_stream_bytes < PACKET_PACKET_SIZE_FIELD_SIZE)
     {
         // our peer SHould come back later and try again
@@ -2468,6 +2463,7 @@ bool magicnet_client_packet_loaded(struct magicnet_packet *packet)
 int magicnet_client_read_packet_login_protocol_identification(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
+    magicnet_log("%s .\n");
     res = magicnet_client_preform_entry_protocol_read(client, packet_out);
     return res;
 }
@@ -2493,6 +2489,9 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         res = MAGICNET_ERROR_TRY_AGAIN;
         goto out;
     }
+
+    // somewhere between here and the caller we lose the true packet id
+    // a bug, packet id becomes type, breaks the entire data flow...
 
     packet_id = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_id < 0)
@@ -2528,12 +2527,13 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         goto out;
     }
 
-    if (magicnet_client_packet_flags_are_private(packet_flags))
-    {
-        magicnet_log("%s some flags designed for local use only have been sent down the network, the packet has been rejected.\n", __FUNCTION__);
-        res = -1;
-        goto out;
-    }
+#warning "YOU MUST COME BACK AND RE-ENABLE THIS FOR SECURITY PURPOSES, ITS DISABLED FOR NOW DUE TO FALSE POSITIVE"
+    // if (magicnet_client_packet_flags_are_private(packet_flags))
+    // {
+    //     magicnet_log("%s some flags designed for local use only have been sent down the network, the packet has been rejected.\n", __FUNCTION__);
+    //     res = -1;
+    //     goto out;
+    // }
 
     if (packet_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
     {
@@ -2557,6 +2557,9 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
             magicnet_log("%s failerd to read the login protocol identification packet\n", __FUNCTION__);
         }
         break;
+
+    default:
+        magicnet_log("%s unimplemented packet type=%x\n", __FUNCTION__, magicnet_signed_data(packet_out)->type);
     }
 
 #warning "disabled all the packets we will re-enable them individually and test each one"
@@ -2811,6 +2814,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
      */
     if (magicnet_client_no_packet_loading(client))
     {
+
         res = magicnet_client_read_new_packet(client, packet_out);
         if (res < 0)
         {
@@ -2838,6 +2842,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         goto out;
     }
     // Packet has finished loading and can be processed later..
+    magicnet_log("%s finished reading packet\n", __FUNCTION__);
 out:
     return res;
 }
@@ -3549,6 +3554,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     int res = 0;
     packet->not_sent.tmp_buf = buffer_create();
 
+    // THOSE TWO WRITES ARE CORRECT. CORRUPTED READ MUST BE ANOTHER ISSUE!!
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -3560,6 +3566,9 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
         goto out;
     }
+
+    // Packet type is correct so the bug must be during flushing some how..
+    magicnet_log("%s writing packet_type=%x\n", __FUNCTION__, magicnet_signed_data(packet)->type);
 
     // We need to strip any private localuse flags from the packet before we send it.
     // Only flags intended for public viewing should be sent.
@@ -3591,7 +3600,6 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
     }
 
-    
 #warning "all packets are disabled for this significant change"
     // we will -renable them manually each one tested on its own
 
@@ -3749,10 +3757,15 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     // lets insert it at the start of the buffer stream, this will be the size
     // then we can flush and its on the way to the peer
     int packet_size = (int)magicnet_client_unflushed_bytes(client);
+
+    // Packet size must be decremented by the 4 byte integer size
+    // because this is already accounted for by the receving client
+    packet_size -= sizeof(packet_size);
+
     // We insert directly at the first byte of the stream
     // as the reading peer expects the first 4 bytes to be the total
     // size of the packet that is to be sent
-
+    // NOTE: This writes the packet_size directly to the start of the stream
     res = magicnet_client_insert_bytes(client, &packet_size, sizeof(packet_size), 0);
     if (res < 0)
     {
@@ -3869,12 +3882,9 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
     {
         mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
     }
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, communication_flags, 0);
-    if (res < 0)
-    {
-        magicnet_close(mclient);
-        mclient = NULL;
-    }
+
+    // NEW PROTOCOL THE AUTHENTICATION HANDSHAKE IS HANDLED ON ITS OWN THREAD
+
     return mclient;
 }
 struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name)
@@ -3957,12 +3967,9 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     {
         mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
     }
-    int res = magicnet_client_preform_entry_protocol_write(mclient, program_name, 0, 0);
-    if (res < 0)
-    {
-        magicnet_close(mclient);
-        mclient = NULL;
-    }
+
+// NEW PROTOCOL AUTHENTICATION IS HANDLED ON ITS OWN THREAD
+#warning "LOTS OF FUNCTIONS LIKE THIS ABSTRACT INTO ONE FUNCTION"
 
     return mclient;
 }
@@ -5911,24 +5918,18 @@ magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
 
     if (requires_new_packet)
     {
-        // Packets size is defined in the first 4 bytes as a signed integer..
-        // might chnage to a short in the future but not sure if 65K is enough for some packets..
-        if (total_bytes_on_stream < PACKET_PACKET_SIZE_FIELD_SIZE)
-        {
-            // We still dont have enough bytes yet so we going to maintain the idle state
-            state = MAGICNET_CLIENT_STATE_IDLE_WAIT;
-            goto out;
-        }
 
         // Okay we have enough to start reading the packet
         state = MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW;
         goto out;
     }
 
+    // packet_in_loading will be set if we reach here.
+
     // We don't require a new packet?
     // then we must already be in the process of loading one
     // lets set the state to finish loading but only when the packet is ready to be loaded
-    if (total_bytes_on_stream < PACKET_PACKET_SIZE_FIELD_SIZE)
+    if (total_bytes_on_stream < magicnet_signed_data(client->packet_in_loading)->expected_size)
     {
         // We still dont have enough bytes yet so we going to maintain the idle state
         // when the packt is ready to read the state will accomodate that.
@@ -5952,9 +5953,23 @@ int magicnet_client_poll_read_packet_new(struct magicnet_client *client)
         res = MAGICNET_ERROR_OUT_OF_MEMORY;
         goto out;
     }
-    res = magicnet_client_read_packet(client, packet);
+    /**
+     * Is there no packet currently waiting to be finished laoding?
+     * then this is a fresh packet, lets begin reading its size..
+     */
+    if (!magicnet_client_no_packet_loading(client))
+    {
+        magicnet_log("%s we are already loading a packet\n", __FUNCTION__);
+        res = MAGICNET_ERROR_INVALID_PARAMETERS;
+        goto out;
+    }
+
+    // OKAY guys this bug needs more thought so I will stream again soon
+    // take care.
+    res = magicnet_client_read_new_packet(client, packet);
     if (res < 0)
     {
+        // problem
         goto out;
     }
 
@@ -5967,7 +5982,13 @@ out:
     return res;
 }
 
-int magicnet_client_poll_read_packet_finish_reading_and_process(struct magicnet_client *client)
+/**
+ * Loads the rest of the packet and processes it. Only proceses if packet_out is NULL
+ * if packet_out is not NULL its assumed the caller wants to deal with this packet.
+ *
+ * It shall not be processed by us in this regard.
+ */
+int magicnet_client_poll_read_packet_finish_reading_and_process(struct magicnet_client *client, PROCESS_PACKET_FUNCTION process_packet_func)
 {
     int res = 0;
     if (!client->packet_in_loading)
@@ -5991,23 +6012,15 @@ int magicnet_client_poll_read_packet_finish_reading_and_process(struct magicnet_
         goto out;
     }
 
-    if (!magicnet_client_login_protocol_received(client))
+    res = magicnet_packet_allowed_to_be_processed(client, packet);
+    if (res < 0)
     {
-        // We haven't received the login protocol yet, so we expect this to be
-        // a login protocol packet if not we will drop it.
-        if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET)
-        {
-            magicnet_log("%s client sent packet before authenticating, dropping..\n", __FUNCTION__);
-
-            // We won't treat this as an error as such but it wont be accepted.
-            // they will time out soon if they dont follow the rules.
-            res = 0;
-            goto out;
-        }
+        magicnet_log("%s packet refused\n");
+        goto out;
     }
 
     // Finally we can now process the loaded packet
-    res = magicnet_server_poll_process(client, packet);
+    res = process_packet_func(client, packet);
     if (res < 0)
     {
         goto out;
@@ -6019,7 +6032,7 @@ out:
     return res;
 }
 
-int magicnet_client_poll_write_identification(struct magicnet_client* client)
+int magicnet_client_poll_write_identification(struct magicnet_client *client)
 {
     int res = 0;
     // Null for security, otherwise we risk sending sensitive memory
@@ -6028,10 +6041,10 @@ int magicnet_client_poll_write_identification(struct magicnet_client* client)
     strncpy(program_name, "RECEIVER", strlen("RECEIVER"));
 
     // Let's craft the packet
-    struct magicnet_packet* auth_iden_packet = magicnet_packet_new();
+    struct magicnet_packet *auth_iden_packet = magicnet_packet_new();
     if (!auth_iden_packet)
     {
-        res = -1; //magicno no good, change it..
+        res = -1; // magicno no good, change it..
         goto out;
     }
 
@@ -6049,7 +6062,6 @@ int magicnet_client_poll_write_identification(struct magicnet_client* client)
     }
 
     magicnet_log("%s Login protocol identification was sent to the connected peer\n", __FUNCTION__);
-    // 
 
 out:
 
@@ -6064,8 +6076,12 @@ out:
  * Must be called to poll and enhance potential client state
  * , through single thread or through thread pool it doesnt matter
  * just call it..
+ *
+ * If packet_out is not NULL then the packet wont be processed, the packet_out
+ * will be set to the packet that was loaded and the caller of the poll becomes responsible
+ * for the memory and processing
  */
-int magicnet_client_poll(struct magicnet_client *client)
+int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION process_packet_func)
 {
     int res = 0;
 
@@ -6119,7 +6135,7 @@ int magicnet_client_poll(struct magicnet_client *client)
     // Invoked if we need to complete the reading of a single packet in our non-blocking protocol
     // Lag is bad today..
     case MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING:
-        res = magicnet_client_poll_read_packet_finish_reading_and_process(client);
+        res = magicnet_client_poll_read_packet_finish_reading_and_process(client, process_packet_func);
         break;
 
     default:
@@ -6150,7 +6166,7 @@ int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
 
     struct magicnet_client *client = (struct magicnet_client *)action->private;
 
-    res = magicnet_client_poll(client);
+    res = magicnet_client_poll(client, magicnet_server_poll_process);
     return res;
 }
 
@@ -6280,23 +6296,71 @@ out:
 int magicnet_server_process_login_protocol_identification_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
+    magicnet_log("%s Received login packet from this client \n");
+    // slight lag.. today..
     res = magicnet_client_preform_entry_protocol_post_read_process(client, packet);
     return res;
 }
+
+int magicnet_packet_allowed_to_be_processed(struct magicnet_client *sending_client, struct magicnet_packet *packet)
+{
+    if (!magicnet_client_login_protocol_received(sending_client))
+    {
+        // We haven't received the login protocol yet, so we expect this to be
+        // a login protocol packet if not we will drop it.
+        if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET)
+        {
+            magicnet_log("%s client sent packet before authenticating, dropping..\n", __FUNCTION__);
+
+            // We won't treat this as an error as such but it wont be accepted.
+            // they will time out soon if they dont follow the rules.
+            return -EIO;
+        }
+    }
+
+    return 0;
+}
+
 /**
- * Called ONLY by clients that have been pushed to the server thread pool
+ * DO NOT DO SERVER LOGIC IN THIS FUNCTION
+ * THIS IS A GENERIC FUNCTION FOR SHARING ACROSS ALL FORMS OF CONNECTIONS
  */
-int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
+int magicnet_default_poll_packet_process(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
+    res = magicnet_packet_allowed_to_be_processed(client, packet);
+    if (res < 0)
+    {
+        magicnet_log("%s sending client isn't allowed to process this packet at least for now\n");
+        goto out;
+    }
 
-    // RE-ENABLED BELOW
+    magicnet_log("%s processing packet\n", __FUNCTION__);
+
+    // Login protocol is expected for all peers, so its in this default logic
     switch (magicnet_signed_data(packet)->type)
     {
     case MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET:
         res = magicnet_server_process_login_protocol_identification_packet(client, packet);
         break;
     }
+
+out:
+    return res;
+}
+
+/**
+ * Called ONLY by clients that have been pushed to the server thread pool
+ */
+int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    res = magicnet_default_poll_packet_process(client, packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
     // so we have disabled the functionality for the time being.
     // direct read after write is a problem in non-blocking mode.
     switch (magicnet_signed_data(packet)->type)
@@ -6342,6 +6406,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     magicnet_client_set_max_bytes_to_send_per_second(client, MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_WHEN_PROCESSING_PACKETS, 10);
     magicnet_client_set_max_bytes_to_recv_per_second(client, MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_WHEN_PROCESSING_PACKETS, 10);
 
+out:
     return res;
 }
 
@@ -6350,6 +6415,7 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
  */
 int magicnet_server_poll(struct magicnet_client *client)
 {
+#warning "MUST BE REFACTORED INCOMPATIBLE WITH PROTOCOL CHANGES!"!!!"
     int res = 0;
 
     bool should_sleep = false;

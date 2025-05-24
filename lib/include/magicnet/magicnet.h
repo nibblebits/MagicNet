@@ -13,6 +13,10 @@
 #include "key.h"
 #include "buffer.h"
 
+struct magicnet_packet;
+struct magicnet_client;
+typedef int (*PROCESS_PACKET_FUNCTION)(struct magicnet_client* client, struct magicnet_packet* packet);
+
 #define PACKET_PACKET_SIZE_FIELD_SIZE sizeof(int)
 
 struct magicnet_client;
@@ -29,7 +33,8 @@ enum
     MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING = 0b00000010,
     MAGICNET_INIT_FLAG_NO_STDOUT_ERROR_LOGGING = 0b00000100,
     // When set we will block on certain requests in magicnet.c wait forever.
-    MAGICNET_INIT_FLAG_ENABLE_BLOCKING = 0b00001000
+    MAGICNET_INIT_FLAG_ENABLE_BLOCKING = 0b00001000,
+    MAGICNET_INIT_FLAG_USE_PROGRAMS = 0b00010000
 };
 
 struct magicnet_registered_structure
@@ -1276,8 +1281,11 @@ void magicnet_close(struct magicnet_client *client);
  *
  * For server threads, they will call this function, for single threaded applications
  * you are responsible.
+ * 
+ * \param client The client to read the packet/ or poll
+ * \param process_packet_func This function is called when the packet is fully read and ready 
  */
-int magicnet_client_poll(struct magicnet_client *client);
+int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION process_packet_func);
 
 void magicnet_reconnect(struct magicnet_program *program);
 
@@ -1316,6 +1324,14 @@ int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
+
+/**
+ * Default handler of packets to be processed. Must be called by all handlers to enforce
+ * the protocol correctly.
+ * 
+ * DO NOT PREFORM SERVER LOGIC IN THIS FUNCTION
+ */
+int magicnet_default_poll_packet_process(struct magicnet_client *client, struct magicnet_packet *packet);
 
 /**
  * Pushes the client to the thread pool so it can be polled frequently
@@ -1357,6 +1373,12 @@ int magicnet_read_transaction_council_certificate_claim_request(struct block_tra
  */
 int magicnet_certificate_transfer_claim(struct magicnet_program *program, const char *initiate_transfer_transaction_hash, const char *certificate_hash);
 int magicnet_certificate_transfer_data_write(struct block_transaction *transaction, struct block_transaction_council_certificate_initiate_transfer_request *transfer_request);
+
+/**
+ * Returns zero if we are allowed to process this packet for this sending client
+ * negative if it must be refused.
+ */
+int magicnet_packet_allowed_to_be_processed(struct magicnet_client* sending_client, struct magicnet_packet* packet);
 
 int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_packet_free(struct magicnet_packet *packet);

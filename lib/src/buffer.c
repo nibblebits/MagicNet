@@ -126,6 +126,8 @@ void buffer_shift_right_at_position(struct buffer* buffer, int index, int amount
 
     // Now null the existing region for debugging purposes
     memset(&buffer->data[index], 0x00, amount);
+
+    // CORRECT
 }
 
 int buffer_insert(struct buffer* buffer, int index, void* data, size_t len)
@@ -136,6 +138,8 @@ int buffer_insert(struct buffer* buffer, int index, void* data, size_t len)
     // Move the data into the region
     memcpy(&buffer->data[index], data, len);
 
+    // CORRECT
+    
     return 0;
 }
 

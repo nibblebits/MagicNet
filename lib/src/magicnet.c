@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <unistd.h>
+#include <pthread.h>
 
 /**
  * @brief A vector of struct magicnet_registered_structure determines the registered
@@ -20,8 +21,14 @@ static struct vector *structure_vec;
 static struct vector *program_vec;
 
 struct magicnet_transactions *magicnet_transactions_new(struct vector *block_transactions_vec);
+int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action);
+void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action* action, void* private_data);
 
 int mn_set_flags;
+
+
+// not a multi-threading problem... hmm..
+extern pthread_mutex_t tmp_mutex;
 
 int magicnet_init(int flags, int t_threads)
 {
@@ -30,11 +37,17 @@ int magicnet_init(int flags, int t_threads)
     srand(time(NULL));
     mn_set_flags = flags;
 
-    if (t_threads > 0)
+    pthread_mutex_init(&tmp_mutex, NULL);
+
+    if (t_threads == 0)
     {
-        // Let's get those threads going.
-        magicnet_threads_init(t_threads);
+        // For now we require at least one thread
+        t_threads = 1;
     }
+
+    // Let's get those threads going.
+    magicnet_threads_init(t_threads);
+
 
     return 0;
 }
@@ -253,6 +266,7 @@ int _magicnet_send_packet(struct magicnet_program *program, int packet_type, voi
         return -1;
     }
 
+    // Use a secure random... temporary..
     magicnet_packet.signed_data.id = rand() % 999999999;
     magicnet_packet.signed_data.type = MAGICNET_PACKET_TYPE_USER_DEFINED;
     magicnet_packet.signed_data.payload.user_defined.type = packet_type;
@@ -692,6 +706,48 @@ void magicnet_program_free(struct magicnet_program *program)
     free(program);
 }
 
+int magicnet_program_client_thread_poll_process_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    
+    // Let's process the default protocol
+    res = magicnet_default_poll_packet_process(client, packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    magicnet_log("%s processing read packet\n", __FUNCTION__);
+    
+
+    // Process other packets here....
+out:
+    return res;
+}
+
+int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
+{
+    int res = 0;
+
+    struct magicnet_client *client = (struct magicnet_client *)action->private;
+
+    res = magicnet_client_poll(client, magicnet_program_client_thread_poll_process_packet);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+out:
+    return res;
+}
+
+void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action* action, void* private_data)
+{
+    // Close the finished client socket.
+    struct magicnet_client* client = (struct magicnet_client*) private_data;
+    magicnet_close(client);
+
+}
 struct magicnet_program *magicnet_program(const char *name)
 {
     int res = 0;
@@ -710,7 +766,7 @@ struct magicnet_program *magicnet_program(const char *name)
         res = -1;
         goto out;
     }
-    
+
     struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, name);
     if (!client)
     {
@@ -721,6 +777,18 @@ struct magicnet_program *magicnet_program(const char *name)
     strncpy(program->name, name, sizeof(program->name));
     vector_push(program_vec, program);
     program->client = client;
+
+    struct magicnet_nthread_action* action = magicnet_threads_action_new(magicnet_program_client_thread_poll, client, magicnet_program_client_thread_poll_free);
+    if (!action)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Let's push this client to the thread for further polling and processing
+    magicnet_threads_push_action(action);
+
+    // Now it will be processed throughout the threads infinitely until negative is returend.
 out:
     if (res < 0)
     {
