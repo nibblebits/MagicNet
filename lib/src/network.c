@@ -2427,11 +2427,12 @@ int magicnet_client_read_new_packet(struct magicnet_client *client, struct magic
     // NOT A BUG!
     if (unread_stream_bytes < PACKET_PACKET_SIZE_FIELD_SIZE)
     {
+        magicnet_log("%s not yet enough bytes sent\n", __FUNCTION__);
         // our peer SHould come back later and try again
         res = MAGICNET_ERROR_TRY_AGAIN;
         goto out;
     }
-
+    
     total_size = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (total_size < 0)
     {
@@ -2442,6 +2443,7 @@ int magicnet_client_read_new_packet(struct magicnet_client *client, struct magic
     magicnet_signed_data(packet_out)->expected_size = total_size;
     client->packet_in_loading = packet_out;
 
+    magicnet_log("%s received expected packet size %i\n", __FUNCTION__, (int)total_size);
 out:
     return res;
 }
@@ -2470,6 +2472,7 @@ int magicnet_client_read_packet_login_protocol_identification(struct magicnet_cl
 
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
+    magicnet_log("%s ...\n", __FUNCTION__);
     int res = 0;
     int packet_id = 0;
     int packet_type = 0;
@@ -2502,9 +2505,11 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
 
     if (client->server)
     {
+        magicnet_log("%s lock aquired\n", __FUNCTION__);
         magicnet_server_lock(client->server);
         bool seen_packet = magicnet_server_has_seen_packet_with_id(client->server, packet_id);
         magicnet_server_unlock(client->server);
+        magicnet_log("%s lock released\n", __FUNCTION__);
         if (seen_packet)
         {
             // magicnet_signed_data(packet_out)->id = packet_id;
@@ -2823,12 +2828,11 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         }
     }
 
-    // Do we have enough data to read the entirrrrrrrre packet now or do we have
-    // to come back another time
 
     int unread_bytes = magicnet_client_unread_bytes_count(client);
     if (unread_bytes < magicnet_signed_data(packet_out)->expected_size)
     {
+        magicnet_log("%s not enough bytes on stream\n", __FUNCTION__);
         // Yes we don't have enough data on stream to load the packet
         // we will need to try again later, this is a non blockijng protocol
         res = MAGICNET_ERROR_TRY_AGAIN;
@@ -5950,6 +5954,7 @@ int magicnet_client_poll_read_packet_new(struct magicnet_client *client)
     struct magicnet_packet *packet = magicnet_packet_new();
     if (!packet)
     {
+        magicnet_log("%s out of memory when making new packet\n", __FUNCTION__);
         res = MAGICNET_ERROR_OUT_OF_MEMORY;
         goto out;
     }
@@ -5964,11 +5969,11 @@ int magicnet_client_poll_read_packet_new(struct magicnet_client *client)
         goto out;
     }
 
-    // OKAY guys this bug needs more thought so I will stream again soon
-    // take care.
+
     res = magicnet_client_read_new_packet(client, packet);
     if (res < 0)
     {
+        magicnet_log("%s error reading new packet\n", __FUNCTION__);
         // problem
         goto out;
     }

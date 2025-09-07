@@ -37,6 +37,7 @@ struct buffer *buffer_wrap(void *data, size_t size)
     buf->len = size;
     buf->msize = size;
     buf->read_bytes = buffer_read_bytes_default_handler;
+    buf->write_bytes = buffer_write_bytes_default_handler;
     buf->flags |= BUFFER_FLAG_WRAPPED;
     return buf;
 }
@@ -120,14 +121,14 @@ void buffer_shift_right_at_position(struct buffer* buffer, int index, int amount
     int bytes_needed = (buffer->len - index) + amount;
     buffer_need(buffer, bytes_needed);
 
-    char* new_move_position = &buffer->data[index+amount];
-    // Now we need to memcpy the memory region and shift it to the right
-    memcpy(&buffer->data[index], new_move_position, amount);
-
-    // Now null the existing region for debugging purposes
+    // We need to first move all the data that exists to the right
+    memcpy(&buffer->data[index+amount], &buffer->data[index], buffer->len);
+    // Now the entire buffer has been shifted to the right
+    // Lets null the data to the left so its not uninitialized
     memset(&buffer->data[index], 0x00, amount);
-
+    
     // CORRECT
+    buffer->len += amount;
 }
 
 int buffer_insert(struct buffer* buffer, int index, void* data, size_t len)
@@ -138,7 +139,6 @@ int buffer_insert(struct buffer* buffer, int index, void* data, size_t len)
     // Move the data into the region
     memcpy(&buffer->data[index], data, len);
 
-    // CORRECT
     
     return 0;
 }

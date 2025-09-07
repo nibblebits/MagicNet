@@ -714,6 +714,7 @@ int magicnet_program_client_thread_poll_process_packet(struct magicnet_client* c
     res = magicnet_default_poll_packet_process(client, packet);
     if (res < 0)
     {
+        magicnet_log("%s error processing packet\n", __FUNCTION__);
         goto out;
     }
 
