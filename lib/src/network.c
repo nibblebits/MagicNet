@@ -139,6 +139,16 @@ struct magicnet_packet *magicnet_packet_new()
     return packet;
 }
 
+struct magicnet_packet* magicnet_packet_new_init(int packet_type)
+{
+    struct magicnet_packet* packet = magicnet_packet_new();
+    if (!packet)
+        return NULL;
+
+    magicnet_signed_data(packet)->type = packet_type;
+    return packet;
+}
+
 int magicnet_client_packet_strip_private_flags(const struct magicnet_packet *packet)
 {
     int flags = packet->signed_data.flags;
@@ -1262,6 +1272,9 @@ int magicnet_client_flush(struct magicnet_client *client)
         amount_written += res;
         client->total_bytes_sent += res;
     }
+
+    // now we must clear the buffer
+    buffer_empty(unflushed_data_buf);
 
 out:
     pthread_mutex_unlock(&tmp_mutex);
@@ -2412,6 +2425,19 @@ out:
     return res;
 }
 
+int magicnet_client_should_start_reading_new_packet(struct magicnet_client* client)
+{
+    int unread_stream_bytes = magicnet_client_unread_bytes_count(client);
+    if (!magicnet_client_no_packet_loading(client))
+    {
+        return MAGICNET_ERROR_ALREADY_EXISTANT;
+    }
+
+    if (unread_stream_bytes <= 0)
+        return MAGICNET_ERROR_END_OF_STREAM;
+    return 0;
+}
+
 int magicnet_client_read_new_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
@@ -2427,12 +2453,11 @@ int magicnet_client_read_new_packet(struct magicnet_client *client, struct magic
     // NOT A BUG!
     if (unread_stream_bytes < PACKET_PACKET_SIZE_FIELD_SIZE)
     {
-        magicnet_log("%s not yet enough bytes sent\n", __FUNCTION__);
         // our peer SHould come back later and try again
         res = MAGICNET_ERROR_TRY_AGAIN;
         goto out;
     }
-    
+
     total_size = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (total_size < 0)
     {
@@ -2470,6 +2495,13 @@ int magicnet_client_read_packet_login_protocol_identification(struct magicnet_cl
     return res;
 }
 
+int magicnet_client_read_packet_ping(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{
+    int res = 0;
+    magicnet_log("%s received ping\n", __FUNCTION__);
+    // Packet ping does not read anything.
+    return res;
+}
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     magicnet_log("%s ...\n", __FUNCTION__);
@@ -2562,7 +2594,9 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
             magicnet_log("%s failerd to read the login protocol identification packet\n", __FUNCTION__);
         }
         break;
-
+    case MAGICNET_PACKET_TYPE_PING:
+        res = magicnet_client_read_packet_ping(client, packet_out);
+        break;
     default:
         magicnet_log("%s unimplemented packet type=%x\n", __FUNCTION__, magicnet_signed_data(packet_out)->type);
     }
@@ -2828,6 +2862,8 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         }
     }
 
+    // Do we have enough data to read the entirrrrrrrre packet now or do we have
+    // to come back another time
 
     int unread_bytes = magicnet_client_unread_bytes_count(client);
     if (unread_bytes < magicnet_signed_data(packet_out)->expected_size)
@@ -2851,11 +2887,6 @@ out:
     return res;
 }
 
-int magicnet_client_write_packet_ping(struct magicnet_client *client, struct magicnet_packet *packet)
-{
-    int res = 0;
-    return res;
-}
 
 int magicnet_client_write_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -3540,6 +3571,12 @@ out:
     return res;
 }
 
+int magicnet_client_write_packet_ping(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    // Packet ping writes nothing more than its type which has been sent.
+    return res;
+}
 /**
  * WARNING: NOT FOR PACKET RELAY, DO NOT RELAY SOMEONE ELSES IDENTIFICATION PACKET
  * FORBIDDEN!!!
@@ -3557,8 +3594,8 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 {
     int res = 0;
     packet->not_sent.tmp_buf = buffer_create();
+    client->last_packet_sent = time(NULL);
 
-    // THOSE TWO WRITES ARE CORRECT. CORRUPTED READ MUST BE ANOTHER ISSUE!!
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -3601,6 +3638,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
     case MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET:
         res = magicnet_client_write_login_protocol_identification_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_PING:
+        res = magicnet_client_write_packet_ping(client, packet);
         break;
     }
 
@@ -5072,19 +5113,22 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
 {
 
     int res = 0;
+
+    // We will always have the known peers vector created
+    // even when theres zero peers
+    struct vector *known_peer_vector = vector_create(sizeof(struct magicnet_peer_information *));
+    magicnet_signed_data(packet)->payload.login_protocol_iden.known_peers = known_peer_vector;
+    if (!known_peer_vector)
+    {
+        res = MAGICNET_ERROR_OUT_OF_MEMORY;
+        goto out;
+    }
+
     // Lets read all the IPS until we get a NULL.
     int total_peers = magicnet_read_int(client, NULL);
     if (total_peers <= 0)
     {
         res = total_peers;
-        goto out;
-    }
-
-    // We need tom ake a vector that can hold peers
-    struct vector *known_peer_vector = vector_create(sizeof(struct magicnet_peer_information *));
-    if (!known_peer_vector)
-    {
-        res = MAGICNET_ERROR_OUT_OF_MEMORY;
         goto out;
     }
 
@@ -5121,7 +5165,6 @@ int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *cl
         vector_push(known_peer_vector, &peer_info);
     }
 
-    magicnet_signed_data(packet)->payload.login_protocol_iden.known_peers = known_peer_vector;
 out:
     return res;
 }
@@ -5361,22 +5404,38 @@ bool magicnet_peer_information_null(struct magicnet_peer_information *peer_info)
 int magicnet_client_preform_entry_protocol_post_read_process_peer(struct magicnet_client *client, struct login_protocol_identification_peer_info *iden_peer_info)
 {
     int res = 0;
-    struct buffer *recv_buffer = buffer_create();
-    if (!recv_buffer)
+    struct buffer *signed_data_buffer = buffer_create();
+    if (!signed_data_buffer)
     {
         res = -ENOMEM;
         goto out;
     }
+
+    // Write to the signed data buffer
+    // we need to hash it later and comapre them.
+    buffer_write_bytes(signed_data_buffer, iden_peer_info->info.name, sizeof(iden_peer_info->info.name));
+    buffer_write_bytes(signed_data_buffer, iden_peer_info->info.email, sizeof(iden_peer_info->info.email));
 
     // Verify that the peer information was signed by the peer himself
     // we don't want people pretending to be others, signature is required.
     char *hash_of_info = iden_peer_info->hash_of_info;
     struct signature *signature = &iden_peer_info->signature;
     struct magicnet_peer_information *peer_info = &iden_peer_info->info;
-    res = public_verify(&client->peer_info.key, hash_of_info, sizeof(*hash_of_info), signature);
+    res = public_verify(&peer_info->key, hash_of_info, sizeof(iden_peer_info->hash_of_info), signature);
     if (res < 0)
     {
         magicnet_log("%s the data provided was not signed by the public key given to us.\n", __FUNCTION__);
+        goto out;
+    }
+
+    // Let's rehash to ensure our hash matches the one they provided to us
+    // if it doesn't match then it was not signed by them they lied
+    char our_hash_of_data[SHA256_STRING_LENGTH];
+    sha256_data(buffer_ptr(signed_data_buffer), our_hash_of_data, buffer_len(signed_data_buffer));
+    if (memcmp(hash_of_info, our_hash_of_data, sizeof(our_hash_of_data)) != 0)
+    {
+        magicnet_log("%s the hash provided does not match the hash we calculated\n", __FUNCTION__);
+        res = -1;
         goto out;
     }
 
@@ -5385,17 +5444,9 @@ int magicnet_client_preform_entry_protocol_post_read_process_peer(struct magicne
         // No name provided then this peer is anonymous.
         strncpy(peer_info->name, "Anonymous", sizeof(peer_info->name));
     }
-
-    // Let's rehash to ensure our hash matches the one they provided to us
-    // if it doesn't match then it was not signed by them they lied
-    char our_hash_of_data[SHA256_STRING_LENGTH];
-    sha256_data(buffer_ptr(recv_buffer), our_hash_of_data, buffer_len(recv_buffer));
-    if (memcmp(hash_of_info, our_hash_of_data, sizeof(our_hash_of_data)) != 0)
-    {
-        magicnet_log("%s the hash provided does not match the hash we calculated\n", __FUNCTION__);
-        res = -1;
-        goto out;
-    }
+    // Now we have proved this is a legit peer lets set the
+    // peer info into the client information.
+    client->peer_info = *peer_info;
 
 out:
     return res;
@@ -5420,12 +5471,17 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
 
         // Okay we have peer information save it locally so we know who this person is
         // when they communicate with us forward from now.
-        res = magicnet_save_peer_info(peer_info);
-        if (res < 0)
+        // We only want to save the peer info if we are a server client
+        // i suggest making a new function for the client side #
+        // to avoid these messy if statements
+        if (client->server)
         {
-            goto out;
+            res = magicnet_save_peer_info(peer_info);
+            if (res < 0)
+            {
+                goto out;
+            }
         }
-
         // This particular peer is the client whos connected
         // therefore lets setup that client information so hes identifiyable for his session
         memcpy(&client->peer_info, peer_info, sizeof(client->peer_info));
@@ -5442,13 +5498,20 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
     // let's loop through the peers they have told us about, to expand our own network
     struct vector *peer_vector = magicnet_signed_data(packet)->payload.login_protocol_iden.known_peers;
     vector_set_peek_pointer(peer_vector, 0);
-    struct magicnet_peer_information *vec_peer_info = vector_peek_ptr(peer_vector);
-    while (vec_peer_info)
+
+    // We only care about the peer info if we are a server client
+    // WARNING: we need to refactor this into another function i guess..
+    if (client->server)
     {
-        // Let's save this peer..
-        magicnet_save_peer_info(vec_peer_info);
-        // We won't check for errors, as theres plenty of others that may save correctlyl.
-        peer_info = vector_peek_ptr(peer_vector);
+
+        struct magicnet_peer_information *vec_peer_info = vector_peek_ptr(peer_vector);
+        while (vec_peer_info)
+        {
+            // Let's save this peer..
+            magicnet_save_peer_info(vec_peer_info);
+            // We won't check for errors, as theres plenty of others that may save correctlyl.
+            peer_info = vector_peek_ptr(peer_vector);
+        }
     }
 
 out:
@@ -5603,19 +5666,28 @@ out:
 
 bool magicnet_client_needs_ping(struct magicnet_client *client)
 {
-    return time(NULL) - client->last_packet_received >= 5;
+    return time(NULL) - client->last_packet_received >= MAGICNET_CLIENT_FORCE_PING_SECONDS;
+}
+
+bool magicnet_client_must_send_ping(struct magicnet_client* client)
+{
+    return time(NULL) - client->last_packet_sent >= MAGICNET_CLIENT_FORCE_PING_SECONDS;
 }
 
 int magicnet_ping(struct magicnet_client *client)
 {
-    // assert(0==1)
-    // int res = magicnet_client_write_packet(client, &(struct magicnet_packet){.type = MAGICNET_PACKET_TYPE_PING});
-    // if (res < 0)
-    // {
-    //     return res;
-    // }
+    magicnet_log("%s sending ping..\n", __FUNCTION__);
+    int res = 0;
+    struct magicnet_packet* packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_PING);
+    if (!packet)
+    {
+        res = MAGICNET_ERROR_OUT_OF_MEMORY;
+        goto out;
+    }
 
-    return 0;
+    res = magicnet_client_write_packet(client, packet, 0);
+out:
+    return res;
 }
 
 int magicnet_send_pong(struct magicnet_client *client)
@@ -5903,6 +5975,7 @@ void *magicnet_server_client_thread(void *_client);
 magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
 {
     int res = 0;
+    bool requires_new_packet = false;
     int total_bytes_on_stream = magicnet_client_unread_bytes_count(client);
     magicnet_client_state state = MAGICNET_CLIENT_STATE_IDLE_WAIT;
     if (!magicnet_client_login_protocol_sent(client))
@@ -5911,8 +5984,14 @@ magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
         goto out;
     }
 
+    if (magicnet_client_must_send_ping(client))
+    {
+        state = MAGICNET_CLIENT_STATE_MUST_SEND_PING;
+        goto out;
+    }
+
     // Do we have any bytes? If so maybe we can start reading a new packet
-    bool requires_new_packet = magicnet_client_no_packet_loading(client);
+    requires_new_packet = magicnet_client_no_packet_loading(client);
     if (total_bytes_on_stream < 0)
     {
         // I/O error..
@@ -5949,23 +6028,20 @@ out:
 int magicnet_client_poll_read_packet_new(struct magicnet_client *client)
 {
     int res = 0;
-
+    struct magicnet_packet *packet = NULL;
+    res = magicnet_client_should_start_reading_new_packet(client);
+    if (res < 0)
+    {   
+        // Not being able to read a packet yet isnt an error.
+        res = 0;
+        goto out;
+    }
     // We need to create a new packet
-    struct magicnet_packet *packet = magicnet_packet_new();
+    packet = magicnet_packet_new();
     if (!packet)
     {
         magicnet_log("%s out of memory when making new packet\n", __FUNCTION__);
         res = MAGICNET_ERROR_OUT_OF_MEMORY;
-        goto out;
-    }
-    /**
-     * Is there no packet currently waiting to be finished laoding?
-     * then this is a fresh packet, lets begin reading its size..
-     */
-    if (!magicnet_client_no_packet_loading(client))
-    {
-        magicnet_log("%s we are already loading a packet\n", __FUNCTION__);
-        res = MAGICNET_ERROR_INVALID_PARAMETERS;
         goto out;
     }
 
@@ -6143,6 +6219,10 @@ int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION
         res = magicnet_client_poll_read_packet_finish_reading_and_process(client, process_packet_func);
         break;
 
+    case MAGICNET_CLIENT_STATE_MUST_SEND_PING:
+        res = magicnet_ping(client);
+        break;
+
     default:
         magicnet_log("%s unknown state or potential error %i\n", __FUNCTION__, (int)state);
     }
@@ -6158,6 +6238,7 @@ int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION
 out:
     if (res < 0)
     {
+        magicnet_log("%s client poll error %i\n", __FUNCTION__, res);
         // destruct the client
         magicnet_close(client);
     }
@@ -6349,6 +6430,8 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
         res = magicnet_server_process_login_protocol_identification_packet(client, packet);
         break;
     }
+
+    client->last_packet_received = time(NULL);
 
 out:
     return res;

@@ -408,6 +408,11 @@ struct magicnet_packet
                     struct magicnet_packet *packet;
                 } sync;
 
+                struct ping
+                {
+                    // no data for ping yet.
+                } ping;
+
                 /**
                  * This packet describes a VOTE of the key who should verify the next block.
                  * SOme better abstraction would be better i think, come back to revise...
@@ -523,6 +528,7 @@ enum
     MAGICNET_CLIENT_STATE_IDLE_WAIT = 3,
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW = 4,
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING = 5,
+    MAGICNET_CLIENT_STATE_MUST_SEND_PING = 6,
 };
 
 typedef int magicnet_client_state;
@@ -542,6 +548,7 @@ struct magicnet_client
     // Communication flags are set in the entry protocol they determine the type of packets this peer is willing to accept.
     int communication_flags;
     time_t last_packet_received;
+    time_t last_packet_sent;
 
     time_t connection_began;
 
@@ -1271,10 +1278,13 @@ struct magicnet_client *magicnet_client_new();
  * and the server completed his side too.
  */
 bool magicnet_client_login_protocol_completed(struct magicnet_client *client);
+bool magicnet_client_must_send_ping(struct magicnet_client* client);
+bool magicnet_client_needs_ping(struct magicnet_client* client);
 
 void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
+bool magicnet_client_no_packet_loading(struct magicnet_client *client);
 
 /**
  * To be called to enhance the client to the next stage, such as moving forward
@@ -1385,6 +1395,7 @@ int magicnet_send_pong(struct magicnet_client *client);
 void magicnet_packet_free(struct magicnet_packet *packet);
 void magicnet_free_packet_pointers(struct magicnet_packet *packet);
 struct magicnet_packet *magicnet_packet_new();
+struct magicnet_packet* magicnet_packet_new_init(int packet_type);
 void magicnet_packet_make_new_id(struct magicnet_packet *packet);
 int magicnet_init(int flags, int t_threads);
 int magicnet_flags();

@@ -72,6 +72,21 @@ void buffer_need(struct buffer *buffer, size_t size)
     }
 }
 
+void buffer_empty(struct buffer* buffer)
+{
+    // EMptying should be as simple as resetting the indexes
+    // to zero.
+    if (buffer->data && buffer->len > 0)
+    {
+        // Just in case someone uses the buffer for strings
+        // and doesnt bother to work with the length.
+        buffer->data[0] = 0x00;
+    }
+
+    buffer->rindex = 0;
+    buffer->len = 0;
+
+}
 void buffer_printf(struct buffer *buffer, const char *fmt, ...)
 {
     struct buffer* str_buf = buffer_create();
@@ -126,7 +141,7 @@ void buffer_shift_right_at_position(struct buffer* buffer, int index, int amount
     // Now the entire buffer has been shifted to the right
     // Lets null the data to the left so its not uninitialized
     memset(&buffer->data[index], 0x00, amount);
-    
+
     // CORRECT
     buffer->len += amount;
 }

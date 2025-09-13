@@ -744,9 +744,8 @@ out:
 
 void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action* action, void* private_data)
 {
-    // Close the finished client socket.
-    struct magicnet_client* client = (struct magicnet_client*) private_data;
-    magicnet_close(client);
+    // No need to access the client it has been closed already.
+    // by the network
 
 }
 struct magicnet_program *magicnet_program(const char *name)

@@ -43,6 +43,14 @@ struct buffer* buffer_wrap(void* data, size_t size);
 int buffer_len(struct buffer* buffer);
 char buffer_read(struct buffer* buffer);
 
+/**
+ * EMpties the entire buffer,
+ * doesnt null the data region
+ * just resets indexes to zero.
+ * puts a single null terminator on first byte
+ * of data region, for string cases.
+ */
+void buffer_empty(struct buffer* buffer);
 int buffer_read_bytes(struct buffer *buffer, void *ptr, size_t amount);
 
 
