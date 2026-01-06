@@ -81,6 +81,11 @@ enum
     #warning "NOTE TO SELF THERES MEMORY CORRUPTION ON PACKET SEND. pROVEN AS empty packet is now 7000 yet packet type still zero"
     MAGICNET_PACKET_TYPE_EMPTY_PACKET = 7000,
     MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET,
+
+    // To be sent once both parties have authenticated with eachother
+    // this confirms they are ready to communicate.
+    MAGICNET_PACKET_TYPE_OPEN_DOOR,
+    MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK,
     MAGICNET_PACKET_TYPE_USER_DEFINED,
     MAGICNET_PACKET_TYPE_EVENTS_POLL,
     MAGICNET_PACKET_TYPE_EVENTS_RES,
@@ -413,6 +418,22 @@ struct magicnet_packet
                     // no data for ping yet.
                 } ping;
 
+                struct open_door
+                {
+                    // No payload for open door packet yet
+                    // actually we can have a unique id of some kind
+                    // This id must match same as the one we sent
+                    // when we tried to open the door to them.
+                    // or packet shall drop.
+                    int door_key;
+                } open_door;
+
+                struct open_door_ack
+                {
+                    // acknowledge the door key..
+                    int door_key;
+                } open_door_ack;
+
                 /**
                  * This packet describes a VOTE of the key who should verify the next block.
                  * SOme better abstraction would be better i think, come back to revise...
@@ -519,6 +540,12 @@ enum
     MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL = 0b00000001,
     // We sent login protocol correctly to the peer.
     MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL = 0b00000010,
+    // Set if this peer has opened the door from his side
+    MAGICNET_CLIENT_STATE_FLAG_DOOR_OPEN_SENT = 0b00000100,
+    // Set if the peer has opened the door on his side
+    MAGICNET_CLIENT_STATE_FLAG_DOOR_OPEN_RECV = 0b00001000,
+    // Set when the door is mutually opened on both sides
+    MAGICNET_CLIENT_STATE_FLAG_DOOR_OPENED = 0b00010000
 };
 
 enum
@@ -529,6 +556,7 @@ enum
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_NEW = 4,
     MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING = 5,
     MAGICNET_CLIENT_STATE_MUST_SEND_PING = 6,
+    MAGICNET_CLIENT_STATE_MUST_OPEN_DOOR = 7,
 };
 
 typedef int magicnet_client_state;
@@ -579,6 +607,17 @@ struct magicnet_client
     // giving control to the signal. We will not process this client on its own thread and any existing thread will be killed
     // when it is found that the signal is present
     int signal_id;
+
+    // THe unique key shared between the client
+    // and other peer that confirms the opening of the door
+    // the first to open the door shall generate the key
+    // the receiver must send the same key back to establish the door opened.
+    struct door_keys
+    {
+        int our_key;
+        int their_key;
+    } door_keys;
+    
 
     char program_name[MAGICNET_PROGRAM_NAME_SIZE];
 
@@ -1254,6 +1293,7 @@ enum
     // MAGICNET_CLIENT_FLAG_ENTRY_PROTOCOL_COMPLETED = 0b00010000,
     MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION = 0b00100000,
     MAGICNET_CLIENT_FLAG_MUST_BLOCK = 0b01000000,
+    MAGICNET_CLIENT_FLAG_
 };
 
 enum

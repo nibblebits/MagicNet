@@ -139,9 +139,9 @@ struct magicnet_packet *magicnet_packet_new()
     return packet;
 }
 
-struct magicnet_packet* magicnet_packet_new_init(int packet_type)
+struct magicnet_packet *magicnet_packet_new_init(int packet_type)
 {
-    struct magicnet_packet* packet = magicnet_packet_new();
+    struct magicnet_packet *packet = magicnet_packet_new();
     if (!packet)
         return NULL;
 
@@ -2425,7 +2425,7 @@ out:
     return res;
 }
 
-int magicnet_client_should_start_reading_new_packet(struct magicnet_client* client)
+int magicnet_client_should_start_reading_new_packet(struct magicnet_client *client)
 {
     int unread_stream_bytes = magicnet_client_unread_bytes_count(client);
     if (!magicnet_client_no_packet_loading(client))
@@ -2495,13 +2495,47 @@ int magicnet_client_read_packet_login_protocol_identification(struct magicnet_cl
     return res;
 }
 
-int magicnet_client_read_packet_ping(struct magicnet_client* client, struct magicnet_packet* packet_out)
+int magicnet_client_read_packet_ping(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     magicnet_log("%s received ping\n", __FUNCTION__);
     // Packet ping does not read anything.
     return res;
 }
+
+int magicnet_client_read_packet_open_door(struct magicnet_client *client, struct magicnet_packet *packet_out)
+{
+    int res = 0;
+    int door_key = 0;
+    magicnet_log("%s open door received\n", __FUNCTION__);
+    door_key = magicnet_read_int(client, NULL);
+    if (door_key < 0)
+    {
+        res = door_key;
+        goto out;
+    }
+    magicnet_signed_data(packet_out)->payload.open_door.door_key = door_key;
+out:
+    return res;
+}
+
+int magicnet_client_read_packet_open_door_ack(struct magicnet_client* client, struct magicnet_packet* packet_out)
+{
+    int res = 0;
+    int door_key = magicnet_read_int(client, NULL);
+    if (door_key < 0)
+    {
+        res = door_key;
+        goto out;
+    }
+
+
+    magicnet_signed_data(packet_out)->payload.open_door_ack.door_key = door_key;
+out:
+    return res;
+}
+
+
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     magicnet_log("%s ...\n", __FUNCTION__);
@@ -2555,12 +2589,23 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     packet_type = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_type < 0)
     {
+        res = packet_type;
+        goto out;
+    }
+
+    // THIS DOESNT GET HIT
+    // THIS SUGGESTS A READING ERROR LEADING TO THE PACKET TYPE 
+    // BENIG ZERO UPPER IN READING..
+    if (packet_type == 0x00)
+    {
+        magicnet_log("%s sending null packet type illegal\n", __FUNCTION__);
         goto out;
     }
 
     packet_flags = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_flags < 0)
     {
+        res = packet_flags;
         goto out;
     }
 
@@ -2597,6 +2642,15 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     case MAGICNET_PACKET_TYPE_PING:
         res = magicnet_client_read_packet_ping(client, packet_out);
         break;
+
+    case MAGICNET_PACKET_TYPE_OPEN_DOOR:
+        res = magicnet_client_read_packet_open_door(client, packet_out);
+        break;
+
+    case MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK:
+        res = magicnet_client_read_packet_open_door_ack(client, packet_out);
+        break;
+        
     default:
         magicnet_log("%s unimplemented packet type=%x\n", __FUNCTION__, magicnet_signed_data(packet_out)->type);
     }
@@ -2862,8 +2916,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
         }
     }
 
-    // Do we have enough data to read the entirrrrrrrre packet now or do we have
-    // to come back another time
 
     int unread_bytes = magicnet_client_unread_bytes_count(client);
     if (unread_bytes < magicnet_signed_data(packet_out)->expected_size)
@@ -2886,7 +2938,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
 out:
     return res;
 }
-
 
 int magicnet_client_write_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -3571,7 +3622,7 @@ out:
     return res;
 }
 
-int magicnet_client_write_packet_ping(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_write_packet_ping(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
     // Packet ping writes nothing more than its type which has been sent.
@@ -3590,6 +3641,21 @@ int magicnet_client_write_login_protocol_identification_packet(struct magicnet_c
     res = magicnet_client_preform_entry_protocol_write(client, program_name, communication_flags, signal_id);
     return res;
 }
+
+int magicnet_client_write_packet_open_door(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.open_door.door_key, NULL);
+    return res;
+}
+
+int magicnet_client_write_packet_open_door_ack(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res =0;
+    res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.open_door_ack.door_key, NULL);
+    return res;
+}
+
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
@@ -3602,6 +3668,14 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         goto out;
     }
 
+    // CONFIRMED: THIS IS NOT A WRITING ERROR
+    // no bug found... if statement never active.
+    if (magicnet_signed_data(packet)->type == 0x00)
+    {
+        magicnet_log("%s caught\n ", __FUNCTION__);
+    }
+
+
     res = magicnet_write_int(client, magicnet_signed_data(packet)->type, packet->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -3609,7 +3683,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     }
 
     // Packet type is correct so the bug must be during flushing some how..
-    magicnet_log("%s writing packet_type=%x\n", __FUNCTION__, magicnet_signed_data(packet)->type);
+    magicnet_log("%s writing packet_type=%i\n", __FUNCTION__, magicnet_signed_data(packet)->type);
 
     // We need to strip any private localuse flags from the packet before we send it.
     // Only flags intended for public viewing should be sent.
@@ -3634,15 +3708,26 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     }
 
     // re-enabled packets
+    // these are only for when the door is closed.
     switch (magicnet_signed_data(packet)->type)
     {
     case MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET:
         res = magicnet_client_write_login_protocol_identification_packet(client, packet);
         break;
-
     case MAGICNET_PACKET_TYPE_PING:
         res = magicnet_client_write_packet_ping(client, packet);
         break;
+
+    case MAGICNET_PACKET_TYPE_OPEN_DOOR:
+        res = magicnet_client_write_packet_open_door(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK:
+        res = magicnet_client_write_packet_open_door_ack(client, packet);
+        break;
+
+        default:
+        magicnet_log("%s sending unimplemented packet type=%i", __FUNCTION__, magicnet_signed_data(packet)->type);
     }
 
 #warning "all packets are disabled for this significant change"
@@ -5384,6 +5469,21 @@ bool magicnet_client_login_protocol_sent(struct magicnet_client *client)
     return (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_WE_SENT_LOGIN_PROTOCOL);
 }
 
+bool magicnet_client_login_protocol_door_open_sent(struct magicnet_client *client)
+{
+    return (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_DOOR_OPEN_SENT);
+}
+
+bool magicnet_client_login_protocol_door_open_recv(struct magicnet_client *client)
+{
+    return (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_DOOR_OPEN_RECV);
+}
+
+bool magicnet_client_door_opened(struct magicnet_client *client)
+{
+    return (client->states.flags & MAGICNET_CLIENT_STATE_FLAG_DOOR_OPENED);
+}
+
 bool magicnet_client_login_protocol_received(struct magicnet_client *client)
 {
     return client->states.flags & MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL;
@@ -5669,7 +5769,7 @@ bool magicnet_client_needs_ping(struct magicnet_client *client)
     return time(NULL) - client->last_packet_received >= MAGICNET_CLIENT_FORCE_PING_SECONDS;
 }
 
-bool magicnet_client_must_send_ping(struct magicnet_client* client)
+bool magicnet_client_must_send_ping(struct magicnet_client *client)
 {
     return time(NULL) - client->last_packet_sent >= MAGICNET_CLIENT_FORCE_PING_SECONDS;
 }
@@ -5678,7 +5778,7 @@ int magicnet_ping(struct magicnet_client *client)
 {
     magicnet_log("%s sending ping..\n", __FUNCTION__);
     int res = 0;
-    struct magicnet_packet* packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_PING);
+    struct magicnet_packet *packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_PING);
     if (!packet)
     {
         res = MAGICNET_ERROR_OUT_OF_MEMORY;
@@ -5984,6 +6084,12 @@ magicnet_client_state magicnet_client_get_state(struct magicnet_client *client)
         goto out;
     }
 
+    if (!magicnet_client_login_protocol_door_open_sent(client))
+    {
+        state = MAGICNET_CLIENT_STATE_MUST_OPEN_DOOR;
+        goto out;
+    }
+
     if (magicnet_client_must_send_ping(client))
     {
         state = MAGICNET_CLIENT_STATE_MUST_SEND_PING;
@@ -6031,7 +6137,7 @@ int magicnet_client_poll_read_packet_new(struct magicnet_client *client)
     struct magicnet_packet *packet = NULL;
     res = magicnet_client_should_start_reading_new_packet(client);
     if (res < 0)
-    {   
+    {
         // Not being able to read a packet yet isnt an error.
         res = 0;
         goto out;
@@ -6044,7 +6150,6 @@ int magicnet_client_poll_read_packet_new(struct magicnet_client *client)
         res = MAGICNET_ERROR_OUT_OF_MEMORY;
         goto out;
     }
-
 
     res = magicnet_client_read_new_packet(client, packet);
     if (res < 0)
@@ -6153,6 +6258,66 @@ out:
     }
     return res;
 }
+
+bool magicnet_client_check_door_fully_open(struct magicnet_client *client)
+{
+    if (magicnet_client_login_protocol_door_open_recv(client) &&
+        magicnet_client_login_protocol_door_open_sent(client))
+    {
+        // We also received therefore the door is fully open
+        client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_DOOR_OPENED;
+        magicnet_log("%s the door has been fully opened\n", __FUNCTION__);
+        return true;
+    }
+
+    return false;
+}
+
+int magicnet_client_open_door(struct magicnet_client *client)
+{
+    int res = 0;
+    magicnet_log("%s we shall open the door with the peer\n", __FUNCTION__);
+
+    if (magicnet_client_login_protocol_door_open_sent(client))
+    {
+        magicnet_log("%s door is already open from our side. We will assume to reopen it again\n", __FUNCTION__);
+    }
+
+    int door_key = client->door_keys.our_key;
+    if (door_key == 0)
+    {
+        // Let's generate a door key to share
+        // the client must send it back
+
+        // shitty random, should change this at some point
+        // its okay fo rnow...
+        door_key = (rand() % 999999) + 1;
+        client->door_keys.our_key = door_key;
+    }
+
+    struct magicnet_packet *packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_OPEN_DOOR);
+    if (!packet)
+    {
+        res = MAGICNET_ERROR_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    magicnet_signed_data(packet)->payload.open_door.door_key = door_key;
+
+    res = magicnet_client_write_packet(client, packet, 0);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_DOOR_OPEN_SENT;
+    // Maybe the door is fully open at this point.
+    magicnet_client_check_door_fully_open(client);
+
+out:
+    return res;
+}
+
 /**
  * Must be called to poll and enhance potential client state
  * , through single thread or through thread pool it doesnt matter
@@ -6221,6 +6386,10 @@ int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION
 
     case MAGICNET_CLIENT_STATE_MUST_SEND_PING:
         res = magicnet_ping(client);
+        break;
+
+    case MAGICNET_CLIENT_STATE_MUST_OPEN_DOOR:
+        res = magicnet_client_open_door(client);
         break;
 
     default:
@@ -6407,6 +6576,69 @@ int magicnet_packet_allowed_to_be_processed(struct magicnet_client *sending_clie
     return 0;
 }
 
+int magicnet_client_open_door_ack(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res =0;
+
+    struct magicnet_packet* ack_packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK);
+    if (!ack_packet)
+    {
+        res = MAGICNET_ERROR_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    // Set the key to the one its expected to be
+    magicnet_signed_data(ack_packet)->payload.open_door_ack.door_key = magicnet_signed_data(packet)->payload.open_door.door_key;
+    client->door_keys.their_key = magicnet_signed_data(packet)->payload.open_door.door_key;
+
+    // We have the cknowledgement packet sent it to them
+    res = magicnet_client_write_packet(client, ack_packet, 0);
+    // The acknowledgement was sent.
+out:
+    return res;
+}
+int magicnet_server_process_open_door_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+{
+    int res = 0;
+    magicnet_log("%s open door process\n", __FUNCTION__);
+    if (magicnet_client_door_opened(client))
+    {
+        magicnet_log("%s door is already open\n", __FUNCTION__);
+        goto out;
+    }
+
+    // We got a door open packet so we have to send ours back
+    // unless we are fully open at this point
+    if (!magicnet_client_check_door_fully_open(client))
+    {
+        // Not fully open open our door.
+        magicnet_client_open_door(client);
+    }
+    //We also have to acknowledge their packet
+    res = magicnet_client_open_door_ack(client, packet);
+out:
+    return res;
+}
+
+int magicnet_server_process_open_door_ack_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res =0;
+    if (client->door_keys.our_key != magicnet_signed_data(packet)->payload.open_door_ack.door_key )
+    {
+        // Client doesnt know what thec ode is
+        // not paying attention kill it
+        res = MAGICNET_ERROR_INVALID_PARAMETERS;
+        goto out;
+    }
+    // Key is valid authenticate
+    // recv flag only set when they acknowledge our open door.
+    client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_DOOR_OPEN_RECV;
+
+    // nOW CHECK THE keys see if its open on both sides
+    magicnet_client_check_door_fully_open(client);
+out:
+    return res;
+}
 /**
  * DO NOT DO SERVER LOGIC IN THIS FUNCTION
  * THIS IS A GENERIC FUNCTION FOR SHARING ACROSS ALL FORMS OF CONNECTIONS
@@ -6428,6 +6660,14 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
     {
     case MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET:
         res = magicnet_server_process_login_protocol_identification_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_OPEN_DOOR:
+        res = magicnet_server_process_open_door_packet(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK:
+        res = magicnet_server_process_open_door_ack_packet(client, packet);
         break;
     }
 
