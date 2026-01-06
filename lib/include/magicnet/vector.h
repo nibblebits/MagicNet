@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+
 // We want at least 20 vector element spaces in reserve before having
 // to reallocate memory again
 #define VECTOR_ELEMENT_INCREMENT 20
@@ -104,10 +105,17 @@ int vector_insert(struct vector *vector_dst, struct vector *vector_src, int dst_
 int vector_pop_at_data_address(struct vector* vector, void* address);
 
 /**
- * Pops the given value from the vector. Only the first value found is popped
+ * Pops the given pointer value from the vector. Only the first value found is popped
+ */
+int vector_pop_ptr_value(struct vector* vector, void* val);
+
+/**
+ * Pops th actual memory from the vector
+ * val is the pointer to the start
+ * extends to vector element_size..
+ * cmp must match for pop 
  */
 int vector_pop_value(struct vector* vector, void* val);
-
 void vector_pop_at(struct vector *vector, int index);
 
 /**
@@ -148,4 +156,11 @@ size_t vector_element_size(struct vector* vector);
  */
 struct vector* vector_clone(struct vector* vector);
 
+
+/**
+ * Returns true if the given element exists.
+ * data should be a pointer to the data, the sizes must match the
+ * vector expected element size.
+ */
+bool vector_exists(struct vector* vector, void* data);
 #endif

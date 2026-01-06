@@ -310,7 +310,26 @@ void vector_stretch(struct vector *vector, int index)
     vector->rindex = index;
 }
 
+
+
 int vector_pop_value(struct vector* vector, void* val)
+{
+    size_t size = vector->esize;
+    int index = 0;
+    for(size_t i = 0; i < vector->count; i++)
+    {
+        void* ptr = vector_at(vector, i);
+        if (memcmp(ptr, val, size) == 0)
+        {
+            vector_pop_at(vector, i);
+            break;
+        }
+        index++;
+    }
+    return index;
+}
+
+int vector_pop_ptr_value(struct vector* vector, void* val)
 {
     int old_pp = vector->pindex;
     vector_set_peek_pointer(vector, 0);
@@ -460,4 +479,19 @@ void *vector_back(struct vector *vector)
 int vector_count(struct vector *vector)
 {
     return vector->count;
+}
+
+bool vector_exists(struct vector* vector, void* data)
+{   
+    size_t size = vector->esize;
+    for (size_t i = 0; i < vector->count; i++)
+    {
+        void* element_data = vector_at(vector, i);
+        if (memcmp(element_data, data, size) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }

@@ -21,10 +21,9 @@ int main()
         return -1;
     }
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
-   //  while (1)
+   while (1)
      {
             struct chat_packet* packet = NULL;
-            printf("testing 123\n");
             int type = magicnet_next_packet(decentralized_program, (void**)&packet);
             switch(type)
             {
@@ -35,5 +34,6 @@ int main()
                 default: 
                     printf("Bad packet %i\n",type);
             }
+
      }
 }

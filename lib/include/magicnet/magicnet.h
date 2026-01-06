@@ -12,6 +12,7 @@
 #include "magicnet/config.h"
 #include "key.h"
 #include "buffer.h"
+#include "vector.h"
 
 struct magicnet_packet;
 struct magicnet_client;
@@ -624,9 +625,19 @@ struct magicnet_client
     /**
      * Used for localhost applications. Anything added here is an awaiting packet for the application that is listening to this
      * program name. These awaiting packets will be received directly by the localhost application requesting them.
+     * Can be used by any peer if packet monitoring is enabled
+     * all packets to monitor shall be pushed here up to a later defined limit..
      */
-    struct magicnet_packet awaiting_packets[MAGICNET_MAX_AWAITING_PACKETS];
+    // does not apply for server clients.. these are for local applications only
+    struct
+    {
+        // struct magicnet_packet* vector
+        struct vector* packets;
+        // The type ids to monitor
+        struct vector* type_ids;
+    } packet_monitoring;
 
+    
     /**
      * These are the packets that are directly for this connected client. When a sync packet is used we will send the
      * next packet from this array to this client in question.
@@ -663,6 +674,10 @@ struct magicnet_client
     // it may have been partially sent at this point. this is an unblocked protocol
     // so we need to be sure the packet is ready before processing.
     struct magicnet_packet *packet_in_loading;
+
+    // Only lock for data that is shared outside of the peers
+    // running thread action..
+    pthread_mutex_t mutex;
 };
 
 // This is the network vote structure to vote for the next block creator
@@ -1313,6 +1328,9 @@ void magicnet_server_shutdown_server_instance(struct magicnet_server *server);
 struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
 struct magicnet_client *magicnet_client_new();
 
+void magicnet_client_lock(struct magicnet_client* client);
+void magicnet_client_unlock(struct magicnet_client* client);
+
 /**
  * Returns true if the login protocol has been completed from both sides, our clients side
  * and the server completed his side too.
@@ -1325,6 +1343,9 @@ void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);
 void magicnet_close(struct magicnet_client *client);
 bool magicnet_client_no_packet_loading(struct magicnet_client *client);
+void magicnet_client_monitor_packet_type(struct magicnet_client* client, int type);
+void magicnet_client_unmonitor_packet_type(struct magicnet_client* client, int type);
+void magicnet_client_handle_packet_monitoring(struct magicnet_client* client, struct magicnet_packet* packet);
 
 /**
  * To be called to enhance the client to the next stage, such as moving forward

@@ -34,7 +34,7 @@
 #include "key.h"
 #include "misc.h"
 
-void magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in);
+int magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in);
 int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client, struct magicnet_packet *packet);
 
 // not the same as free, the memory of client isnt freed.
@@ -183,14 +183,8 @@ int magicnet_packet_resign_on_send(struct magicnet_packet *packet)
 void magicnet_client_destruct(struct magicnet_client *client)
 {
     client->flags &= ~MAGICNET_CLIENT_FLAG_CONNECTED;
-    // Let's free all the packets
-    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
-    {
-        magicnet_free_packet_pointers(&client->packets_for_client.packets[i]);
-        magicnet_free_packet_pointers(&client->awaiting_packets[i]);
-    }
-    memset(&client->packets_for_client, 0, sizeof(client->packets_for_client));
-    memset(&client->awaiting_packets, 0, sizeof(client->awaiting_packets));
+    
+    memset(&client->packets_for_client, 0, sizeof(client->packets_for_client));;
 
     if (client->events)
     {
@@ -891,8 +885,21 @@ void magicnet_client_set_max_bytes_to_recv_per_second(struct magicnet_client *cl
     client->reset_max_bytes_to_recv_at = time(NULL) + reset_in_seconds;
 }
 
-void magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in)
+void magicnet_client_lock(struct magicnet_client* client)
 {
+    pthread_mutex_lock(&client->mutex);
+}
+
+void magicnet_client_unlock(struct magicnet_client* client)
+{
+    pthread_mutex_unlock(&client->mutex);
+}
+
+
+
+int magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in)
+{
+    int res = 0;
     memset(client, 0, sizeof(struct magicnet_client));
     client->sock = connfd;
     client->server = server;
@@ -904,17 +911,56 @@ void magicnet_init_client(struct magicnet_client *client, struct magicnet_server
     // We lied we haven't got a packet yet but we need to be sure the connection isnt booted right away.
     client->last_packet_received = time(NULL);
 
+    // Mutex only used for data thats shared outside of the
+    // thread action 
+    pthread_mutex_init(&client->mutex, NULL);
+    
+    // todo add the free stuff later on...
+    client->packet_monitoring.packets = vector_create(sizeof(struct magicnet_packet*));
+    if (!client->packet_monitoring.packets)
+    {
+        //res = -ENOMEM; ADD STATUS CODES...
+        res = -1;
+        goto out;
+    }
+
+    client->packet_monitoring.type_ids = vector_create(sizeof(int));
+    if (!client->packet_monitoring.type_ids)
+    {
+        res = -1; // impl -ENOMEM
+        goto out;
+    }
+
     if (addr_in)
     {
         memcpy(&client->client_info, addr_in, sizeof(&client->client_info));
     }
     for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
     {
-        magicnet_signed_data(&client->awaiting_packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
         magicnet_signed_data(&client->packets_for_client.packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     }
 
     client->unflushed_data = buffer_create();
+
+out:
+    if (res < 0)
+    {
+        if (client->packet_monitoring.packets)
+        {
+            vector_free(client->packet_monitoring.packets);
+        }
+
+        if (client->packet_monitoring.type_ids)
+        {
+            vector_free(client->packet_monitoring.type_ids);
+        }
+
+        if (client->unflushed_data)
+        {
+            buffer_free(client->unflushed_data);
+        }
+    }
+    return res;
 }
 
 /**
@@ -1448,13 +1494,21 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
         goto out;
     }
 
+    // TODO CHECK THEY CANT JUST DECLARE MASSIVE PAKCET SIZES, HAVE SOME LIMITS
     long data_size = magicnet_read_long(client, packet_out->not_sent.tmp_buf);
     data = calloc(1, data_size);
+    if (!data)
+    {
+        res = -1;
+        goto out;
+    }
+
     res = magicnet_read_bytes(client, data, data_size, packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
         goto out;
     }
+
 
     res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.user_defined.program_name, sizeof(magicnet_signed_data(packet_out)->payload.user_defined.program_name), packet_out->not_sent.tmp_buf);
     if (res < 0)
@@ -1466,8 +1520,6 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
     magicnet_signed_data(packet_out)->payload.user_defined.data_len = data_size;
     magicnet_signed_data(packet_out)->payload.user_defined.data = data;
 
-    // Send a received back
-    res = magicnet_write_int(client, MAGICNET_ACKNOWLEGED_ALL_OKAY, NULL);
 out:
     if (res < 0)
     {
@@ -2650,30 +2702,29 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     case MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK:
         res = magicnet_client_read_packet_open_door_ack(client, packet_out);
         break;
-        
+
+    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+        res = magicnet_client_read_packet_empty(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read empty packet failed\n", __FUNCTION__);
+        }
+        break;
+    case MAGICNET_PACKET_TYPE_USER_DEFINED:
+        res = magicnet_client_read_user_defined_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s user defined packet failed\n", __FUNCTION__);
+        }
+        break;
+
     default:
         magicnet_log("%s unimplemented packet type=%x\n", __FUNCTION__, magicnet_signed_data(packet_out)->type);
     }
 
-#warning "disabled all the packets we will re-enable them individually and test each one"
+#warning "disabled most of the packets we will re-enable them individually and test each one"
 
-    // switch (packet_type)
-    // {
 
-    // case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
-    //     res = magicnet_client_read_packet_empty(client, packet_out);
-    //     if (res < 0)
-    //     {
-    //         magicnet_log("%s read empty packet failed\n", __FUNCTION__);
-    //     }
-    //     break;
-    // case MAGICNET_PACKET_TYPE_USER_DEFINED:
-    //     res = magicnet_client_read_user_defined_packet(client, packet_out);
-    //     if (res < 0)
-    //     {
-    //         magicnet_log("%s user defined packet failed\n", __FUNCTION__);
-    //     }
-    //     break;
 
     // case MAGICNET_PACKET_TYPE_EVENTS_POLL:
     //     res = magicnet_client_read_events_poll_packet(client, packet_out);
@@ -2979,8 +3030,6 @@ int magicnet_client_write_packet_user_defined(struct magicnet_client *client, st
         goto out;
     }
 
-    // Read the response.
-    res = magicnet_read_int(client, NULL);
 out:
     return res;
 }
@@ -3726,11 +3775,19 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_client_write_packet_open_door_ack(client, packet);
         break;
 
+    case MAGICNET_PACKET_TYPE_EMPTY_PACKET:
+        res = magicnet_client_write_packet_empty(client, packet);
+        break;
+
+    case MAGICNET_PACKET_TYPE_USER_DEFINED:
+        res = magicnet_client_write_packet_user_defined(client, packet);
+        break;
+
         default:
         magicnet_log("%s sending unimplemented packet type=%i", __FUNCTION__, magicnet_signed_data(packet)->type);
     }
 
-#warning "all packets are disabled for this significant change"
+#warning "most  packets are disabled for this significant change"
     // we will -renable them manually each one tested on its own
 
     // switch (magicnet_signed_data(packet)->type)
@@ -4212,34 +4269,6 @@ struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client
     return packet;
 }
 
-struct magicnet_packet *magicnet_client_get_available_free_to_use_packet(struct magicnet_client *client)
-{
-    struct magicnet_packet *packet = NULL;
-    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
-    {
-        if (magicnet_signed_data(&client->awaiting_packets[i])->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE)
-        {
-            magicnet_signed_data(&client->awaiting_packets[i])->type &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
-            packet = &client->awaiting_packets[i];
-        }
-    }
-
-    return packet;
-}
-
-struct magicnet_packet *magicnet_client_get_next_packet_to_process(struct magicnet_client *client)
-{
-    struct magicnet_packet *packet = NULL;
-    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
-    {
-        if (magicnet_signed_data(&client->awaiting_packets[i])->flags & MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING)
-        {
-            packet = &client->awaiting_packets[i];
-            break;
-        }
-    }
-    return packet;
-}
 
 void magicnet_copy_packet_block_send(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
@@ -4381,44 +4410,7 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
     }
 }
 
-bool magicnet_client_has_awaiting_packet_been_queued(struct magicnet_client *client, struct magicnet_packet *packet)
-{
-    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
-    {
-        if (magicnet_signed_data(&client->awaiting_packets[i])->id == magicnet_signed_data(packet)->id)
-        {
-            return true;
-        }
-    }
 
-    return false;
-}
-int magicnet_client_add_awaiting_packet(struct magicnet_client *client, struct magicnet_packet *packet)
-{
-
-    if (magicnet_client_has_awaiting_packet_been_queued(client, packet))
-    {
-        return MAGICNET_ERROR_RECEIVED_PACKET_BEFORE;
-    }
-
-    if (MAGICNET_nulled_signature(&packet->signature))
-    {
-        magicnet_log("%s you may not add an awaiting packet that has not been signed with a key. We need to know whos sending data on the network. Refused\n", __FUNCTION__);
-        return MAGICNET_ERROR_SECURITY_RISK;
-    }
-
-    struct magicnet_packet *awaiting_packet = magicnet_client_get_available_free_to_use_packet(client);
-    if (!awaiting_packet)
-    {
-        return MAGICNET_ERROR_QUEUE_FULL;
-    }
-
-    // Let us check if the packet has already been sent before
-    magicnet_copy_packet(awaiting_packet, packet);
-    magicnet_signed_data(awaiting_packet)->flags |= MAGICNET_PACKET_FLAG_IS_READY_FOR_PROCESSING;
-    magicnet_signed_data(awaiting_packet)->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
-    return 0;
-}
 
 struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_client *client)
 {
@@ -4517,24 +4509,7 @@ struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_serv
 
     return NULL;
 }
-/**
- * @brief Marks the packet in the client->awaiting_packets array as processed
- * \note The packet point must be the same pointer returned from magicnet_client_get_next_packet_to_process
- * @param client
- * @param packet
- */
-void magicnet_client_mark_packet_processed(struct magicnet_client *client, struct magicnet_packet *packet)
-{
-    memset(packet, 0, sizeof(struct magicnet_packet));
-    for (int i = 0; i < MAGICNET_MAX_AWAITING_PACKETS; i++)
-    {
-        if (magicnet_signed_data(&client->awaiting_packets[i])->id == magicnet_signed_data(packet)->id)
-        {
-            magicnet_signed_data(&client->awaiting_packets[i])->flags |= MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
-            break;
-        }
-    }
-}
+
 
 int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -4587,25 +4562,22 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
     magicnet_server_lock(client->server);
 
     // We must find all the clients of the same program name
+    // relay to our local connections..
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
         struct magicnet_client *cli = &client->server->clients[i];
         if (!magicnet_client_in_use(client))
         {
             continue;
-        }
+        }   
 
-        // Same program name as the sending client? Then add it to the packet queue of the connected client
-        if (strncmp(cli->program_name, magicnet_signed_data(packet)->payload.user_defined.program_name, sizeof(cli->program_name)) == 0)
-        {
-            res = magicnet_client_add_awaiting_packet(cli, packet);
-            if (res < 0)
-            {
-                magicnet_log("%s error adding the packet to the awaiting packet queue.\n", __FUNCTION__);
-                goto out;
-            }
-        }
+
+        // We relay to the local clients, they shall handle the rest.
+        magicnet_relay_packet_to_client(client, packet);
+        
     }
+    
+    // Relay to the internet
     magicnet_server_add_packet_to_relay(client->server, packet);
 
 out:
@@ -6639,6 +6611,62 @@ int magicnet_server_process_open_door_ack_packet(struct magicnet_client* client,
 out:
     return res;
 }
+
+
+#warning "BELOW FUNCTIONS DONT RESPECT THE MUTEXES, MAKE SURE YOU CALL THEM WITH A LOCK"
+bool magicnet_client_monitoring_packet_type(struct magicnet_client* client, int type)
+{
+    if (vector_exists(client->packet_monitoring.type_ids, &type))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+void magicnet_client_monitor_packet_type(struct magicnet_client* client, int type)
+{
+    vector_push(client->packet_monitoring.type_ids, &type);
+}
+
+void magicnet_client_unmonitor_packet_type(struct magicnet_client* client, int type)
+{
+    vector_pop_value(client->packet_monitoring.type_ids, &type);
+}
+
+void magicnet_client_handle_packet_monitoring(struct magicnet_client* client, struct magicnet_packet* packet)
+{
+    int res = 0;
+    struct magicnet_packet* cloned_packet = NULL;
+
+    // Do we have packet monitoring enabled for this type of packet
+    if (magicnet_client_monitoring_packet_type(client, magicnet_signed_data(packet)->type))
+    {
+        // yes great..
+        cloned_packet = magicnet_packet_new();
+        if (!cloned_packet)
+        {
+            // nomem..
+            res = -1;
+            goto out;
+        }
+
+        magicnet_copy_packet(cloned_packet, packet);
+
+        // We have the clone push it to the vector
+        vector_push(client->packet_monitoring.packets, &cloned_packet);
+    }
+
+out:
+    if (res < 0)
+    {
+        if (cloned_packet)
+        {
+            magicnet_packet_free(cloned_packet);
+            cloned_packet = NULL;
+        }
+    }
+}
 /**
  * DO NOT DO SERVER LOGIC IN THIS FUNCTION
  * THIS IS A GENERIC FUNCTION FOR SHARING ACROSS ALL FORMS OF CONNECTIONS
@@ -6673,6 +6701,10 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
 
     client->last_packet_received = time(NULL);
 
+    // Packet monitoring needs client locking as the thread monitoring might pop them off
+    magicnet_client_lock(client);
+    magicnet_client_handle_packet_monitoring(client, packet);
+    magicnet_client_unlock(client);
 out:
     return res;
 }

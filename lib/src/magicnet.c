@@ -642,6 +642,8 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out, b
         {
             goto out;
         }
+
+        // no longer possibel in non-blocking system FIX...
         if (magicnet_client_read_packet(client, packet) < 0)
         {
             res = -1;
@@ -720,8 +722,7 @@ int magicnet_program_client_thread_poll_process_packet(struct magicnet_client* c
 
     magicnet_log("%s processing read packet\n", __FUNCTION__);
     
-
-    // Process other packets here....
+    
 out:
     return res;
 }
@@ -777,6 +778,10 @@ struct magicnet_program *magicnet_program(const char *name)
     strncpy(program->name, name, sizeof(program->name));
     vector_push(program_vec, program);
     program->client = client;
+
+    // Lets setup monitoring before the threads begin
+    // We only care about user defined packets, this is what we must montior
+    magicnet_client_monitor_packet_type(client, MAGICNET_PACKET_TYPE_USER_DEFINED);
 
     struct magicnet_nthread_action* action = magicnet_threads_action_new(magicnet_program_client_thread_poll, client, magicnet_program_client_thread_poll_free);
     if (!action)
