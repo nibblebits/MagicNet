@@ -2915,6 +2915,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         has_signature = true;
     }
 
+   
     if (has_signature)
     {
         // Now the packet is constructed lets verify its contents if it has been signed.
@@ -4454,9 +4455,48 @@ int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magic
     magicnet_copy_packet(packet_out, packet);
     magicnet_signed_data(packet_out)->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     client->packets_for_client.pos_write++;
+    client->packets_for_client.total++;
     return res;
 }
 
+/**
+ * Flushes all the packets to relay straight to the I/O stream of the client.
+ * 
+ * NOTE: Theres clear signs of unsigned pakcets being flushed resulting in the peer
+ * terminating the connection, look into this only localhost can accept such packets.
+ * 
+ */
+int magicnet_client_packets_for_client_flush(struct magicnet_client* client)
+{
+    int res = 0;
+    
+    for (int i = 0; i < client->packets_for_client.total; i++)
+    {
+        struct magicnet_packet* packet = magicnet_client_next_packet_to_relay(client);
+        if (!packet)
+        {
+            // brak might be better but im not sure yet..
+            // possibly the packets are scattered around the indexes.
+            continue;
+        }
+
+        res = magicnet_client_write_packet(client, packet, 0);
+        if (res < 0)
+        {
+            // I/O problem we are done.
+            break;
+        }
+
+        // We are done with the packet itsprocessed..
+        magicnet_client_relay_packet_finished(client, packet);
+    }
+
+    client->packets_for_client.pos_read = 0;
+    client->packets_for_client.pos_write = 0;
+    client->packets_for_client.total = 0;
+
+    return res;
+}
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
 {
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
@@ -4511,48 +4551,48 @@ struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_serv
 }
 
 
-int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
-{
-    int res = 0;
-    magicnet_log("%s polling packet request\n", __FUNCTION__);
-    struct magicnet_packet *packet_to_process = NULL;
-    struct magicnet_packet *packet_to_send = NULL;
-    magicnet_server_lock(client->server);
-    packet_to_process = magicnet_client_get_next_packet_to_process(client);
-    magicnet_server_unlock(client->server);
+// int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
+// {
+//     int res = 0;
+//     magicnet_log("%s polling packet request\n", __FUNCTION__);
+//     struct magicnet_packet *packet_to_process = NULL;
+//     struct magicnet_packet *packet_to_send = NULL;
+//     magicnet_server_lock(client->server);
+//     packet_to_process = magicnet_client_get_next_packet_to_process(client);
+//     magicnet_server_unlock(client->server);
 
-    if (!packet_to_process)
-    {
-        packet_to_send = magicnet_packet_new();
-        magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
-        res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
-        magicnet_log("%s Not found\n", __FUNCTION__);
-        goto out;
-    }
+//     if (!packet_to_process)
+//     {
+//         packet_to_send = magicnet_packet_new();
+//         magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_EMPTY_PACKET;
+//         res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+//         magicnet_log("%s Not found\n", __FUNCTION__);
+//         goto out;
+//     }
 
-    magicnet_log("%s packet found\n", __FUNCTION__);
-    // We have a packet they could use.. Lets send it there way.. We wont sign it as it should already be signed.
-    res = magicnet_client_write_packet(client, packet_to_process, 0);
-    if (res < 0)
-    {
-        goto out;
-    }
+//     magicnet_log("%s packet found\n", __FUNCTION__);
+//     // We have a packet they could use.. Lets send it there way.. We wont sign it as it should already be signed.
+//     res = magicnet_client_write_packet(client, packet_to_process, 0);
+//     if (res < 0)
+//     {
+//         goto out;
+//     }
 
-out:
-    // Free the internal pointers of this packet since we don't care about it anymore as its been sent.
-    // Note dont use packet_free as this packet is declared in an array its not a pointer. It will
-    // be reused for a different packet once marked as processed.
-    if (packet_to_process)
-    {
-        magicnet_free_packet_pointers(packet_to_process);
-        magicnet_client_mark_packet_processed(client, packet_to_process);
-    }
-    if (packet_to_send)
-    {
-        magicnet_packet_free(packet_to_send);
-    }
-    return res;
-}
+// out:
+//     // Free the internal pointers of this packet since we don't care about it anymore as its been sent.
+//     // Note dont use packet_free as this packet is declared in an array its not a pointer. It will
+//     // be reused for a different packet once marked as processed.
+//     if (packet_to_process)
+//     {
+//         magicnet_free_packet_pointers(packet_to_process);
+//         magicnet_client_mark_packet_processed(client, packet_to_process);
+//     }
+//     if (packet_to_send)
+//     {
+//         magicnet_packet_free(packet_to_send);
+//     }
+//     return res;
+// }
 
 int magicnet_client_process_user_defined_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
@@ -4585,65 +4625,69 @@ out:
     return res;
 }
 
-int magicnet_client_process_server_sync_packet(struct magicnet_client *client, struct magicnet_packet *packet)
-{
-    int res = 0;
-    struct magicnet_packet *packet_to_relay = magicnet_packet_new();
-    bool has_packet_to_relay = false;
-    // We got to lock this server
-    magicnet_server_lock(client->server);
-    struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
-    if (tmp_packet)
-    {
-        magicnet_copy_packet(packet_to_relay, tmp_packet);
-        has_packet_to_relay = true;
-        magicnet_client_relay_packet_finished(client, tmp_packet);
-    }
-    magicnet_server_unlock(client->server);
+/**
+ * DEPRECATED REPLACED BY A NEW SYSTEM WHERE THE CLIENT THREAD ITS SELF
+ * ATTEMPTS TO EXTRACT THOSE PACKETS AND WRITE TO ITS OWN SOCKET.
+ */
+// int magicnet_client_process_server_sync_packet(struct magicnet_client *client, struct magicnet_packet *packet)
+// {
+//     int res = 0;
+//     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
+//     bool has_packet_to_relay = false;
+//     // We got to lock this server
+//     magicnet_server_lock(client->server);
+//     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+//     if (tmp_packet)
+//     {
+//         magicnet_copy_packet(packet_to_relay, tmp_packet);
+//         has_packet_to_relay = true;
+//         magicnet_client_relay_packet_finished(client, tmp_packet);
+//     }
+//     magicnet_server_unlock(client->server);
 
-    if (has_packet_to_relay)
-    {
-        // We have a packet lets send to the client
-        int flags = 0;
-        if (MAGICNET_nulled_signature(&packet_to_relay->signature) &&
-            magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
-        {
-            // We got to sign this packet we are about to relay.
-            flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-        }
-        res = magicnet_client_write_packet(client, packet_to_relay, flags);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
-    else
-    {
-        // No packet to relay? Then we need to send back a not found packet
-        magicnet_signed_data(packet_to_relay)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
-        // Since this is a packet of our creation it also must be signed.. We aren't relaying
-        // anything new here.
-        res = magicnet_client_write_packet(client, packet_to_relay, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
+//     if (has_packet_to_relay)
+//     {
+//         // We have a packet lets send to the client
+//         int flags = 0;
+//         if (MAGICNET_nulled_signature(&packet_to_relay->signature) &&
+//             magicnet_signed_data(packet_to_relay)->flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+//         {
+//             // We got to sign this packet we are about to relay.
+//             flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+//         }
+//         res = magicnet_client_write_packet(client, packet_to_relay, flags);
+//         if (res < 0)
+//         {
+//             goto out;
+//         }
+//     }
+//     else
+//     {
+//         // No packet to relay? Then we need to send back a not found packet
+//         magicnet_signed_data(packet_to_relay)->type = MAGICNET_PACKET_TYPE_NOT_FOUND;
+//         // Since this is a packet of our creation it also must be signed.. We aren't relaying
+//         // anything new here.
+//         res = magicnet_client_write_packet(client, packet_to_relay, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+//         if (res < 0)
+//         {
+//             goto out;
+//         }
+//     }
 
-    // Do we also have a packet from them?
-    if (magicnet_signed_data(packet)->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
-    {
-        res = magicnet_server_poll_process(client, magicnet_signed_data(packet)->payload.sync.packet);
-        if (res < 0)
-        {
-            goto out;
-        }
-    }
+//     // Do we also have a packet from them?
+//     if (magicnet_signed_data(packet)->payload.sync.flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
+//     {
+//         res = magicnet_server_poll_process(client, magicnet_signed_data(packet)->payload.sync.packet);
+//         if (res < 0)
+//         {
+//             goto out;
+//         }
+//     }
 
-out:
-    magicnet_packet_free(packet_to_relay);
-    return res;
-}
+// out:
+//     magicnet_packet_free(packet_to_relay);
+//     return res;
+// }
 
 /**
  * This function rebuilds coin send transactions
@@ -5061,9 +5105,11 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         // Non local host clients have access to only one packet type
         switch (magicnet_signed_data(packet)->type)
         {
-        case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-            res = magicnet_client_process_server_sync_packet(client, packet);
-            break;
+
+            // DEPRECATED
+        // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+        //     res = magicnet_client_process_server_sync_packet(client, packet);
+        //     break;
 
         case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
             res = magicnet_client_process_block_super_download_request_packet(client, packet);
@@ -5084,17 +5130,18 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
 
         switch (magicnet_signed_data(packet)->type)
         {
-        case MAGICNET_PACKET_TYPE_POLL_PACKETS:
-            res = magicnet_client_process_packet_poll_packets(client, packet);
-            break;
+        // case MAGICNET_PACKET_TYPE_POLL_PACKETS:
+        //     res = magicnet_client_process_packet_poll_packets(client, packet);
+        //     break;
 
         case MAGICNET_PACKET_TYPE_USER_DEFINED:
             res = magicnet_client_process_user_defined_packet(client, packet);
             break;
 
-        case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-            res = magicnet_client_process_server_sync_packet(client, packet);
-            break;
+            // DEPRECATED
+        // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+        //     res = magicnet_client_process_server_sync_packet(client, packet);
+        //     break;
 
         case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
             res = magicnet_client_process_transaction_send_packet(client, packet);
@@ -6535,13 +6582,15 @@ int magicnet_packet_allowed_to_be_processed(struct magicnet_client *sending_clie
     {
         // We haven't received the login protocol yet, so we expect this to be
         // a login protocol packet if not we will drop it.
+        // LIKELY NEED TO ACCEPT MORE PACKET TYPES HERE,, THAT WAS THE BUG I BELIEVE... FIX LATER.
         if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET)
         {
             magicnet_log("%s client sent packet before authenticating, dropping..\n", __FUNCTION__);
 
             // We won't treat this as an error as such but it wont be accepted.
             // they will time out soon if they dont follow the rules.
-            return -EIO;
+         //   return -EIO;
+         // DISABLED FOR NOW WHILE I FIND OUT WHAT HAPPEND...
         }
     }
 
@@ -6701,7 +6750,6 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
 
     client->last_packet_received = time(NULL);
 
-    // Packet monitoring needs client locking as the thread monitoring might pop them off
     magicnet_client_lock(client);
     magicnet_client_handle_packet_monitoring(client, packet);
     magicnet_client_unlock(client);
@@ -6725,9 +6773,9 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     // direct read after write is a problem in non-blocking mode.
     switch (magicnet_signed_data(packet)->type)
     {
-        // case MAGICNET_PACKET_TYPE_USER_DEFINED:
-        //     res = magicnet_server_poll_process_user_defined_packet(client, packet);
-        //     break;
+        case MAGICNET_PACKET_TYPE_USER_DEFINED:
+            res = magicnet_server_poll_process_user_defined_packet(client, packet);
+            break;
 
         // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
         //     res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
@@ -6761,6 +6809,13 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     magicnet_server_lock(client->server);
     res = magicnet_server_add_seen_packet(client->server, packet);
     magicnet_server_unlock(client->server);
+    if (res < 0)
+    {
+        goto out;
+    }
+
+    // Lets flush any packets now awaiting to be flushed to our client
+    res = magicnet_client_packets_for_client_flush(client);
 
     // Since we processed something lets for the next 10 seconds increase the bandwidth just in case theres more to send
     magicnet_client_set_max_bytes_to_send_per_second(client, MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_WHEN_PROCESSING_PACKETS, 10);

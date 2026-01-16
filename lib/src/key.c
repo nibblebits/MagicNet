@@ -22,16 +22,23 @@
 #include "database.h"
 
 pthread_mutex_t key_lock;
+bool key_lock_initialized = false;
 struct key public_key = {};
 struct key private_key = {};
 
 void MAGICNET_keys_init()
 {
+    if (key_lock_initialized)
+    {
+        return;
+    }
+    
     if (pthread_mutex_init(&key_lock, NULL) != 0)
     {
         magicnet_log("Failed to initialize the key lock\n");
         return;
     }
+    key_lock_initialized = true;
 }
 struct key *MAGICNET_public_key()
 {

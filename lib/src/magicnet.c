@@ -752,6 +752,9 @@ void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action* ac
 struct magicnet_program *magicnet_program(const char *name)
 {
     int res = 0;
+    // Init the keys so we can deal with verification
+    // we cant sign on a localhost client however.
+    MAGICNET_keys_init();
     struct magicnet_program *program = magicnet_get_program(name);
     if (program)
     {

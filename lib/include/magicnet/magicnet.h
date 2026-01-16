@@ -647,6 +647,7 @@ struct magicnet_client
         struct magicnet_packet packets[MAGICNET_MAX_AWAITING_PACKETS];
         off_t pos_read;
         off_t pos_write;
+        size_t total;
     } packets_for_client;
 
     // These are pending events for this client, events only apply to localhost clients and are a way for
@@ -1409,6 +1410,7 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
  * Pushes the client to the thread pool so it can be polled frequently
  */
 int magicnet_client_push(struct magicnet_client *client);
+int magicnet_client_packets_for_client_flush(struct magicnet_client* client);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);

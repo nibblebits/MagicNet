@@ -49,6 +49,7 @@ bool MAGICNET_nulled_signature(struct signature* signature);
 void MAGICNET_load_keypair();
 struct key *MAGICNET_public_key();
 struct key *MAGICNET_private_key();
+void MAGICNET_keys_init();
 bool key_cmp(struct key *key, struct key *key2);
 bool key_loaded(struct key *key);
 

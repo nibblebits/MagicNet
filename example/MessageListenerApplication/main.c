@@ -23,17 +23,18 @@ int main()
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
    while (1)
      {
-            struct chat_packet* packet = NULL;
-            int type = magicnet_next_packet(decentralized_program, (void**)&packet);
-            switch(type)
-            {
-                case CHAT_PACKET:
-                    printf("testing: %s\n", packet->message);
-                break;
+            // struct chat_packet* packet = NULL;
+            // int type = magicnet_next_packet(decentralized_program, (void**)&packet);
+            // switch(type)
+            // {
+            //     case CHAT_PACKET:
+            //         printf("testing: %s\n", packet->message);
+            //     break;
 
-                default: 
-                    printf("Bad packet %i\n",type);
-            }
+            //     default: 
+            //         printf("Bad packet %i\n",type);
+            // }
+        usleep(10000);
 
      }
 }
