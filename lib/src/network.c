@@ -913,7 +913,11 @@ int magicnet_init_client(struct magicnet_client *client, struct magicnet_server 
 
     // Mutex only used for data thats shared outside of the
     // thread action 
-    pthread_mutex_init(&client->mutex, NULL);
+    pthread_mutexattr_t mutex_attr;
+    pthread_mutexattr_init(&mutex_attr);
+    pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&client->mutex, &mutex_attr);
+    pthread_mutexattr_destroy(&mutex_attr);
     
     // todo add the free stuff later on...
     client->packet_monitoring.packets = vector_create(sizeof(struct magicnet_packet*));
@@ -2952,6 +2956,7 @@ out:
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
+    magicnet_client_lock(client);
 
     /**
      * Is there no packet currently waiting to be finished laoding?
@@ -2988,6 +2993,7 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
     // Packet has finished loading and can be processed later..
     magicnet_log("%s finished reading packet\n", __FUNCTION__);
 out:
+    magicnet_client_unlock(client);
     return res;
 }
 
@@ -3709,6 +3715,7 @@ int magicnet_client_write_packet_open_door_ack(struct magicnet_client* client, s
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags)
 {
     int res = 0;
+    magicnet_client_lock(client);
     packet->not_sent.tmp_buf = buffer_create();
     client->last_packet_sent = time(NULL);
 
@@ -3986,6 +3993,7 @@ out:
     //     res = MAGICNET_ERROR_UNKNOWN;
     // }
 
+    magicnet_client_unlock(client);
     return res;
 }
 
@@ -6349,26 +6357,19 @@ out:
 int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION process_packet_func)
 {
     int res = 0;
+    bool should_close = false;
+    struct magicnet_server *server = NULL;
+
+    magicnet_client_lock(client);
 
     // Keep us waiting more than a few seconds we need to disconnect them
     // if they haven't logged in on time
     if (magicnet_client_inactive(client))
     {
-        // The client is ignoring us, he must have a bad connection
-        // or be an attacker, lets boot it and if it continues perm ban
-        if (client->server)
-        {
-            magicnet_server_lock(client->server);
-            magicnet_close(client);
-            magicnet_server_unlock(client->server);
-        }
-        else
-        {
-            magicnet_close(client);
-        }
-
         magicnet_log("%s server booted inactive client\n", __FUNCTION__);
         res = MAGICNET_ERROR_CRITICAL_ERROR;
+        should_close = true;
+        server = client->server;
         goto out;
         // ban TODO.. implement later..
     }
@@ -6428,10 +6429,26 @@ out:
     {
         magicnet_log("%s client poll error %i\n", __FUNCTION__, res);
         // destruct the client
-        magicnet_close(client);
+        should_close = true;
+        server = client->server;
     }
     // We return zero so that it will call us again in a few cycles..
 
+    magicnet_client_unlock(client);
+
+    if (should_close)
+    {
+        if (server)
+        {
+            magicnet_server_lock(server);
+            magicnet_close(client);
+            magicnet_server_unlock(server);
+        }
+        else
+        {
+            magicnet_close(client);
+        }
+    }
     return res;
 }
 int magicnet_client_thread_poll(struct magicnet_nthread_action *action)

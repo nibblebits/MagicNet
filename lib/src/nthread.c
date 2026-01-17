@@ -146,22 +146,50 @@ void *magicnet_nthread_thread_pthread_function(void *nthread_ptr)
         // Infinite loop for these threads, with a little sleeping
         // come back later to add ability to shut them down
 
-        // Lets loop through all the actions
-        vector_set_peek_pointer(thread->actions, 0);
-        struct magicnet_nthread_action *action = vector_peek_ptr(thread->actions);
-        while (action)
+        int index = 0;
+        while (1)
         {
+            struct magicnet_nthread_action *action = NULL;
+
+            pthread_mutex_lock(&thread->thread.mutex);
+            int count = vector_count(thread->actions);
+            if (index >= count)
+            {
+                pthread_mutex_unlock(&thread->thread.mutex);
+                break;
+            }
+
+            struct magicnet_nthread_action **action_ptr = vector_at(thread->actions, index);
+            if (action_ptr)
+            {
+                action = *action_ptr;
+            }
+            pthread_mutex_unlock(&thread->thread.mutex);
+
+            if (!action)
+            {
+                index++;
+                continue;
+            }
+
             // now let's call the poll function of the action
             int res = action->poll(action);
             if (res < 0 || res == MAGICNET_ACTION_POLL_END)
             {
                 // This action has completed whatever it wanted to do
                 // or an error occured, we are done with it
-                vector_pop_last_peek(thread->actions);
+                pthread_mutex_lock(&thread->thread.mutex);
+                if (index < vector_count(thread->actions))
+                {
+                    vector_pop_at(thread->actions, index);
+                }
+                pthread_mutex_unlock(&thread->thread.mutex);
                 // Free the action
                 magicnet_threads_action_free(action);
+                continue;
             }
-            action = vector_peek_ptr(thread->actions);
+
+            index++;
         }
         usleep(100);
     }
@@ -231,7 +259,22 @@ struct magicnet_nthread_thread *magicnet_threads_next_thread_for_push()
 {
     struct magicnet_nthread_thread *thread = NULL;
 
-    thread = (struct magicnet_nthread_thread *)vector_peek_ptr_at(nthread->threads, nthread->next_thread_index_push);
+    pthread_mutex_lock(&nthread->mutex);
+    size_t count = vector_count(nthread->threads);
+    if (count == 0)
+    {
+        pthread_mutex_unlock(&nthread->mutex);
+        return NULL;
+    }
+
+    size_t index = nthread->next_thread_index_push;
+    if (index >= count)
+    {
+        index = 0;
+        nthread->next_thread_index_push = 1;
+    }
+
+    thread = (struct magicnet_nthread_thread *)vector_peek_ptr_at(nthread->threads, index);
     if (!thread)
     {
         // Not found? alright lets just get index zero
@@ -239,6 +282,7 @@ struct magicnet_nthread_thread *magicnet_threads_next_thread_for_push()
         // reset the next pointer too, to index 1 since we just took zero.
         nthread->next_thread_index_push = 1;
     }
+    pthread_mutex_unlock(&nthread->mutex);
 
     return thread;
 }
