@@ -231,6 +231,12 @@ void magicnet_client_destruct(struct magicnet_client *client)
     }
 }
 
+
+struct buffer* magicnet_packet_signing_buffer(struct magicnet_packet* packet)
+{
+    return packet->not_sent.tmp_buf;
+}
+
 struct magicnet_client *magicnet_client_new()
 {
     struct magicnet_client *client = calloc(1, sizeof(struct magicnet_client));
@@ -2985,8 +2991,12 @@ out:
     // in the client.
     client->packet_in_loading = NULL;
 
-    buffer_free(packet_out->not_sent.tmp_buf);
-    packet_out->not_sent.tmp_buf = NULL;
+    // We shall not erase this buffer as it might be needed in processing
+    if (res <  0)
+    {
+        buffer_free(packet_out->not_sent.tmp_buf);
+        packet_out->not_sent.tmp_buf = NULL;
+    }
 
     return res;
 }
@@ -3773,7 +3783,18 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         goto out;
     }
 
-    packet->not_sent.tmp_buf = buffer_create();
+    // It's possible after writing the packet is later cloned
+    // for this reason we wont create a new tmp_buf each time
+    // we shall maintain the memory.
+    if (packet->not_sent.tmp_buf)
+    {
+        buffer_empty(packet->not_sent.tmp_buf);
+    }
+    else
+    {
+        packet->not_sent.tmp_buf = buffer_create();
+    }
+    
     client->last_packet_sent = time(NULL);
 
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
@@ -4077,9 +4098,11 @@ out:
         // just broke the protocol, receiver is waiting on data from us we didnt send.
         // Its too late to send more data we will be out of sync
         close(client->sock);
+        
+        buffer_free(packet->not_sent.tmp_buf);
+        packet->not_sent.tmp_buf = NULL;
     }
-    buffer_free(packet->not_sent.tmp_buf);
-    packet->not_sent.tmp_buf = NULL;
+
 
     // // We expect to receive a response byte
     // res = magicnet_read_int(client, NULL);
@@ -4733,13 +4756,13 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
         struct magicnet_client *cli = &client->server->clients[i];
-        if (!magicnet_client_in_use(client))
+        if (!magicnet_client_in_use(cli))
         {
             continue;
         }
 
         // We relay to the local clients, they shall handle the rest.
-        magicnet_relay_packet_to_client(client, packet);
+        magicnet_relay_packet_to_client(cli, packet);
     }
 
     // Relay to the internet
@@ -6864,6 +6887,14 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
     }
 
     magicnet_log("%s processing packet\n", __FUNCTION__);
+
+    if (!packet->not_sent.tmp_buf)
+    {
+        magicnet_log("%s BUG the tmp_buf was erased pre-processing\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+
 
     // Login protocol is expected for all peers, so its in this default logic
     switch (magicnet_signed_data(packet)->type)

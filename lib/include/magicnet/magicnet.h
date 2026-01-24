@@ -1407,6 +1407,12 @@ int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 int magicnet_default_poll_packet_process(struct magicnet_client *client, struct magicnet_packet *packet);
 
 /**
+ * The buffer that shall be signed with the keys 
+ * this is the data that matters to you when sending to peers.
+ */
+struct buffer* magicnet_packet_signing_buffer(struct magicnet_packet* packet);
+
+/**
  * Pushes the client to the thread pool so it can be polled frequently
  */
 int magicnet_client_push(struct magicnet_client *client);
