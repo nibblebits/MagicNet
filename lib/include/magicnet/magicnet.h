@@ -306,8 +306,8 @@ struct magicnet_packet
          * it is freed and NULLED Once more.
          *
          * It is used for debugging purposes and also to ensure packet integrity through the use of signatures.
-         * The datahash further above is based off the buffer of tmp_buf. tmp_buf contains every single byte
-         * sent to the client in regards to this packet.
+         * The datahash further above is based off the buffer of tmp_buf. tmp_buf contains the signed payload
+         * bytes (packet body excluding the framing size field and signature/hash trailer).
          */
         struct buffer *tmp_buf;
 

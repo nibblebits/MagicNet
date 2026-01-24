@@ -1278,10 +1278,10 @@ int magicnet_read_bytes(struct magicnet_client *client, void *ptr_out, size_t am
             break;
         }
 
-        // Sometimes we are to store the result in a buffer for debugging and validation purposes..
+        // Only record the bytes we actually received in this iteration.
         if (store_in_buffer)
         {
-            buffer_write_bytes(store_in_buffer, ptr_out + amount_read, amount - amount_read);
+            buffer_write_bytes(store_in_buffer, ptr_out + amount_read, res);
         }
 
         client->total_bytes_received += res;
@@ -2559,7 +2559,8 @@ int magicnet_client_read_new_packet(struct magicnet_client *client, struct magic
         goto out;
     }
 
-    total_size = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
+    // Packet size is part of the framing, not the signed payload.
+    total_size = magicnet_read_int(client, NULL);
     if (total_size < 0)
     {
         res = total_size;
