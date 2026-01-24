@@ -231,7 +231,16 @@ void buffer_shift_right_at_position(struct buffer *buffer, int index, int amount
     // memcpy(4, 0, 100)
     // 0000111111.... 
     // yes buffer->len shouldve been used.
-    memcpy(&buffer->data[index + amount], &buffer->data[index], buffer->len);
+    // wait what if the index does not start at zero
+    // index=10
+    // sindex=20
+    // len=100
+    // amount=10
+    //memcpy(20, 10, 100)
+    // yes theres an overflow not accounted for 
+    // copying from byte 10 to 100 exceeds the buffer 
+    // -index solved the bug..
+    memcpy(&buffer->data[index + amount], &buffer->data[index], buffer->len-index);
     // Now the entire buffer has been shifted to the right
     // Lets null the data to the left so its not uninitialized
     // memset seems correct.
