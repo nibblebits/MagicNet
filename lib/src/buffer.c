@@ -8,17 +8,71 @@ int buffer_read_bytes_default_handler(struct buffer *buffer, void *ptr, size_t a
 
 struct buffer *buffer_create()
 {
-   return buffer_create_with_handler(NULL, NULL);
+    return buffer_create_with_handler(NULL, NULL, NULL);
 }
 
-struct buffer* buffer_create_with_handler(BUFFER_WRITE_BYTES_FUNCTION write_bytes, BUFFER_READ_BYTES_FUNCTION read_bytes)
+struct buffer *buffer_clone(struct buffer *buffer_in)
 {
+    int res = 0;
+    struct buffer *cloned_buffer = buffer_create();
+    if (!cloned_buffer)
+    {
+        res = -1;
+        goto out;
+    }
+
+    memcpy(cloned_buffer, buffer_in, sizeof(*cloned_buffer));
+    cloned_buffer->data = calloc(buffer_in->msize, 1);
+    if (!cloned_buffer->data)
+    {
+        res = -1;
+        goto out;
+    }
+
+    memcpy(cloned_buffer->data, buffer_in->data, buffer_in->msize);
+
+    // We shall inform the buffer that its been cloned
+    // the owner is responsible for cloning his private data into cloned_buffer.
+    res = buffer_in->buffer_cloned(buffer_in, cloned_buffer);
+    if (res < 0)
+    {
+        // The buffer owner has refused the clone.
+        goto out;
+    }
+out:
+    if (res < 0)
+    {
+        free(cloned_buffer->data);
+        free(cloned_buffer);
+        cloned_buffer = NULL;
+    }
+    return cloned_buffer;
+}
+
+int buffer_cloned_default_handler(struct buffer *buffer_in, struct buffer *buffer_out)
+{
+    // Default handler accepts this cloning.
+    return 0;
+}
+
+struct buffer *buffer_create_with_handler(BUFFER_WRITE_BYTES_FUNCTION write_bytes, BUFFER_READ_BYTES_FUNCTION read_bytes, BUFFER_CLONED_FUNCTION cloned)
+{
+    int res = 0;
     struct buffer *buf = calloc(sizeof(struct buffer), 1);
+    // valgrind complains bytes uninitialized but calloc setss to zero
+    //  odd false positive perhaps.
     buf->data = calloc(BUFFER_REALLOC_AMOUNT, 1);
+    if (!buf->data)
+    {
+        res = -1;
+        goto out;
+    }
+
     buf->len = 0;
     buf->msize = BUFFER_REALLOC_AMOUNT;
     buf->write_bytes = buffer_write_bytes_default_handler;
     buf->read_bytes = buffer_read_bytes_default_handler;
+    buf->buffer_cloned = buffer_cloned_default_handler;
     if (write_bytes)
     {
         buf->write_bytes = write_bytes;
@@ -26,6 +80,18 @@ struct buffer* buffer_create_with_handler(BUFFER_WRITE_BYTES_FUNCTION write_byte
     if (read_bytes)
     {
         buf->read_bytes = read_bytes;
+    }
+
+    if (cloned)
+    {
+        buf->buffer_cloned = cloned;
+    }
+out:
+    if (res < 0)
+    {
+        free(buf->data);
+        free(buf);
+        buf = NULL;
     }
     return buf;
 }
@@ -47,12 +113,12 @@ int buffer_len(struct buffer *buffer)
     return buffer->len;
 }
 
-void buffer_private_set(struct buffer* buffer, void* private)
+void buffer_private_set(struct buffer *buffer, void *private)
 {
     buffer->private_data = private;
 }
 
-void* buffer_private_get(struct buffer* buffer)
+void *buffer_private_get(struct buffer *buffer)
 {
     return buffer->private_data;
 }
@@ -61,6 +127,11 @@ void buffer_extend(struct buffer *buffer, size_t size)
 {
     buffer->data = realloc(buffer->data, buffer->msize + size);
     buffer->msize += size;
+}
+
+int buffer_memory_len(struct buffer* buffer)
+{
+    return buffer->msize;
 }
 
 void buffer_need(struct buffer *buffer, size_t size)
@@ -72,7 +143,7 @@ void buffer_need(struct buffer *buffer, size_t size)
     }
 }
 
-void buffer_empty(struct buffer* buffer)
+void buffer_empty(struct buffer *buffer)
 {
     // EMptying should be as simple as resetting the indexes
     // to zero.
@@ -85,18 +156,17 @@ void buffer_empty(struct buffer* buffer)
 
     buffer->rindex = 0;
     buffer->len = 0;
-
 }
 void buffer_printf(struct buffer *buffer, const char *fmt, ...)
 {
-    struct buffer* str_buf = buffer_create();
+    struct buffer *str_buf = buffer_create();
     // Temporary, this is a limitation we are guessing the size is no more than 2048
     int len = 2048;
     buffer_extend(str_buf, len);
 
     va_list args;
     va_start(args, fmt);
-    int index = buffer->len;    
+    int index = buffer->len;
 
     int actual_len = vsnprintf(&str_buf->data[0], len, fmt, args);
     str_buf->len += actual_len;
@@ -108,14 +178,14 @@ void buffer_printf(struct buffer *buffer, const char *fmt, ...)
 
 void buffer_printf_no_terminator(struct buffer *buffer, const char *fmt, ...)
 {
-    struct buffer* str_buf = buffer_create();
+    struct buffer *str_buf = buffer_create();
     // Temporary, this is a limitation we are guessing the size is no more than 2048
     int len = 2048;
     buffer_extend(str_buf, len);
 
     va_list args;
     va_start(args, fmt);
-    int index = buffer->len;    
+    int index = buffer->len;
 
     int actual_len = vsnprintf(&str_buf->data[0], len, fmt, args);
     str_buf->len += actual_len - 1;
@@ -131,22 +201,31 @@ void buffer_write(struct buffer *buffer, char c)
     buffer_write_bytes(buffer, &c, sizeof(char));
 }
 
-void buffer_shift_right_at_position(struct buffer* buffer, int index, int amount)
+void buffer_shift_right_at_position(struct buffer *buffer, int index, int amount)
 {
-    int bytes_needed = (buffer->len - index) + amount;
-    buffer_need(buffer, bytes_needed);
 
+    // seems correct now
+    int mem_len_needed = (index+amount);
+    int mem_len_diff = (mem_len_needed - buffer_memory_len(buffer));
+    if (mem_len_diff > 0)
+    {
+        buffer_need(buffer, mem_len_diff);
+    }
+
+    // memcpy seems correct
     // We need to first move all the data that exists to the right
-    memcpy(&buffer->data[index+amount], &buffer->data[index], buffer->len);
+    memcpy(&buffer->data[index + amount], &buffer->data[index], amount);
     // Now the entire buffer has been shifted to the right
     // Lets null the data to the left so its not uninitialized
+    // memset seems correct.
     memset(&buffer->data[index], 0x00, amount);
 
-    // CORRECT
+    // Since this is a shift of right the stream length will always be increased by amount
     buffer->len += amount;
+    
 }
 
-int buffer_insert(struct buffer* buffer, int index, void* data, size_t len)
+int buffer_insert(struct buffer *buffer, int index, void *data, size_t len)
 {
     // Make memory for the insertation.
     buffer_shift_right_at_position(buffer, index, len);
@@ -154,7 +233,6 @@ int buffer_insert(struct buffer* buffer, int index, void* data, size_t len)
     // Move the data into the region
     memcpy(&buffer->data[index], data, len);
 
-    
     return 0;
 }
 

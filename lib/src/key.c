@@ -117,7 +117,7 @@ bool MAGICNET_key_valid(struct key *key)
 
 int public_verify(struct key *public_key, const char *data, size_t size, struct signature *sig_in)
 {
-    pthread_mutex_lock(&key_lock);
+   // pthread_mutex_lock(&key_lock);
     int res = 0;
     ECDSA_SIG *sig = NULL;
     BIGNUM *pr_sig = NULL;
@@ -197,7 +197,7 @@ out:
         EC_POINT_free(point);
     }
 
-    pthread_mutex_unlock(&key_lock);
+ //   pthread_mutex_unlock(&key_lock);
 
     return res;
 }
@@ -236,7 +236,8 @@ int private_sign_key_sig_hash(struct key_signature_hash *key_sig_hash, void *has
 
 int private_sign(const char *data, size_t size, struct signature *sig_out)
 {
-    pthread_mutex_lock(&key_lock);
+  //  pthread_mutex_lock(&key_lock);
+    magicnet_log("%s resign request hash=%s\n", __FUNCTION__, data);
     int res = 0;
     ECDSA_SIG *sig = NULL;
     EC_KEY *eckey = EC_KEY_new();
@@ -327,7 +328,7 @@ out:
         BN_free(pnum);
     }
 
-    pthread_mutex_unlock(&key_lock);
+   // pthread_mutex_unlock(&key_lock);
 
     return res;
 }

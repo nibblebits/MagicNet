@@ -60,7 +60,29 @@ int magicnet_client_insert_bytes(struct magicnet_client *client, void *ptr_in, s
 // WE WILL RULE OUT THE MULTITHREADING ISSUE WITH A TEMPORARY MUTEX.
 pthread_mutex_t tmp_mutex;
 
+
 size_t magicnet_client_unflushed_bytes(struct magicnet_client *client);
+
+
+// flags in future but this is fool proof for debugging.
+bool magicnet_packet_hashed(struct magicnet_packet* packet)
+{
+    char tmp_hash[SHA256_STRING_LENGTH] = {0};
+    return memcmp(packet->datahash, tmp_hash, sizeof(tmp_hash)) != 0;
+}
+
+void magicnet_packet_hash(struct magicnet_packet* packet_out)
+{
+    char tmp_buf[SHA256_STRING_LENGTH];
+    if (!packet_out->not_sent.tmp_buf)
+    {
+        magicnet_log("%s BUG with hashing null sending buffer\n", __FUNCTION__);
+        return;
+    }
+
+    sha256_data(buffer_ptr(packet_out->not_sent.tmp_buf), tmp_buf, packet_out->not_sent.tmp_buf->len);
+    strncpy(packet_out->datahash, tmp_buf, sizeof(packet_out->datahash));
+}
 struct buffer *magicnet_client_unflushed_bytes_buffer(struct magicnet_client *client)
 {
     return client->unflushed_data;
@@ -129,6 +151,8 @@ bool magicnet_packet_ready_for_processing(struct magicnet_packet *packet)
 
 void magicnet_packet_make_new_id(struct magicnet_packet *packet)
 {
+    // change this to secure random terrible...
+    // TODO
     magicnet_signed_data(packet)->id = rand() % 999999999;
 }
 
@@ -183,8 +207,9 @@ int magicnet_packet_resign_on_send(struct magicnet_packet *packet)
 void magicnet_client_destruct(struct magicnet_client *client)
 {
     client->flags &= ~MAGICNET_CLIENT_FLAG_CONNECTED;
-    
-    memset(&client->packets_for_client, 0, sizeof(client->packets_for_client));;
+
+    memset(&client->packets_for_client, 0, sizeof(client->packets_for_client));
+    ;
 
     if (client->events)
     {
@@ -885,17 +910,15 @@ void magicnet_client_set_max_bytes_to_recv_per_second(struct magicnet_client *cl
     client->reset_max_bytes_to_recv_at = time(NULL) + reset_in_seconds;
 }
 
-void magicnet_client_lock(struct magicnet_client* client)
+void magicnet_client_lock(struct magicnet_client *client)
 {
     pthread_mutex_lock(&client->mutex);
 }
 
-void magicnet_client_unlock(struct magicnet_client* client)
+void magicnet_client_unlock(struct magicnet_client *client)
 {
     pthread_mutex_unlock(&client->mutex);
 }
-
-
 
 int magicnet_init_client(struct magicnet_client *client, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in)
 {
@@ -912,18 +935,18 @@ int magicnet_init_client(struct magicnet_client *client, struct magicnet_server 
     client->last_packet_received = time(NULL);
 
     // Mutex only used for data thats shared outside of the
-    // thread action 
+    // thread action
     pthread_mutexattr_t mutex_attr;
     pthread_mutexattr_init(&mutex_attr);
     pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(&client->mutex, &mutex_attr);
     pthread_mutexattr_destroy(&mutex_attr);
-    
+
     // todo add the free stuff later on...
-    client->packet_monitoring.packets = vector_create(sizeof(struct magicnet_packet*));
+    client->packet_monitoring.packets = vector_create(sizeof(struct magicnet_packet *));
     if (!client->packet_monitoring.packets)
     {
-        //res = -ENOMEM; ADD STATUS CODES...
+        // res = -ENOMEM; ADD STATUS CODES...
         res = -1;
         goto out;
     }
@@ -1312,6 +1335,9 @@ int magicnet_client_flush(struct magicnet_client *client)
         // possibly multi-trhreading issues on the socket.
         // Flush directly to the socket
         // NOT A MULTI-THREADING ISSUE TESTED
+        // theres an overflow with the  ptr_in+amount_written, valgrind,
+        // NOT OVERFLOW UNINITIALIZED BYTES
+        // i believe to be a false positive come back to check.
         res = write(client->sock, ptr_in + amount_written, total_bytes - amount_written);
         if (res <= 0)
         {
@@ -1378,15 +1404,6 @@ void magicnet_buffer_stream_private_data_free(struct magicnet_buffer_stream_priv
     free(buffer_data);
 }
 
-/**
- * This handler can be hooked by people creating buffers to effectively stream over the network when writing/reading
- * for a particular buffer.
- */
-int magicnet_network_write_bytes_buffer_handler(struct buffer *buffer, void *data, size_t amount)
-{
-    struct magicnet_buffer_stream_private_data *private_data = buffer_private_get(buffer);
-    return magicnet_write_bytes(private_data->client, data, amount, private_data->write_buf);
-}
 
 int magicnet_write_int(struct magicnet_client *client, int value, struct buffer *store_in_buffer)
 {
@@ -1513,7 +1530,6 @@ int magicnet_client_read_user_defined_packet(struct magicnet_client *client, str
         goto out;
     }
 
-
     res = magicnet_read_bytes(client, magicnet_signed_data(packet_out)->payload.user_defined.program_name, sizeof(magicnet_signed_data(packet_out)->payload.user_defined.program_name), packet_out->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -1618,11 +1634,12 @@ int magicnet_client_verify_packet_was_signed(struct magicnet_packet *packet)
         return -1;
     }
 
+    magicnet_log("%s key=%s, hash=%s, sig1=%s, sig2=%s\n", __FUNCTION__, packet->pub_key.key, packet->datahash, packet->signature.pr_sig, packet->signature.ps_sig);
     // Let's ensure that they signed the hash that was given to us
     int res = public_verify(&packet->pub_key, packet->datahash, sizeof(packet->datahash), &packet->signature);
     if (res < 0)
     {
-        magicnet_log("%s the signature was not signed with the public key provided\n", __FUNCTION__);
+        magicnet_log("%s the signature was not signed with the public key provided, hash=%s\n", __FUNCTION__, packet->datahash);
         return -1;
     }
 
@@ -1762,11 +1779,33 @@ out:
     return res;
 }
 
+/**
+ * This handler can be hooked by people creating buffers to effectively stream over the network when writing/reading
+ * for a particular buffer.
+ */
+int magicnet_network_write_bytes_buffer_handler(struct buffer *buffer, void *data, size_t amount)
+{
+    struct magicnet_buffer_stream_private_data *private_data = buffer_private_get(buffer);
+    return magicnet_write_bytes(private_data->client, data, amount, private_data->write_buf);
+}
+
+int magicnet_network_buffer_clone_handler(struct buffer* buffer_in, struct buffer* buffer_out)
+{
+    struct magicnet_buffer_stream_private_data* buffer_in_private = (struct magicnet_buffer_stream_private_data*) buffer_in->private_data;
+    // We are required to clone our private data
+    buffer_out->private_data = magicnet_buffer_stream_private_data_create(buffer_in_private->write_buf, buffer_in_private->client);
+    if (!buffer_out->private_data)
+    {
+        return -1;
+    }
+    return 0;
+}
+
 int magicnet_client_read_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate_out, struct buffer *write_buf)
 {
     int res = 0;
     struct magicnet_buffer_stream_private_data *private_data = NULL;
-    struct buffer *buffer = buffer_create_with_handler(magicnet_network_write_bytes_buffer_handler, magicnet_network_read_bytes_buffer_handler);
+    struct buffer *buffer = buffer_create_with_handler(magicnet_network_write_bytes_buffer_handler, magicnet_network_read_bytes_buffer_handler, magicnet_network_buffer_clone_handler);
     if (!buffer)
     {
         goto out;
@@ -2575,7 +2614,7 @@ out:
     return res;
 }
 
-int magicnet_client_read_packet_open_door_ack(struct magicnet_client* client, struct magicnet_packet* packet_out)
+int magicnet_client_read_packet_open_door_ack(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     int res = 0;
     int door_key = magicnet_read_int(client, NULL);
@@ -2585,12 +2624,10 @@ int magicnet_client_read_packet_open_door_ack(struct magicnet_client* client, st
         goto out;
     }
 
-
     magicnet_signed_data(packet_out)->payload.open_door_ack.door_key = door_key;
 out:
     return res;
 }
-
 
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
@@ -2616,7 +2653,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     }
 
     // somewhere between here and the caller we lose the true packet id
-    // a bug, packet id becomes type, breaks the entire data flow...
+    // a bug, packet id becomes type, breaks the entire data flow... NO BUG ANYORE..
 
     packet_id = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_id < 0)
@@ -2650,7 +2687,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     }
 
     // THIS DOESNT GET HIT
-    // THIS SUGGESTS A READING ERROR LEADING TO THE PACKET TYPE 
+    // THIS SUGGESTS A READING ERROR LEADING TO THE PACKET TYPE
     // BENIG ZERO UPPER IN READING..
     if (packet_type == 0x00)
     {
@@ -2727,8 +2764,6 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     }
 
 #warning "disabled most of the packets we will re-enable them individually and test each one"
-
-
 
     // case MAGICNET_PACKET_TYPE_EVENTS_POLL:
     //     res = magicnet_client_read_events_poll_packet(client, packet_out);
@@ -2883,12 +2918,17 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         }
     }
 
-    res = magicnet_read_bytes(client, &packet_out->datahash, sizeof(packet_out->datahash), NULL);
+    res = magicnet_read_bytes(client, packet_out->datahash, sizeof(packet_out->datahash), NULL);
     if (res < 0)
     {
         return -1;
     }
 
+    if (magicnet_signed_data(packet_out)->type == MAGICNET_PACKET_TYPE_USER_DEFINED)
+    {
+        // BRAK HERE
+        magicnet_log("%s break here\n", __FUNCTION__);
+    }
     /**
      * @brief Here unsigned packets provided by a LOCALHOST connection will be signed with our local key
      * this is okay because this is the local machine therefore it is the authority of this server instance
@@ -2902,9 +2942,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
 
         // Let's start by rehashing the data so we have an accurate hash. Just in case they provided us with a NULL hash entry
         // perfectly valid from a localhost client.
-        char tmp_buf[SHA256_STRING_LENGTH];
-        sha256_data(buffer_ptr(packet_out->not_sent.tmp_buf), tmp_buf, packet_out->not_sent.tmp_buf->len);
-        strncpy(packet_out->datahash, tmp_buf, sizeof(packet_out->datahash));
+        magicnet_packet_hash(packet_out);
 
         // Now let us craft a signature
         packet_out->pub_key = *MAGICNET_public_key();
@@ -2919,7 +2957,6 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         has_signature = true;
     }
 
-   
     if (has_signature)
     {
         // Now the packet is constructed lets verify its contents if it has been signed.
@@ -2972,7 +3009,6 @@ int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_
             goto out;
         }
     }
-
 
     int unread_bytes = magicnet_client_unread_bytes_count(client);
     if (unread_bytes < magicnet_signed_data(packet_out)->expected_size)
@@ -3079,13 +3115,26 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 {
     return 0;
 }
+int magicnet_network_write_bytes_buffer_clone_handler(struct buffer* buffer_in, struct buffer* buffer_out)
+{
+    struct magicnet_buffer_stream_private_data* private_data = (struct magicnet_buffer_stream_private_data*) buffer_in->private_data;
+    if (private_data)
+    {
+        buffer_out->private_data = magicnet_buffer_stream_private_data_create(private_data->write_buf, private_data->client);
+        if (!buffer_out->private_data)
+        {
+            return -1;
+        }
+    }
+    return 0;
+}
 
 int magicnet_client_write_council_certificate(struct magicnet_client *client, struct magicnet_council_certificate *certificate, struct buffer *write_buf)
 {
     int res = 0;
     struct magicnet_buffer_stream_private_data *private_data = NULL;
     // We will create the buffer so that it streams directly to the network
-    struct buffer *buffer = buffer_create_with_handler(magicnet_network_write_bytes_buffer_handler, NULL);
+    struct buffer *buffer = buffer_create_with_handler(magicnet_network_write_bytes_buffer_handler, NULL, magicnet_network_write_bytes_buffer_clone_handler);
     if (!buffer)
     {
         return -1;
@@ -3705,9 +3754,9 @@ int magicnet_client_write_packet_open_door(struct magicnet_client *client, struc
     return res;
 }
 
-int magicnet_client_write_packet_open_door_ack(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_write_packet_open_door_ack(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    int res =0;
+    int res = 0;
     res = magicnet_write_int(client, magicnet_signed_data(packet)->payload.open_door_ack.door_key, NULL);
     return res;
 }
@@ -3731,7 +3780,6 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
         magicnet_log("%s caught\n ", __FUNCTION__);
     }
-
 
     res = magicnet_write_int(client, magicnet_signed_data(packet)->type, packet->not_sent.tmp_buf);
     if (res < 0)
@@ -3764,7 +3812,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         }
     }
 
-    // re-enabled packets
+    // re-enabled packets 6 in read 6 in write valid.
     // these are only for when the door is closed.
     switch (magicnet_signed_data(packet)->type)
     {
@@ -3791,7 +3839,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_client_write_packet_user_defined(client, packet);
         break;
 
-        default:
+    default:
         magicnet_log("%s sending unimplemented packet type=%i", __FUNCTION__, magicnet_signed_data(packet)->type);
     }
 
@@ -3879,9 +3927,11 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     // Okay we have a buffer of all the data we sent to the peer, lets get it and hash it so that
     // we can prove who signed this packet later on..
 
-    sha256_data(buffer_ptr(packet->not_sent.tmp_buf), packet->datahash, packet->not_sent.tmp_buf->len);
     if (flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
     {
+       magicnet_packet_hash(packet);
+
+        magicnet_log("%s will sign packet\n", __FUNCTION__);  // not called...
         if (!MAGICNET_nulled_signature(&packet->signature))
         {
             magicnet_log("%s you asked us to sign the packet but it was already signed.. We will not send this packet as it may be a potential attacker playing games\n", __FUNCTION__);
@@ -3896,6 +3946,30 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
             magicnet_log("%s Failed to sign data with signature\n", __FUNCTION__);
             goto out;
         }
+
+        // One final check incase concurrency problems memory leaks or whatever threading problems
+        // damaged the packet integrity.
+        // AT THIS POINT THE VERIFY WORKS
+        res = magicnet_client_verify_packet_was_signed(packet);
+        if (res < 0)
+        {
+            magicnet_log("%s packet was signed incorrectly\n", __FUNCTION__);
+            goto out;
+        }
+
+        // WE KNOW THAT THIS FUNCTION DOES NOT CORRUPT THE PACKET
+        // BECAUSE BOTH PASS, WHICH MEANS THE PROBLEM IS FURTHER DOWN OR ON ANOTHER THREAD
+        res = magicnet_client_verify_packet_was_signed(packet);
+        if (res < 0)
+        {
+            magicnet_log("%s packet was signed incorrectly abc..\n", __FUNCTION__);
+            goto out;
+        }
+    }
+
+    if (magicnet_signed_data(packet)->type == MAGICNET_PACKET_TYPE_USER_DEFINED)
+    {
+        magicnet_log("%s server break here, hash=%s\n", __FUNCTION__, packet->datahash);
     }
 
     if (stripped_flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
@@ -3915,28 +3989,43 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
         magicnet_log("%s attempting to send unsigned packet\n", __FUNCTION__);
     }
-    res = magicnet_write_int(client, has_signature, NULL);
-    if (res < 0)
+
+    // THE MEMORY CORRUPTION HAPPENS BELOW SUGGESTING THE BUFFER IS SOME HOW BROKEN
+  //  if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
     {
-        goto out;
+        res = magicnet_write_int(client, has_signature, NULL);
+        if (res < 0)
+        {
+            goto out;
+        }
+
+        // Send the key and signature if their is any
+        if (has_signature)
+        {
+            res = magicnet_write_bytes(client, &packet->pub_key, sizeof(packet->pub_key), NULL);
+            if (res < 0)
+            {
+                goto out;
+            }
+
+            res = magicnet_write_bytes(client, &packet->signature, sizeof(packet->signature), NULL);
+            if (res < 0)
+            {
+                goto out;
+            }
+        }
     }
 
-    // Send the key and signature if their is any
     if (has_signature)
     {
-        res = magicnet_write_bytes(client, &packet->pub_key, sizeof(packet->pub_key), NULL);
+        // SOMEWHERE BETWEEN THIS CHECK AND ABOVE TO THE LAST CHECK THE DATA WAS DAMAGED.
+        res = magicnet_client_verify_packet_was_signed(packet);
         if (res < 0)
         {
-            goto out;
-        }
-
-        res = magicnet_write_bytes(client, &packet->signature, sizeof(packet->signature), NULL);
-        if (res < 0)
-        {
+            magicnet_log("%s packet was signed incorrectly second check\n", __FUNCTION__);
             goto out;
         }
     }
-
     // Send the data hash
     res = magicnet_write_bytes(client, packet->datahash, sizeof(packet->datahash), NULL);
     if (res < 0)
@@ -4278,7 +4367,6 @@ struct magicnet_packet *magicnet_recv_next_packet(struct magicnet_client *client
     return packet;
 }
 
-
 void magicnet_copy_packet_block_send(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
     struct magicnet_block_send *block_send_packet_in = &magicnet_signed_data(packet_in)->payload.block_send;
@@ -4378,12 +4466,18 @@ void magicnet_copy_packet_login_protocol_identification_packet(struct magicnet_p
  */
 void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_packet *packet_in)
 {
+    int res = 0;
     memcpy(packet_out, packet_in, sizeof(struct magicnet_packet));
     if (magicnet_signed_data(packet_in)->flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
     {
         magicnet_signed_data(packet_out)->my_certificate = magicnet_council_certificate_clone(magicnet_signed_data(packet_in)->my_certificate);
     }
 
+    // We must clone the not sent buffer
+    if (packet_in->not_sent.tmp_buf)
+    {
+        packet_out->not_sent.tmp_buf = buffer_clone(packet_in->not_sent.tmp_buf);
+    }
     switch (magicnet_signed_data(packet_in)->type)
     {
 
@@ -4417,9 +4511,25 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         magicnet_copy_packet_transaction_list_response(packet_out, packet_in);
         break;
     }
+
+    // Prove the integrity and nothing was damaged
+    if (magicnet_packet_hashed(packet_in))
+    {
+        magicnet_packet_hash(packet_out);
+        if (memcmp(packet_out->datahash, packet_in->datahash, sizeof(packet_out->datahash)) != 0)
+        {
+            magicnet_log("%s BUG: Fix copy_packet data integreity broken\n", __FUNCTION__);
+            res = -1;
+            goto out;
+        }
+        else
+        {
+            magicnet_log("%s cloned packet correctly\n", __FUNCTION__);
+        }
+    }
+out:
+    return res;
 }
-
-
 
 struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_client *client)
 {
@@ -4461,26 +4571,28 @@ int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magic
         memset(packet_out, 0, sizeof(struct magicnet_packet));
     }
     magicnet_copy_packet(packet_out, packet);
+
     magicnet_signed_data(packet_out)->flags &= ~MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE;
     client->packets_for_client.pos_write++;
     client->packets_for_client.total++;
+out:
     return res;
 }
 
 /**
  * Flushes all the packets to relay straight to the I/O stream of the client.
- * 
+ *
  * NOTE: Theres clear signs of unsigned pakcets being flushed resulting in the peer
  * terminating the connection, look into this only localhost can accept such packets.
- * 
+ *
  */
-int magicnet_client_packets_for_client_flush(struct magicnet_client* client)
+int magicnet_client_packets_for_client_flush(struct magicnet_client *client)
 {
     int res = 0;
-    
+
     for (int i = 0; i < client->packets_for_client.total; i++)
     {
-        struct magicnet_packet* packet = magicnet_client_next_packet_to_relay(client);
+        struct magicnet_packet *packet = magicnet_client_next_packet_to_relay(client);
         if (!packet)
         {
             // brak might be better but im not sure yet..
@@ -4558,7 +4670,6 @@ struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_serv
     return NULL;
 }
 
-
 // int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
 // {
 //     int res = 0;
@@ -4617,14 +4728,12 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
         if (!magicnet_client_in_use(client))
         {
             continue;
-        }   
-
+        }
 
         // We relay to the local clients, they shall handle the rest.
         magicnet_relay_packet_to_client(client, packet);
-        
     }
-    
+
     // Relay to the internet
     magicnet_server_add_packet_to_relay(client->server, packet);
 
@@ -5115,9 +5224,9 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         {
 
             // DEPRECATED
-        // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-        //     res = magicnet_client_process_server_sync_packet(client, packet);
-        //     break;
+            // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+            //     res = magicnet_client_process_server_sync_packet(client, packet);
+            //     break;
 
         case MAGICNET_PACKET_TYPE_BLOCK_SUPER_DOWNLOAD_REQUEST:
             res = magicnet_client_process_block_super_download_request_packet(client, packet);
@@ -5138,18 +5247,18 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
 
         switch (magicnet_signed_data(packet)->type)
         {
-        // case MAGICNET_PACKET_TYPE_POLL_PACKETS:
-        //     res = magicnet_client_process_packet_poll_packets(client, packet);
-        //     break;
+            // case MAGICNET_PACKET_TYPE_POLL_PACKETS:
+            //     res = magicnet_client_process_packet_poll_packets(client, packet);
+            //     break;
 
         case MAGICNET_PACKET_TYPE_USER_DEFINED:
             res = magicnet_client_process_user_defined_packet(client, packet);
             break;
 
             // DEPRECATED
-        // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
-        //     res = magicnet_client_process_server_sync_packet(client, packet);
-        //     break;
+            // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
+            //     res = magicnet_client_process_server_sync_packet(client, packet);
+            //     break;
 
         case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
             res = magicnet_client_process_transaction_send_packet(client, packet);
@@ -6606,19 +6715,19 @@ int magicnet_packet_allowed_to_be_processed(struct magicnet_client *sending_clie
 
             // We won't treat this as an error as such but it wont be accepted.
             // they will time out soon if they dont follow the rules.
-         //   return -EIO;
-         // DISABLED FOR NOW WHILE I FIND OUT WHAT HAPPEND...
+            //   return -EIO;
+            // DISABLED FOR NOW WHILE I FIND OUT WHAT HAPPEND...
         }
     }
 
     return 0;
 }
 
-int magicnet_client_open_door_ack(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_client_open_door_ack(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    int res =0;
+    int res = 0;
 
-    struct magicnet_packet* ack_packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK);
+    struct magicnet_packet *ack_packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK);
     if (!ack_packet)
     {
         res = MAGICNET_ERROR_OUT_OF_MEMORY;
@@ -6652,16 +6761,16 @@ int magicnet_server_process_open_door_packet(struct magicnet_client *client, str
         // Not fully open open our door.
         magicnet_client_open_door(client);
     }
-    //We also have to acknowledge their packet
+    // We also have to acknowledge their packet
     res = magicnet_client_open_door_ack(client, packet);
 out:
     return res;
 }
 
-int magicnet_server_process_open_door_ack_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_server_process_open_door_ack_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
-    int res =0;
-    if (client->door_keys.our_key != magicnet_signed_data(packet)->payload.open_door_ack.door_key )
+    int res = 0;
+    if (client->door_keys.our_key != magicnet_signed_data(packet)->payload.open_door_ack.door_key)
     {
         // Client doesnt know what thec ode is
         // not paying attention kill it
@@ -6678,9 +6787,8 @@ out:
     return res;
 }
 
-
 #warning "BELOW FUNCTIONS DONT RESPECT THE MUTEXES, MAKE SURE YOU CALL THEM WITH A LOCK"
-bool magicnet_client_monitoring_packet_type(struct magicnet_client* client, int type)
+bool magicnet_client_monitoring_packet_type(struct magicnet_client *client, int type)
 {
     if (vector_exists(client->packet_monitoring.type_ids, &type))
     {
@@ -6690,20 +6798,20 @@ bool magicnet_client_monitoring_packet_type(struct magicnet_client* client, int 
     return false;
 }
 
-void magicnet_client_monitor_packet_type(struct magicnet_client* client, int type)
+void magicnet_client_monitor_packet_type(struct magicnet_client *client, int type)
 {
     vector_push(client->packet_monitoring.type_ids, &type);
 }
 
-void magicnet_client_unmonitor_packet_type(struct magicnet_client* client, int type)
+void magicnet_client_unmonitor_packet_type(struct magicnet_client *client, int type)
 {
     vector_pop_value(client->packet_monitoring.type_ids, &type);
 }
 
-void magicnet_client_handle_packet_monitoring(struct magicnet_client* client, struct magicnet_packet* packet)
+void magicnet_client_handle_packet_monitoring(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    struct magicnet_packet* cloned_packet = NULL;
+    struct magicnet_packet *cloned_packet = NULL;
 
     // Do we have packet monitoring enabled for this type of packet
     if (magicnet_client_monitoring_packet_type(client, magicnet_signed_data(packet)->type))
@@ -6790,9 +6898,9 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     // direct read after write is a problem in non-blocking mode.
     switch (magicnet_signed_data(packet)->type)
     {
-        case MAGICNET_PACKET_TYPE_USER_DEFINED:
-            res = magicnet_server_poll_process_user_defined_packet(client, packet);
-            break;
+    case MAGICNET_PACKET_TYPE_USER_DEFINED:
+        res = magicnet_server_poll_process_user_defined_packet(client, packet);
+        break;
 
         // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
         //     res = magicnet_server_poll_process_verifier_signup_packet(client, packet);

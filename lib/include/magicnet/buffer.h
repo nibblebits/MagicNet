@@ -20,6 +20,11 @@ struct buffer;
 typedef int(*BUFFER_WRITE_BYTES_FUNCTION)(struct buffer* buffer, void* ptr, size_t amount);
 typedef int(*BUFFER_READ_BYTES_FUNCTION)(struct buffer* buffer, void* ptr, size_t amount);
 
+/**
+ * Implementor must clone their own private data into the new_buffer
+ */
+typedef int(*BUFFER_CLONED_FUNCTION)(struct buffer* buffer, struct buffer* new_buffer);
+
 struct buffer
 {
     int flags;
@@ -31,14 +36,16 @@ struct buffer
 
     BUFFER_WRITE_BYTES_FUNCTION write_bytes;
     BUFFER_READ_BYTES_FUNCTION read_bytes;
+    BUFFER_CLONED_FUNCTION buffer_cloned;
 
     // Can be used to store private data related for the person who created the buffer
     void* private_data;
 };
 
 struct buffer* buffer_create();
-struct buffer* buffer_create_with_handler(BUFFER_WRITE_BYTES_FUNCTION write_bytes, BUFFER_READ_BYTES_FUNCTION read_bytes);
+struct buffer* buffer_create_with_handler(BUFFER_WRITE_BYTES_FUNCTION write_bytes, BUFFER_READ_BYTES_FUNCTION read_bytes, BUFFER_CLONED_FUNCTION cloned);
 struct buffer* buffer_wrap(void* data, size_t size);
+struct buffer* buffer_clone(struct buffer* buffer_in);
 
 int buffer_len(struct buffer* buffer);
 char buffer_read(struct buffer* buffer);
@@ -97,5 +104,5 @@ void buffer_private_set(struct buffer* buffer, void* private);
 */
 void* buffer_private_get(struct buffer* buffer);
 
-
+int buffer_memory_len(struct buffer* buffer);
 #endif

@@ -28,7 +28,7 @@ void sha256_hash_string (unsigned char hash[SHA256_DIGEST_LENGTH], char *outputB
 
 void sha256_data(void* input, char* outputBuffer, size_t size)
 {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
+    unsigned char hash[SHA256_DIGEST_LENGTH] = {0};
     SHA256_CTX sha256;
     SHA256_Init(&sha256);
     SHA256_Update(&sha256, input, size);

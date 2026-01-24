@@ -152,6 +152,13 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
         return;
     }
 
+    // We shall free the tmp_buf
+    if (packet->not_sent.tmp_buf)
+    {
+        buffer_free(packet->not_sent.tmp_buf);
+        packet->not_sent.tmp_buf = NULL;
+    }
+    
     if (magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
     {
         magicnet_council_certificate_free(magicnet_signed_data(packet)->my_certificate);
