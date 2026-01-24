@@ -3772,7 +3772,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = -1;
         goto out;
     }
-    
+
     packet->not_sent.tmp_buf = buffer_create();
     client->last_packet_sent = time(NULL);
 
@@ -6503,7 +6503,7 @@ int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION
     {
     case MAGICNET_CLIENT_STATE_IDLE_WAIT:
         // Do nothinbg we are instructed to wait
-        magicnet_log("%s IDLE WAIT STATE\n", __FUNCTION__);
+      //  magicnet_log("%s IDLE WAIT STATE\n", __FUNCTION__);
         break;
 
     case MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PACKET_MUST_WRITE:

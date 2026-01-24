@@ -203,52 +203,36 @@ void buffer_write(struct buffer *buffer, char c)
 
 void buffer_shift_right_at_position(struct buffer *buffer, int index, int amount)
 {
-    // index=0
-    //amount=4
-    //goal shift right 4 bytes
-    //buffer->len +4 = new length
-    //buffer->len = 100 = current
-    // final_len = 104
-    // shifting (index 4) to index 103 
-    // memcpy(4, 0, 100)
-    // old buffer_len was correct!
+    // index = 10
+    // len = 100
+    // amount = 1
+    // goal shift the stream from index 10 one byte to the right
+    // new location index 11
+    // null index 10 
+    // new length 101
+
+    // first how much do we need
+    // amount will always be the amount to shift the stream thus its the memory needed
+    int amount_mem_needed = amount;
+    buffer_need(buffer, amount_mem_needed);
+
     
-    // seems correct now
-    int mem_len_needed = (index+amount);
-    int mem_len_diff = (mem_len_needed - buffer_memory_len(buffer));
-    if (mem_len_diff > 0)
-    {
-        buffer_need(buffer, mem_len_diff);
-    }
+    // Now we have the memory no possible overflow
+    int shift_to_index = index+amount; // index 10 + 1(amount) = index 11
+    int shift_from_index = index;      // 10 = old_index
+    int amount_to_copy = (buffer->len - shift_from_index); // 100 - 10 = 90
+    // lets prove it
+    // 90 + 1 + 10 = 101 
+    // ok it should be right.
 
-    // memcpy seems correct
-    // We need to first move all the data that exists to the right
 
-    // 0+4 = 4
-    // 0=0
-    // copy from 0 to 4->100
-    // this overflows but the memor ywas extended
-    // memcpy(4, 0, 100)
-    // 0000111111.... 
-    // yes buffer->len shouldve been used.
-    // wait what if the index does not start at zero
-    // index=10
-    // sindex=20
-    // len=100
-    // amount=10
-    //memcpy(20, 10, 100)
-    // yes theres an overflow not accounted for 
-    // copying from byte 10 to 100 exceeds the buffer 
-    // -index solved the bug..
-    memcpy(&buffer->data[index + amount], &buffer->data[index], buffer->len-index);
-    // Now the entire buffer has been shifted to the right
-    // Lets null the data to the left so its not uninitialized
-    // memset seems correct.
-    memset(&buffer->data[index], 0x00, amount);
+    // copy the memory to the new location
+    memmove(&buffer->data[shift_to_index], &buffer->data[shift_from_index], amount_to_copy);
 
-    // Since this is a shift of right the stream length will always be increased by amount
+    // null the old memory
+    memset(&buffer->data[shift_from_index], 0x00, amount);
+
     buffer->len += amount;
-    
 }
 
 int buffer_insert(struct buffer *buffer, int index, void *data, size_t len)
