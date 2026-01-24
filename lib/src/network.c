@@ -4751,21 +4751,7 @@ int magicnet_client_process_user_defined_packet(struct magicnet_client *client, 
     // We got to lock this server
     magicnet_server_lock(client->server);
 
-    // We must find all the clients of the same program name
-    // relay to our local connections..
-    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
-    {
-        struct magicnet_client *cli = &client->server->clients[i];
-        if (!magicnet_client_in_use(cli))
-        {
-            continue;
-        }
-
-        // We relay to the local clients, they shall handle the rest.
-        magicnet_relay_packet_to_client(cli, packet);
-    }
-
-    // Relay to the internet
+    // Relay to the internet and local connections
     magicnet_server_add_packet_to_relay(client->server, packet);
 
 out:
