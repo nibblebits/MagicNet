@@ -3765,6 +3765,14 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 {
     int res = 0;
     magicnet_client_lock(client);
+
+    if (magicnet_signed_data(packet)->type == 0x00)
+    {
+        magicnet_log("%s attempting to send a NULL packet, this suggests a memory error, no null type exists\n", __FUNCTION__);
+        res = -1;
+        goto out;
+    }
+    
     packet->not_sent.tmp_buf = buffer_create();
     client->last_packet_sent = time(NULL);
 

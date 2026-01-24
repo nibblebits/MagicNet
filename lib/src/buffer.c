@@ -203,7 +203,16 @@ void buffer_write(struct buffer *buffer, char c)
 
 void buffer_shift_right_at_position(struct buffer *buffer, int index, int amount)
 {
-
+    // index=0
+    //amount=4
+    //goal shift right 4 bytes
+    //buffer->len +4 = new length
+    //buffer->len = 100 = current
+    // final_len = 104
+    // shifting (index 4) to index 103 
+    // memcpy(4, 0, 100)
+    // old buffer_len was correct!
+    
     // seems correct now
     int mem_len_needed = (index+amount);
     int mem_len_diff = (mem_len_needed - buffer_memory_len(buffer));
@@ -214,7 +223,15 @@ void buffer_shift_right_at_position(struct buffer *buffer, int index, int amount
 
     // memcpy seems correct
     // We need to first move all the data that exists to the right
-    memcpy(&buffer->data[index + amount], &buffer->data[index], amount);
+
+    // 0+4 = 4
+    // 0=0
+    // copy from 0 to 4->100
+    // this overflows but the memor ywas extended
+    // memcpy(4, 0, 100)
+    // 0000111111.... 
+    // yes buffer->len shouldve been used.
+    memcpy(&buffer->data[index + amount], &buffer->data[index], buffer->len);
     // Now the entire buffer has been shifted to the right
     // Lets null the data to the left so its not uninitialized
     // memset seems correct.
