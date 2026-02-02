@@ -60,18 +60,16 @@ int magicnet_client_insert_bytes(struct magicnet_client *client, void *ptr_in, s
 // WE WILL RULE OUT THE MULTITHREADING ISSUE WITH A TEMPORARY MUTEX.
 pthread_mutex_t tmp_mutex;
 
-
 size_t magicnet_client_unflushed_bytes(struct magicnet_client *client);
 
-
 // flags in future but this is fool proof for debugging.
-bool magicnet_packet_hashed(struct magicnet_packet* packet)
+bool magicnet_packet_hashed(struct magicnet_packet *packet)
 {
     char tmp_hash[SHA256_STRING_LENGTH] = {0};
     return memcmp(packet->datahash, tmp_hash, sizeof(tmp_hash)) != 0;
 }
 
-void magicnet_packet_hash(struct magicnet_packet* packet_out)
+void magicnet_packet_hash(struct magicnet_packet *packet_out)
 {
     char tmp_buf[SHA256_STRING_LENGTH];
     if (!packet_out->not_sent.tmp_buf)
@@ -231,8 +229,7 @@ void magicnet_client_destruct(struct magicnet_client *client)
     }
 }
 
-
-struct buffer* magicnet_packet_signing_buffer(struct magicnet_packet* packet)
+struct buffer *magicnet_packet_signing_buffer(struct magicnet_packet *packet)
 {
     return packet->not_sent.tmp_buf;
 }
@@ -1410,7 +1407,6 @@ void magicnet_buffer_stream_private_data_free(struct magicnet_buffer_stream_priv
     free(buffer_data);
 }
 
-
 int magicnet_write_int(struct magicnet_client *client, int value, struct buffer *store_in_buffer)
 {
 
@@ -1795,9 +1791,9 @@ int magicnet_network_write_bytes_buffer_handler(struct buffer *buffer, void *dat
     return magicnet_write_bytes(private_data->client, data, amount, private_data->write_buf);
 }
 
-int magicnet_network_buffer_clone_handler(struct buffer* buffer_in, struct buffer* buffer_out)
+int magicnet_network_buffer_clone_handler(struct buffer *buffer_in, struct buffer *buffer_out)
 {
-    struct magicnet_buffer_stream_private_data* buffer_in_private = (struct magicnet_buffer_stream_private_data*) buffer_in->private_data;
+    struct magicnet_buffer_stream_private_data *buffer_in_private = (struct magicnet_buffer_stream_private_data *)buffer_in->private_data;
     // We are required to clone our private data
     buffer_out->private_data = magicnet_buffer_stream_private_data_create(buffer_in_private->write_buf, buffer_in_private->client);
     if (!buffer_out->private_data)
@@ -2993,7 +2989,7 @@ out:
     client->packet_in_loading = NULL;
 
     // We shall not erase this buffer as it might be needed in processing
-    if (res <  0)
+    if (res < 0)
     {
         buffer_free(packet_out->not_sent.tmp_buf);
         packet_out->not_sent.tmp_buf = NULL;
@@ -3126,9 +3122,9 @@ int magicnet_client_write_packet_empty(struct magicnet_client *client, struct ma
 {
     return 0;
 }
-int magicnet_network_write_bytes_buffer_clone_handler(struct buffer* buffer_in, struct buffer* buffer_out)
+int magicnet_network_write_bytes_buffer_clone_handler(struct buffer *buffer_in, struct buffer *buffer_out)
 {
-    struct magicnet_buffer_stream_private_data* private_data = (struct magicnet_buffer_stream_private_data*) buffer_in->private_data;
+    struct magicnet_buffer_stream_private_data *private_data = (struct magicnet_buffer_stream_private_data *)buffer_in->private_data;
     if (private_data)
     {
         buffer_out->private_data = magicnet_buffer_stream_private_data_create(private_data->write_buf, private_data->client);
@@ -3795,7 +3791,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     {
         packet->not_sent.tmp_buf = buffer_create();
     }
-    
+
     client->last_packet_sent = time(NULL);
 
     res = magicnet_write_int(client, magicnet_signed_data(packet)->id, packet->not_sent.tmp_buf);
@@ -3959,9 +3955,9 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     if (flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
     {
-       magicnet_packet_hash(packet);
+        magicnet_packet_hash(packet);
 
-        magicnet_log("%s will sign packet\n", __FUNCTION__);  // not called...
+        magicnet_log("%s will sign packet\n", __FUNCTION__); // not called...
         if (!MAGICNET_nulled_signature(&packet->signature))
         {
             magicnet_log("%s you asked us to sign the packet but it was already signed.. We will not send this packet as it may be a potential attacker playing games\n", __FUNCTION__);
@@ -4021,7 +4017,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     }
 
     // THE MEMORY CORRUPTION HAPPENS BELOW SUGGESTING THE BUFFER IS SOME HOW BROKEN
-  //  if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
+    //  if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
     {
         res = magicnet_write_int(client, has_signature, NULL);
         if (res < 0)
@@ -4099,11 +4095,10 @@ out:
         // just broke the protocol, receiver is waiting on data from us we didnt send.
         // Its too late to send more data we will be out of sync
         close(client->sock);
-        
+
         buffer_free(packet->not_sent.tmp_buf);
         packet->not_sent.tmp_buf = NULL;
     }
-
 
     // // We expect to receive a response byte
     // res = magicnet_read_int(client, NULL);
@@ -6513,7 +6508,7 @@ int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION
     {
     case MAGICNET_CLIENT_STATE_IDLE_WAIT:
         // Do nothinbg we are instructed to wait
-      //  magicnet_log("%s IDLE WAIT STATE\n", __FUNCTION__);
+        //  magicnet_log("%s IDLE WAIT STATE\n", __FUNCTION__);
         break;
 
     case MAGICNET_CLIENT_STATE_AWAITING_LOGIN_PACKET_MUST_WRITE:
@@ -6825,12 +6820,12 @@ void magicnet_client_unmonitor_packet_type(struct magicnet_client *client, int t
     vector_pop_value(client->packet_monitoring.type_ids, &type);
 }
 
-struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_find_pop(struct magicnet_client* client, int packet_type)
+struct magicnet_packet *magicnet_client_packet_monitoring_packet_queue_find_pop(struct magicnet_client *client, int packet_type)
 {
-    struct magicnet_packet* packet = NULL;
-    vector_set_peek_pointer(client->packet_monitoring.packets, 0 );
+    struct magicnet_packet *packet = NULL;
+    vector_set_peek_pointer(client->packet_monitoring.packets, 0);
     packet = vector_peek_ptr(client->packet_monitoring.packets);
-    while(packet)
+    while (packet)
     {
         if (magicnet_signed_data(packet)->type == packet_type)
         {
@@ -6843,9 +6838,9 @@ struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_find_pop(
 
     return NULL;
 }
-struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_pop(struct magicnet_client* client)
+struct magicnet_packet *magicnet_client_packet_monitoring_packet_queue_pop(struct magicnet_client *client)
 {
-    struct magicnet_packet* packet = NULL;
+    struct magicnet_packet *packet = NULL;
     vector_pop_ptr_value(client->packet_monitoring.packets, &packet);
     return packet;
 }
@@ -6904,7 +6899,6 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
         res = -1;
         goto out;
     }
-
 
     // Login protocol is expected for all peers, so its in this default logic
     switch (magicnet_signed_data(packet)->type)
@@ -7288,6 +7282,10 @@ void *magicnet_server_client_thread(void *_client)
     magicnet_server_unlock(client->server);
 }
 
+
+void magicnet_server_outgoing_client_thread_free(struct magicnet_nthread_action *action, void *private_data)
+{
+}
 void magicnet_server_attempt_new_connections(struct magicnet_server *server)
 {
     char ip[MAGICNET_MAX_IP_STRING_SIZE];
@@ -7300,13 +7298,10 @@ void magicnet_server_attempt_new_connections(struct magicnet_server *server)
     struct magicnet_client *client = magicnet_tcp_network_connect_for_ip_for_server(server, ip, MAGICNET_SERVER_PORT, MAGICNET_LISTEN_ALL_PROGRAM, 0, 0);
     if (client)
     {
-        pthread_t threadId;
-        if (pthread_create(&threadId, NULL, &magicnet_server_client_thread, client))
-        {
-            // Error thread not created.
-            return;
-        }
+        magicnet_client_push(client);
     }
+
+out:
 }
 
 bool magicnet_server_should_make_new_connections(struct magicnet_server *server)

@@ -656,6 +656,12 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out)
     *packet_out = payload_clone;
     res = magicnet_signed_data(packet)->payload.user_defined.type;
 out:
+    // We are responsible for the original packet payload
+    // we own it since we popped it.
+    if (packet)
+    {
+        magicnet_packet_free(packet);
+    }
     if (res < 0)
     {
         if (payload_clone)

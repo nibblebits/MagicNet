@@ -21,6 +21,10 @@ int main()
         printf("Issue creating a program is the local server running?\n");
         return -1;
     }
+
+    // ONE MOMENT IM BOOTING A SECOND SERVER TO TEST WITH
+    // FUNCTIONALITY DOES NOT WORK FOR REMOTE SERVERS WE WILL FIND OUT WHAT IS
+    // WRONG WITH THAT, WORKS WITH LOCAL SERVERS.
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
 
     struct chat_packet packet;
