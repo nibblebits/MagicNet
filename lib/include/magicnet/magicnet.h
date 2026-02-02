@@ -1339,6 +1339,8 @@ void magicnet_client_unlock(struct magicnet_client* client);
 bool magicnet_client_login_protocol_completed(struct magicnet_client *client);
 bool magicnet_client_must_send_ping(struct magicnet_client* client);
 bool magicnet_client_needs_ping(struct magicnet_client* client);
+struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_pop(struct magicnet_client* client);
+struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_find_pop(struct magicnet_client* client, int packet_type);
 
 void magicnet_client_free(struct magicnet_client *client);
 bool magicnet_connected(struct magicnet_client *client);

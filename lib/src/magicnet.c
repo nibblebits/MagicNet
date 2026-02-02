@@ -22,10 +22,9 @@ static struct vector *program_vec;
 
 struct magicnet_transactions *magicnet_transactions_new(struct vector *block_transactions_vec);
 int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action);
-void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action* action, void* private_data);
+void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action *action, void *private_data);
 
 int mn_set_flags;
-
 
 // not a multi-threading problem... hmm..
 extern pthread_mutex_t tmp_mutex;
@@ -47,7 +46,6 @@ int magicnet_init(int flags, int t_threads)
 
     // Let's get those threads going.
     magicnet_threads_init(t_threads);
-
 
     return 0;
 }
@@ -158,7 +156,7 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
         buffer_free(packet->not_sent.tmp_buf);
         packet->not_sent.tmp_buf = NULL;
     }
-    
+
     if (magicnet_signed_data(packet)->flags & MAGICNET_PACKET_FLAG_CONTAINS_MY_COUNCIL_CERTIFICATE)
     {
         magicnet_council_certificate_free(magicnet_signed_data(packet)->my_certificate);
@@ -631,73 +629,59 @@ int magicnet_send_packet(struct magicnet_program *program, int packet_type, void
     return _magicnet_send_packet(program, packet_type, packet, true);
 }
 
-int _magicnet_next_packet(struct magicnet_program *program, void **packet_out, bool reconnect_if_neccessary)
+int _magicnet_next_packet(struct magicnet_program *program, void **packet_out)
 {
     int res = 0;
-    struct magicnet_packet *packet = magicnet_packet_new();
-    struct magicnet_client *client = program->client;
-    struct magicnet_packet *packet_to_send = magicnet_packet_new();
-    packet_to_send->signed_data.type = MAGICNET_PACKET_TYPE_POLL_PACKETS;
-    // First we poll to see if thiers packets for us
-    bool loop = true;
-    while (loop)
+    size_t payload_size = 0;
+    void *payload_data = NULL;
+    void *payload_clone = NULL;
+    // We must locate the USER DEFINED PACKET from the monitoring queue
+    struct magicnet_packet *packet = magicnet_client_packet_monitoring_packet_queue_find_pop(program->client, MAGICNET_PACKET_TYPE_USER_DEFINED);
+    if (!packet)
     {
-        // We want a new packet ID as we cant send the same packet twice.
-        magicnet_packet_make_new_id(packet_to_send);
-        res = magicnet_client_write_packet(client, packet_to_send, 0);
-        if (res < 0)
-        {
-            goto out;
-        }
-
-        // no longer possibel in non-blocking system FIX...
-        if (magicnet_client_read_packet(client, packet) < 0)
-        {
-            res = -1;
-            goto out;
-        }
-        loop = false;
-        if (magicnet_signed_data(packet)->type != MAGICNET_PACKET_TYPE_USER_DEFINED)
-        {
-            // Someone sent as a dodgy packet. we only want user defined packets.
-            // Do cleanup.
-            loop = true;
-        }
-
-        if (!(magicnet_flags() & MAGICNET_INIT_FLAG_ENABLE_BLOCKING))
-        {
-            // Blocking not allowed then leave
-            // break;
-            // TODO NOT YET DONE
-        }
-    }
-
-    int payload_packet_type = magicnet_signed_data(packet)->payload.user_defined.type;
-    struct magicnet_registered_structure structure;
-    res = magicnet_get_structure(payload_packet_type, &structure);
-    if (res < 0)
-    {
-        // We aren't aware of this structure.
+        res = -1;
         goto out;
     }
-    res = payload_packet_type;
-    void *data = calloc(1, structure.size);
-    memcpy(data, magicnet_signed_data(packet)->payload.user_defined.data, structure.size);
-    *packet_out = data;
-out:
-    if (res < 0 && reconnect_if_neccessary)
+
+    payload_size = magicnet_signed_data(packet)->payload.user_defined.data_len;
+    payload_data = magicnet_signed_data(packet)->payload.user_defined.data;
+    payload_clone = calloc(1, payload_size);
+    if (!payload_clone)
     {
-        magicnet_reconnect(program);
-        res = _magicnet_next_packet(program, packet_out, false);
+        goto out;
     }
-    magicnet_packet_free(packet);
-    magicnet_packet_free(packet_to_send);
+    memcpy(payload_clone, magicnet_signed_data(packet)->payload.user_defined.data, payload_size);
+
+    // We have our clone, transfer it to the caller.
+    *packet_out = payload_clone;
+    res = magicnet_signed_data(packet)->payload.user_defined.type;
+out:
+    if (res < 0)
+    {
+        if (payload_clone)
+        {
+            free(payload_clone);
+        }
+        if (packet)
+        {
+            magicnet_packet_free(packet);
+        }
+    }
     return res;
 }
 
+/**
+ * This is a packet in terms of a custom magicnet program
+ * not a protocol packet.
+ */
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out)
 {
-    return _magicnet_next_packet(program, packet_out, true);
+    int res = -1;
+    magicnet_client_lock(program->client);
+    res = _magicnet_next_packet(program, packet_out);
+out:
+    magicnet_client_unlock(program->client);
+    return res;
 }
 
 struct magicnet_program *magicnet_program_new()
@@ -715,10 +699,10 @@ void magicnet_program_free(struct magicnet_program *program)
     free(program);
 }
 
-int magicnet_program_client_thread_poll_process_packet(struct magicnet_client* client, struct magicnet_packet* packet)
+int magicnet_program_client_thread_poll_process_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
-    
+
     // Let's process the default protocol
     res = magicnet_default_poll_packet_process(client, packet);
     if (res < 0)
@@ -728,8 +712,7 @@ int magicnet_program_client_thread_poll_process_packet(struct magicnet_client* c
     }
 
     magicnet_log("%s processing read packet\n", __FUNCTION__);
-    
-    
+
 out:
     return res;
 }
@@ -750,11 +733,10 @@ out:
     return res;
 }
 
-void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action* action, void* private_data)
+void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action *action, void *private_data)
 {
     // No need to access the client it has been closed already.
     // by the network
-
 }
 struct magicnet_program *magicnet_program(const char *name)
 {
@@ -793,7 +775,7 @@ struct magicnet_program *magicnet_program(const char *name)
     // We only care about user defined packets, this is what we must montior
     magicnet_client_monitor_packet_type(client, MAGICNET_PACKET_TYPE_USER_DEFINED);
 
-    struct magicnet_nthread_action* action = magicnet_threads_action_new(magicnet_program_client_thread_poll, client, magicnet_program_client_thread_poll_free);
+    struct magicnet_nthread_action *action = magicnet_threads_action_new(magicnet_program_client_thread_poll, client, magicnet_program_client_thread_poll_free);
     if (!action)
     {
         res = -1;

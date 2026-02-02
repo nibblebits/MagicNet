@@ -6526,7 +6526,6 @@ int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION
         break;
 
     // Invoked if we need to complete the reading of a single packet in our non-blocking protocol
-    // Lag is bad today..
     case MAGICNET_CLIENT_STATE_PACKET_READ_PACKET_FINISH_READING:
         res = magicnet_client_poll_read_packet_finish_reading_and_process(client, process_packet_func);
         break;
@@ -6826,6 +6825,30 @@ void magicnet_client_unmonitor_packet_type(struct magicnet_client *client, int t
     vector_pop_value(client->packet_monitoring.type_ids, &type);
 }
 
+struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_find_pop(struct magicnet_client* client, int packet_type)
+{
+    struct magicnet_packet* packet = NULL;
+    vector_set_peek_pointer(client->packet_monitoring.packets, 0 );
+    packet = vector_peek_ptr(client->packet_monitoring.packets);
+    while(packet)
+    {
+        if (magicnet_signed_data(packet)->type == packet_type)
+        {
+            // We found the packet lets pop it off
+            vector_pop_last_peek(client->packet_monitoring.packets);
+            return packet;
+        }
+        packet = vector_peek_ptr(client->packet_monitoring.packets);
+    }
+
+    return NULL;
+}
+struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_pop(struct magicnet_client* client)
+{
+    struct magicnet_packet* packet = NULL;
+    vector_pop_ptr_value(client->packet_monitoring.packets, &packet);
+    return packet;
+}
 void magicnet_client_handle_packet_monitoring(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
