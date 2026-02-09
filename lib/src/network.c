@@ -2645,7 +2645,7 @@ bool magicnet_client_allowed_no_signature(struct magicnet_client* client, struct
     {
         return true;
     }
-    
+
     return (client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) || !magicnet_client_door_opened(client);
 }
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
@@ -2908,7 +2908,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     bool has_signature = false;
 
     has_signature = magicnet_read_int(client, NULL);
-    if (!has_signature && !magicnet_client_allowed_no_signature(client, packet))
+    if (!has_signature && !magicnet_client_allowed_no_signature(client, packet_out))
     {
         magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
         return -1;
