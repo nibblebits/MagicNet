@@ -2689,14 +2689,6 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         goto out;
     }
 
-    // THIS DOESNT GET HIT
-    // THIS SUGGESTS A READING ERROR LEADING TO THE PACKET TYPE
-    // BENIG ZERO UPPER IN READING..
-    if (packet_type == 0x00)
-    {
-        magicnet_log("%s sending null packet type illegal\n", __FUNCTION__);
-        goto out;
-    }
 
     packet_flags = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_flags < 0)
@@ -2900,11 +2892,11 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     bool has_signature = false;
 
     has_signature = magicnet_read_int(client, NULL);
-    // if (!has_signature && !(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
-    // {
-    //     magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
-    //     return -1;
-    // }
+    if (!has_signature && !(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
+    {
+        magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
+        return -1;
+    }
 
     if (has_signature)
     {
@@ -5927,6 +5919,16 @@ int magicnet_ping(struct magicnet_client *client)
 {
     magicnet_log("%s sending ping..\n", __FUNCTION__);
     int res = 0;
+    
+    // Really repeating myself might make sense to autosign packets if going to remote
+    // reconsider this design choice
+    int send_flags = 0;
+
+    if (client->server)
+    {
+        send_flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    }
+
     struct magicnet_packet *packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_PING);
     if (!packet)
     {
@@ -5934,7 +5936,7 @@ int magicnet_ping(struct magicnet_client *client)
         goto out;
     }
 
-    res = magicnet_client_write_packet(client, packet, 0);
+    res = magicnet_client_write_packet(client, packet, send_flags);
 out:
     return res;
 }
@@ -6370,6 +6372,13 @@ out:
 int magicnet_client_poll_write_identification(struct magicnet_client *client)
 {
     int res = 0;
+    int write_flags = 0;
+
+    //  If this is a client belonging to the server we must sign packets before sending
+    if (client->server)
+    {
+        write_flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    }
     // Null for security, otherwise we risk sending sensitive memory
     // thats on the stack
     char program_name[MAGICNET_PROGRAM_NAME_SIZE] = {0};
@@ -6390,7 +6399,7 @@ int magicnet_client_poll_write_identification(struct magicnet_client *client)
     strncpy(magicnet_signed_data(auth_iden_packet)->payload.login_protocol_iden.program_name, program_name, sizeof(magicnet_signed_data(auth_iden_packet)->payload.login_protocol_iden.program_name));
 
     // Let's send the packet now
-    res = magicnet_client_write_packet(client, auth_iden_packet, 0);
+    res = magicnet_client_write_packet(client, auth_iden_packet, write_flags);
     if (res < 0)
     {
         goto out;
@@ -6425,6 +6434,13 @@ bool magicnet_client_check_door_fully_open(struct magicnet_client *client)
 int magicnet_client_open_door(struct magicnet_client *client)
 {
     int res = 0;
+    int send_flags = 0;
+
+    // crappy code lets improve this later..
+    if (client->server)
+    {
+        send_flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+    }
     magicnet_log("%s we shall open the door with the peer\n", __FUNCTION__);
 
     if (magicnet_client_login_protocol_door_open_sent(client))
@@ -6453,7 +6469,7 @@ int magicnet_client_open_door(struct magicnet_client *client)
 
     magicnet_signed_data(packet)->payload.open_door.door_key = door_key;
 
-    res = magicnet_client_write_packet(client, packet, 0);
+    res = magicnet_client_write_packet(client, packet, send_flags);
     if (res < 0)
     {
         goto out;
@@ -7242,6 +7258,7 @@ out:
     return res;
 }
 
+#warning "DEPRECATED AND NOT USED"
 void *magicnet_server_client_thread(void *_client)
 {
     struct magicnet_client *client = _client;
