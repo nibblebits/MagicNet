@@ -1414,6 +1414,7 @@ int magicnet_default_poll_packet_process(struct magicnet_client *client, struct 
  * this is the data that matters to you when sending to peers.
  */
 struct buffer* magicnet_packet_signing_buffer(struct magicnet_packet* packet);
+int magicnet_client_unsigned_packet_allowed(const struct magicnet_packet* packet);
 
 /**
  * Pushes the client to the thread pool so it can be polled frequently

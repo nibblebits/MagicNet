@@ -177,6 +177,13 @@ int magicnet_client_packet_strip_private_flags(const struct magicnet_packet *pac
     return flags & ~MAGICNET_PACKET_PRIVATE_FLAGS;
 }
 
+int magicnet_client_unsigned_packet_allowed(const struct magicnet_packet* packet)
+{
+    int type = magicnet_signed_data(packet)->type;
+    // Put this in some kind of array at some point rather than this thing..
+    return type == MAGICNET_PACKET_TYPE_PING || type == MAGICNET_PACKET_TYPE_OPEN_DOOR || type == MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK || type == MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET;
+}
+
 bool magicnet_client_packet_flags_are_private(int flags)
 {
     return flags & MAGICNET_PACKET_PRIVATE_FLAGS;
@@ -2632,8 +2639,13 @@ out:
     return res;
 }
 
-bool magicnet_client_allowed_no_signature(struct magicnet_client* client)
+bool magicnet_client_allowed_no_signature(struct magicnet_client* client, struct magicnet_packet* packet)
 {
+    if (magicnet_client_unsigned_packet_allowed(packet))
+    {
+        return true;
+    }
+    
     return (client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) || !magicnet_client_door_opened(client);
 }
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
@@ -2896,7 +2908,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     bool has_signature = false;
 
     has_signature = magicnet_read_int(client, NULL);
-    if (!has_signature && !magicnet_client_allowed_no_signature(client))
+    if (!has_signature && !magicnet_client_allowed_no_signature(client, packet))
     {
         magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
         return -1;
@@ -4623,7 +4635,7 @@ int magicnet_client_packets_for_client_flush(struct magicnet_client *client)
             continue;
         }
 
-        res = magicnet_client_write_packet(client, packet, 0);
+        res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
         if (res < 0)
         {
             // I/O problem we are done.
@@ -5940,7 +5952,7 @@ int magicnet_ping(struct magicnet_client *client)
         goto out;
     }
 
-    res = magicnet_client_write_packet(client, packet, 0);
+    res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
 out:
     return res;
 }
