@@ -2634,9 +2634,7 @@ out:
 
 bool magicnet_client_allowed_no_signature(struct magicnet_client* client)
 {
-    // for now no signing is required
-    return true;
-   // return (client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) || !magicnet_client_door_opened(client);
+    return (client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) || !magicnet_client_door_opened(client);
 }
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
