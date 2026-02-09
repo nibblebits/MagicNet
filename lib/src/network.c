@@ -5714,6 +5714,7 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
             goto out;
         }
 
+
         // Okay we have peer information save it locally so we know who this person is
         // when they communicate with us forward from now.
         // We only want to save the peer info if we are a server client
@@ -5735,7 +5736,9 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
         // based on the connected socket.
         char *ip_address = inet_ntoa(client->client_info.sin_addr);
         strncpy(client->peer_info.ip_address, ip_address, sizeof(client->peer_info.ip_address));
+        magicnet_log("%s received peer information\n", __FUNCTION__);
     }
+
 
     // Peer info now copied into the client so hes identifyable throughout
     // the session..
@@ -5760,6 +5763,8 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
     }
 
 out:
+    magicnet_log("%s peer info logic completed\n", __FUNCTION__);
+
     if (res >= 0)
     {
         // All okay? then the peer completed the login protocol on our side
@@ -5767,6 +5772,10 @@ out:
         client->states.flags |= MAGICNET_CLIENT_STATE_FLAG_PEER_COMPLETED_LOGIN_PROTOCOL;
 
         magicnet_log("%s peer has completed his side of the login protocol\n", __FUNCTION__);
+    }
+    else
+    {
+        magicnet_log("%s failed with error=%i\n", __FUNCTION__, res);
     }
     return res;
 }
