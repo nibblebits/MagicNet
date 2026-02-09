@@ -2900,11 +2900,11 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     bool has_signature = false;
 
     has_signature = magicnet_read_int(client, NULL);
-    if (!has_signature && !(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
-    {
-        magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
-        return -1;
-    }
+    // if (!has_signature && !(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
+    // {
+    //     magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
+    //     return -1;
+    // }
 
     if (has_signature)
     {
