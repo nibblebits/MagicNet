@@ -3960,18 +3960,12 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 
     // Okay we have a buffer of all the data we sent to the peer, lets get it and hash it so that
     // we can prove who signed this packet later on..
-
-    if (flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED)
+    // only unsigned packets shall be signed when this flag is present
+    if ((flags & MAGICNET_PACKET_FLAG_MUST_BE_SIGNED) && MAGICNET_nulled_signature(&packet->signature))
     {
         magicnet_packet_hash(packet);
 
         magicnet_log("%s will sign packet\n", __FUNCTION__); // not called...
-        if (!MAGICNET_nulled_signature(&packet->signature))
-        {
-            magicnet_log("%s you asked us to sign the packet but it was already signed.. We will not send this packet as it may be a potential attacker playing games\n", __FUNCTION__);
-            res = -1;
-            goto out;
-        }
 
         packet->pub_key = *MAGICNET_public_key();
         res = private_sign(packet->datahash, sizeof(packet->datahash), &packet->signature);
