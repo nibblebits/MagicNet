@@ -2632,6 +2632,10 @@ out:
     return res;
 }
 
+bool magicnet_client_allowed_no_signature(struct magicnet_client* client)
+{
+    return (client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) || !magicnet_client_door_opened(client);
+}
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
     magicnet_log("%s ...\n", __FUNCTION__);
@@ -2892,7 +2896,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     bool has_signature = false;
 
     has_signature = magicnet_read_int(client, NULL);
-    if (!has_signature && !(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
+    if (!has_signature && !magicnet_client_allowed_no_signature(client))
     {
         magicnet_log("%s only localhost clients are allowed to not sign packets. All remote packets must be signed!\n", __FUNCTION__);
         return -1;
@@ -5919,15 +5923,7 @@ int magicnet_ping(struct magicnet_client *client)
 {
     magicnet_log("%s sending ping..\n", __FUNCTION__);
     int res = 0;
-    
-    // Really repeating myself might make sense to autosign packets if going to remote
-    // reconsider this design choice
-    int send_flags = 0;
 
-    if (client->server)
-    {
-        send_flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    }
 
     struct magicnet_packet *packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_PING);
     if (!packet)
@@ -5936,7 +5932,7 @@ int magicnet_ping(struct magicnet_client *client)
         goto out;
     }
 
-    res = magicnet_client_write_packet(client, packet, send_flags);
+    res = magicnet_client_write_packet(client, packet, 0);
 out:
     return res;
 }
@@ -6372,13 +6368,7 @@ out:
 int magicnet_client_poll_write_identification(struct magicnet_client *client)
 {
     int res = 0;
-    int write_flags = 0;
 
-    //  If this is a client belonging to the server we must sign packets before sending
-    if (client->server)
-    {
-        write_flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    }
     // Null for security, otherwise we risk sending sensitive memory
     // thats on the stack
     char program_name[MAGICNET_PROGRAM_NAME_SIZE] = {0};
@@ -6399,7 +6389,7 @@ int magicnet_client_poll_write_identification(struct magicnet_client *client)
     strncpy(magicnet_signed_data(auth_iden_packet)->payload.login_protocol_iden.program_name, program_name, sizeof(magicnet_signed_data(auth_iden_packet)->payload.login_protocol_iden.program_name));
 
     // Let's send the packet now
-    res = magicnet_client_write_packet(client, auth_iden_packet, write_flags);
+    res = magicnet_client_write_packet(client, auth_iden_packet, 0);
     if (res < 0)
     {
         goto out;

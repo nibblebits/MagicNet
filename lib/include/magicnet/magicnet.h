@@ -1399,6 +1399,7 @@ int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id);
 struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
+bool magicnet_client_door_opened(struct magicnet_client *client);
 
 /**
  * Default handler of packets to be processed. Must be called by all handlers to enforce
