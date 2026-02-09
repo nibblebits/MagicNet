@@ -5751,14 +5751,13 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
     // WARNING: we need to refactor this into another function i guess..
     if (client->server)
     {
-
         struct magicnet_peer_information *vec_peer_info = vector_peek_ptr(peer_vector);
         while (vec_peer_info)
         {
             // Let's save this peer..
             magicnet_save_peer_info(vec_peer_info);
             // We won't check for errors, as theres plenty of others that may save correctlyl.
-            peer_info = vector_peek_ptr(peer_vector);
+            vec_peer_info = vector_peek_ptr(peer_vector);
         }
     }
 
