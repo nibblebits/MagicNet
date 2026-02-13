@@ -1,4 +1,4 @@
-OBJECTS= ./build/vector.o ./build/magicnet.o ./build/nthread.o ./build/council.o ./build/reqres.o ./build/events.o ./build/init.o ./build/block.o ./build/log.o ./build/settings.o ./build/network.o ./build/peer.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/wallet.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
+OBJECTS= ./build/vector.o ./build/magicnet.o  ./build/shared.o ./build/nthread.o ./build/council.o ./build/reqres.o ./build/events.o ./build/init.o ./build/block.o ./build/log.o ./build/settings.o ./build/network.o ./build/peer.o ./build/signaling.o ./build/cdownloader.o ./build/database.o ./build/wallet.o ./build/key.o ./build/sha256.o ./build/misc.o ./build/buffer.o
 INCLUDES= -I ./ -I ./include -I ./include/magicnet -I ./include/magicnet/vector
 ADDITIONAL_FLAGS= -g -fPIC
 all: ${OBJECTS}
@@ -7,6 +7,10 @@ all: ${OBJECTS}
 
 ./build/magicnet.o:./src/magicnet.c
 	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/magicnet.c -c -o ./build/magicnet.o 
+
+
+./build/shared.o:./src/shared.c
+	gcc ${INCLUDES} ${ADDITIONAL_FLAGS}  ./src/shared.c -c -o ./build/shared.o 
 
 
 ./build/nthread.o:./src/nthread.c

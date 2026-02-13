@@ -679,6 +679,7 @@ struct magicnet_client
     // Only lock for data that is shared outside of the peers
     // running thread action..
     pthread_mutex_t mutex;
+
 };
 
 // This is the network vote structure to vote for the next block creator

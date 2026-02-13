@@ -4,6 +4,7 @@
 #include "magicnet/init.h"
 #include "magicnet/log.h"
 #include "magicnet/signaling.h"
+#include "magicnet/shared.h"
 #include <memory.h>
 #include <time.h>
 #include <stdio.h>
@@ -89,6 +90,13 @@ void test_free(struct magicnet_nthread_action* action, void* private_data)
 {
     printf("Action was freed\n");
 }
+
+void free_x_func(struct magicnet_shared_ptr* ptr, void* data_ptr)
+{
+    printf("server asked us to free test worked\n");
+    free(data_ptr);
+}
+
 int main(int argc, char **argv)
 {
     int res = 0;
@@ -157,7 +165,14 @@ int main(int argc, char **argv)
         printf("Wallet balance=%f\n", test_wallet->balance);
     }
 
-
+    // shared test
+    int* x= calloc(1, sizeof(int));
+    *x = 50;
+    struct magicnet_shared_ptr* shared_ptr = magicnet_shared_ptr_new(x, free_x_func);
+    int* y = magicnet_shared_ptr_hold(shared_ptr);
+    *y = 60;
+    printf("x=%i\n", *x);
+    magicnet_shared_ptr_release(shared_ptr);
 
     // Accept the clients
     bool server_shutdown = false;
