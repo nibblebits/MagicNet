@@ -2982,13 +2982,6 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     // Change this so it works in real time or remove and deprecate it..
     packet_out->not_sent.total_read_bytes = magicnet_signed_data(packet_out)->expected_size;
 
-    // We have seen this packet now.
-    if (client->server)
-    {
-        magicnet_server_lock(client->server);
-        magicnet_server_add_seen_packet(client->server, packet_out);
-        magicnet_server_unlock(client->server);
-    }
 
 out:
 
