@@ -6229,7 +6229,6 @@ out:
     return res;
 }
 
-void *magicnet_server_client_thread(void *_client);
 
 // int (*MAGICNET_NTHREAD_POLL_FUNCTION)(struct magicnet_nthread_action* action)
 
@@ -6957,6 +6956,12 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
         goto out;
     }
 
+    // Has the server already seen this packet? if so we need to drop this
+    if (magicnet_server_has_seen_packet(client->server, packet))
+    {
+        magicnet_log("%s skipping packet to prevent feedback loop\n", __FUNCTION__);
+        goto out;
+    }
     // so we have disabled the functionality for the time being.
     // direct read after write is a problem in non-blocking mode.
     switch (magicnet_signed_data(packet)->type)
@@ -7015,85 +7020,86 @@ out:
 
 /**
  * Called if your a client that connected to another peer, you call it to sync with it.
+ * 
+ * DEPRECATED..
  */
-int magicnet_server_poll(struct magicnet_client *client)
-{
-#warning "MUST BE REFACTORED INCOMPATIBLE WITH PROTOCOL CHANGES!"!!!"
-    int res = 0;
+// int magicnet_server_poll(struct magicnet_client *client)
+// {
+//     int res = 0;
 
-    bool should_sleep = false;
-    // We also want to send a packet of our own
-    int flags = 0;
+//     bool should_sleep = false;
+//     // We also want to send a packet of our own
+//     int flags = 0;
 
-    struct magicnet_packet *packet_to_send = magicnet_packet_new();
-    struct magicnet_packet *packet_to_relay = magicnet_packet_new();
-    magicnet_signed_data(packet_to_relay)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
-    struct magicnet_packet *packet = NULL;
-    magicnet_server_read_lock(client->server);
-    struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
-    if (tmp_packet)
-    {
-        magicnet_copy_packet(packet_to_relay, tmp_packet);
-    }
-    magicnet_server_unlock(client->server);
+//     struct magicnet_packet *packet_to_send = magicnet_packet_new();
+//     struct magicnet_packet *packet_to_relay = magicnet_packet_new();
+//     magicnet_signed_data(packet_to_relay)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
+//     struct magicnet_packet *packet = NULL;
+//     magicnet_server_read_lock(client->server);
+//     struct magicnet_packet *tmp_packet = magicnet_client_next_packet_to_relay(client);
+//     if (tmp_packet)
+//     {
+//         magicnet_copy_packet(packet_to_relay, tmp_packet);
+//     }
+//     magicnet_server_unlock(client->server);
 
-    if (tmp_packet)
-    {
-        flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
-        magicnet_server_lock(client->server);
-        magicnet_client_relay_packet_finished(client, tmp_packet);
-        magicnet_server_unlock(client->server);
-    }
-    if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
-    {
-        magicnet_log("non empty packet to send\n");
-    }
+//     if (tmp_packet)
+//     {
+//         flags |= MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET;
+//         magicnet_server_lock(client->server);
+//         magicnet_client_relay_packet_finished(client, tmp_packet);
+//         magicnet_server_unlock(client->server);
+//     }
+//     if (magicnet_signed_data(packet_to_relay)->type != MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+//     {
+//         magicnet_log("non empty packet to send\n");
+//     }
 
-    magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
-    if (flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
-    {
-        magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
-        magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
-    }
+//     magicnet_signed_data(packet_to_send)->type = MAGICNET_PACKET_TYPE_SERVER_SYNC;
+//     if (flags & MAGICNET_TRANSMIT_FLAG_EXPECT_A_PACKET)
+//     {
+//         magicnet_signed_data(packet_to_send)->payload.sync.flags = flags;
+//         magicnet_signed_data(packet_to_send)->payload.sync.packet = packet_to_relay;
+//     }
 
-    res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
-    if (res < 0)
-    {
-        goto out;
-    }
-    packet = magicnet_recv_next_packet(client, &res);
-    if (packet == NULL)
-    {
-        should_sleep = false;
-        goto out;
-    }
+//     res = magicnet_client_write_packet(client, packet_to_send, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+//     if (res < 0)
+//     {
+//         goto out;
+//     }
+//     packet = magicnet_recv_next_packet(client, &res);
+//     if (packet == NULL)
+//     {
+//         should_sleep = false;
+//         goto out;
+//     }
 
-    if (magicnet_signed_data(packet)->type == MAGICNET_PACKET_TYPE_EMPTY_PACKET)
-    {
-        res = 0;
-        goto out;
-    }
+//     if (magicnet_signed_data(packet)->type == MAGICNET_PACKET_TYPE_EMPTY_PACKET)
+//     {
+//         res = 0;
+//         goto out;
+//     }
 
-    // Alright we got a packet to relay.. Lets deal with it
-    res = magicnet_server_poll_process(client, packet);
-    if (res < 0)
-    {
-        goto out;
-    }
+//     // Alright we got a packet to relay.. Lets deal with it
+//     res = magicnet_server_poll_process(client, packet);
+//     if (res < 0)
+//     {
+//         goto out;
+//     }
 
-out:
+// out:
 
-    magicnet_packet_free(packet_to_send);
-    magicnet_packet_free(packet);
-    magicnet_packet_free(packet_to_relay);
+//     magicnet_packet_free(packet_to_send);
+//     magicnet_packet_free(packet);
+//     magicnet_packet_free(packet_to_relay);
 
-    // We don't really want to over whelm the thread... This would be better in the loop however.
-    if (should_sleep)
-    {
-        //   usleep(2000000);
-    }
-    return res;
-}
+//     // We don't really want to over whelm the thread... This would be better in the loop however.
+//     if (should_sleep)
+//     {
+//         //   usleep(2000000);
+//     }
+//     return res;
+// }
 void *magicnet_client_thread(void *_client)
 {
 
@@ -7263,45 +7269,45 @@ out:
 }
 
 #warning "DEPRECATED AND NOT USED"
-void *magicnet_server_client_thread(void *_client)
-{
-    struct magicnet_client *client = _client;
-    bool shutdown = false;
-    bool sleeping = false;
-    sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set, SIGINT);
-    pthread_sigmask(SIG_BLOCK, &set, NULL);
+// void *magicnet_server_client_thread(void *_client)
+// {
+//     struct magicnet_client *client = _client;
+//     bool shutdown = false;
+//     bool sleeping = false;
+//     sigset_t set;
+//     sigemptyset(&set);
+//     sigaddset(&set, SIGINT);
+//     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
-    magicnet_log("%s new outbound connection created\n", __FUNCTION__);
-    magicnet_server_lock(client->server);
-    magicnet_server_add_thread(client->server, pthread_self());
-    magicnet_server_recalculate_my_ip(client->server);
-    magicnet_server_unlock(client->server);
+//     magicnet_log("%s new outbound connection created\n", __FUNCTION__);
+//     magicnet_server_lock(client->server);
+//     magicnet_server_add_thread(client->server, pthread_self());
+//     magicnet_server_recalculate_my_ip(client->server);
+//     magicnet_server_unlock(client->server);
 
-    int res = 0;
-    while (res >= 0 && !shutdown)
-    {
-        if (!sleeping)
-        {
-            // We must ask the server to relay packets to us
-            res = magicnet_server_poll(client);
-        }
-        else
-        {
-            sleep(1);
-        }
+//     int res = 0;
+//     while (res >= 0 && !shutdown)
+//     {
+//         if (!sleeping)
+//         {
+//             // We must ask the server to relay packets to us
+//             res = magicnet_server_poll(client);
+//         }
+//         else
+//         {
+//             sleep(1);
+//         }
 
-        magicnet_server_read_lock(client->server);
-        shutdown = client->server->shutdown;
-        sleeping = false;
-        magicnet_server_unlock(client->server);
-    }
-    magicnet_server_lock(client->server);
-    magicnet_close(client);
-    magicnet_server_remove_thread(client->server, pthread_self());
-    magicnet_server_unlock(client->server);
-}
+//         magicnet_server_read_lock(client->server);
+//         shutdown = client->server->shutdown;
+//         sleeping = false;
+//         magicnet_server_unlock(client->server);
+//     }
+//     magicnet_server_lock(client->server);
+//     magicnet_close(client);
+//     magicnet_server_remove_thread(client->server, pthread_self());
+//     magicnet_server_unlock(client->server);
+// }
 
 
 void magicnet_server_outgoing_client_thread_free(struct magicnet_nthread_action *action, void *private_data)
