@@ -252,7 +252,7 @@ struct magicnet_program *magicnet_get_program(const char *name)
 
 void magicnet_reconnect(struct magicnet_program *program)
 {
-    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, program->name);
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, 0, program->name);
     if (!client)
     {
         return;
@@ -272,7 +272,7 @@ int _magicnet_send_packet(struct magicnet_program *program, int packet_type, voi
     }
     
     // We must protect the client
-    magicnet_shared_ptr_hold(program->client->shared_ptr);
+    magicnet_client_hold(program->client);
 
     // Use a secure random... temporary..
     magicnet_packet.signed_data.id = rand() % 999999999;
@@ -302,7 +302,7 @@ out:
         }
     }
 
-    magicnet_shared_ptr_release(program->client->shared_ptr);
+    magicnet_client_release(program->client);
     return res;
 }
 
@@ -646,7 +646,7 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out)
     void *payload_clone = NULL;
 
     // Hold it to protect the memory!
-    magicnet_shared_ptr_hold(program->client->shared_ptr);
+    magicnet_client_hold(program->client);
     // We must locate the USER DEFINED PACKET from the monitoring queue
     struct magicnet_packet *packet = magicnet_client_packet_monitoring_packet_queue_find_pop(program->client, MAGICNET_PACKET_TYPE_USER_DEFINED);
     if (!packet)
@@ -669,7 +669,7 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out)
     res = magicnet_signed_data(packet)->payload.user_defined.type;
 out:
     // we are done with the client
-    magicnet_shared_ptr_release(program->client->shared_ptr);
+    magicnet_client_release(program->client);
     // We are responsible for the original packet payload
     // we own it since we popped it.
     if (packet)
@@ -744,18 +744,19 @@ int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
     struct magicnet_client *client = (struct magicnet_client *)action->private;
 
     // likely not neccessary but makes more cleaner sense..
-    magicnet_shared_ptr_hold(client->shared_ptr);
+    magicnet_client_hold(client);
     res = magicnet_client_poll(client, magicnet_program_client_thread_poll_process_packet);
     if (res < 0)
     {
         goto out;
     }
-    magicnet_shared_ptr_release(client->shared_ptr);
+    magicnet_client_release(client);
 
-    // If theres an error we shall release one reference
+    // If theres an error we shall release one reference, this is the reference
+    // that was held the moment the thread was created.
     if (res < 0)
     {
-        magicnet_shared_ptr_release(client->shared_ptr);
+        magicnet_client_release(client);
     }
 out:
     return res;
@@ -795,16 +796,21 @@ struct magicnet_program *magicnet_program(const char *name)
         goto out;
     }
 
-    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE, name);
+    struct magicnet_client *client = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, 0, name);
     if (!client)
     {
         res = -1;
         goto out;
     }
 
+    // Associate the program with the client.
+    program->client = client;
+
+     // SO long the program is open we hold a reference
+    magicnet_client_hold(program->client);
+
     strncpy(program->name, name, sizeof(program->name));
     vector_push(program_vec, program);
-    program->client = client;
 
     // Lets setup monitoring before the threads begin
     // We only care about user defined packets, this is what we must montior
@@ -817,14 +823,13 @@ struct magicnet_program *magicnet_program(const char *name)
         goto out;
     }
 
-    // SO long the program is open we hold a reference
-    magicnet_client_hold(program->client);
+  
 
     // We shall hold one reference to the shared pointer which the magicnet_program_client_thread_poll shall 
     // release upon an error or leaving.
     // REMEMBER THE REFERNECE WILL BE RELEASED IN THE THREAD WE JUST ARE ABOUT TO START
     // WHEN WE PUSH THE ACTION.
-    magicnet_shared_ptr_hold(client);
+    magicnet_client_hold(client);
     // Let's push this client to the thread for further polling and processing
     magicnet_threads_push_action(action);
 

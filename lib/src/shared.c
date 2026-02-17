@@ -2,10 +2,10 @@
 #include "shared.h"
 #include <memory.h>
 #include <stdlib.h>
-struct magicnet_shared_ptr* magicnet_shared_ptr_new(void* data, MAGICNET_SHARED_PTR_FREE_DATA_FUNCTION free_data_func)
-{   
+struct magicnet_shared_ptr *magicnet_shared_ptr_new(void *data, MAGICNET_SHARED_PTR_FREE_DATA_FUNCTION free_data_func)
+{
     int res = 0;
-    struct magicnet_shared_ptr* shared_ptr = calloc(1, sizeof(struct magicnet_shared_ptr));
+    struct magicnet_shared_ptr *shared_ptr = calloc(1, sizeof(struct magicnet_shared_ptr));
     if (!shared_ptr)
     {
         res = -1;
@@ -25,16 +25,21 @@ struct magicnet_shared_ptr* magicnet_shared_ptr_new(void* data, MAGICNET_SHARED_
     pthread_mutexattr_destroy(&mutex_attr);
 
     shared_ptr->ptr = data;
+    //keep at zero, the person who made the pointer should hold it
+    shared_ptr->ref_count = 0;
     shared_ptr->functions.free_data = free_data_func;
 out:
     if (res < 0)
     {
         free(shared_ptr->mutex);
         free(shared_ptr);
+        shared_ptr = NULL;
     }
+
+    return shared_ptr;
 }
 
-void magicnet_shared_ptr_free_data(struct magicnet_shared_ptr* ptr)
+void magicnet_shared_ptr_free_data(struct magicnet_shared_ptr *ptr)
 {
     if (ptr->functions.free_data)
     {
@@ -42,29 +47,33 @@ void magicnet_shared_ptr_free_data(struct magicnet_shared_ptr* ptr)
     }
 }
 
-void* magicnet_shared_ptr_hold(struct magicnet_shared_ptr* ptr)
+void *magicnet_shared_ptr_hold(struct magicnet_shared_ptr *ptr)
 {
-    void* _ptr =  ptr->ptr;
-    pthread_mutex_t* mutex = ptr->mutex;
+    void *_ptr = ptr->ptr;
+    pthread_mutex_t *mutex = ptr->mutex;
     pthread_mutex_lock(mutex);
     ptr->ref_count++;
 
+    pthread_mutex_unlock(mutex);
 
     return _ptr;
 }
 
-void magicnet_shared_ptr_release(struct magicnet_shared_ptr* ptr)
+void magicnet_shared_ptr_release(struct magicnet_shared_ptr *ptr)
 {
-    pthread_mutex_t* mutex = ptr->mutex;
+    pthread_mutex_t *mutex = ptr->mutex;
     pthread_mutex_lock(mutex);
     ptr->ref_count--;
     if (ptr->ref_count <= 0)
     {
         magicnet_shared_ptr_free_data(ptr);
+        free(ptr);
+        pthread_mutex_unlock(mutex);
+        pthread_mutex_destroy(mutex);
+        free(mutex);
+        return;
     }
-    
+
     pthread_mutex_unlock(mutex);
-    free(ptr);
-    pthread_mutex_destroy(mutex);
-    free(mutex);
+
 }

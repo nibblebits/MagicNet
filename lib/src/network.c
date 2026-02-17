@@ -357,7 +357,7 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
     {
         if (magicnet_connected(&server->clients[i]))
         {
-            magicnet_ip_count_vec_add_or_increment(ip_vec, server->clients[i].my_ip_address_to_client);
+            magicnet_ip_count_vec_add_or_increment(ip_vec, server->clients[i]->my_ip_address_to_client);
         }
     }
 
@@ -365,7 +365,7 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
     {
         if (magicnet_connected(&server->outgoing_clients[i]))
         {
-            magicnet_ip_count_vec_add_or_increment(ip_vec, server->outgoing_clients[i].my_ip_address_to_client);
+            magicnet_ip_count_vec_add_or_increment(ip_vec, server->outgoing_clients[i]->my_ip_address_to_client);
         }
     }
 
@@ -516,7 +516,7 @@ struct magicnet_client *magicnet_find_free_client(struct magicnet_server *server
                 magicnet_log("%s BUG found, the client is not null\n", __FUNCTION__);
             }
            
-            server->clients[i] = calloc(1, sizeof(struct magicnet_client*));
+            server->clients[i] = calloc(1, sizeof(struct magicnet_client));
             return server->clients[i];
         }
      }
@@ -1044,7 +1044,7 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
     {
         if (magicnet_connected(&server->outgoing_clients[i]))
         {
-            vector_push(vector_out, &server->outgoing_clients[i].client_info);
+            vector_push(vector_out, &server->outgoing_clients[i]->client_info);
         }
     }
 }
@@ -4265,37 +4265,20 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
         return NULL;
     }
 
-#warning "This code is duplicated all over the place, use a common function..."
+    // Creates and initializes the client.
     struct magicnet_client *mclient = magicnet_client_new();
     if (!mclient)
     {
         return NULL;
     }
-    mclient->sock = sockfd;
-    mclient->server = NULL;
-    mclient->flags |= MAGICNET_CLIENT_FLAG_CONNECTED | MAGICNET_CLIENT_FLAG_IS_OUTGOING_CONNECTION;
-    mclient->connection_began = time(NULL);
-    mclient->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
-    mclient->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
-    mclient->events = vector_create(sizeof(struct magicnet_event *));
-
-    // Bit crappy, convert to integer then test...
-    // cAN'T always rely on 127.0.0.1 for loopback, check the system
-    // for valid
-    if (strcmp(ip_address, "127.0.0.1") == 0)
-    {
-        mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
-    }
-
+    
     if (program_name)
     {
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
     }
 
- 
-// NEW PROTOCOL AUTHENTICATION IS HANDLED ON ITS OWN THREAD
-#warning "LOTS OF FUNCTIONS LIKE THIS ABSTRACT INTO ONE FUNCTION"
-
+    // Bind the socket id, if you dont do this its zero and will write to stdout lol
+    mclient->sock = sockfd;
     return mclient;
 }
 
@@ -4693,7 +4676,7 @@ struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_serv
 {
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        if (magicnet_client_in_use(&server->clients[i]) && key_cmp(&server->clients[i].peer_info.key, key))
+        if (magicnet_client_in_use(&server->clients[i]) && key_cmp(&server->clients[i]->peer_info.key, key))
         {
             return &server->clients[i];
         }
@@ -4701,7 +4684,7 @@ struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_serv
 
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        if (magicnet_client_in_use(&server->outgoing_clients[i]) && key_cmp(&server->outgoing_clients[i].peer_info.key, key))
+        if (magicnet_client_in_use(&server->outgoing_clients[i]) && key_cmp(&server->outgoing_clients[i]->peer_info.key, key))
         {
             return &server->outgoing_clients[i];
         }
