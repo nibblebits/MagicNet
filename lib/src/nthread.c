@@ -6,7 +6,7 @@
 #include <stdlib.h>
 struct magicnet_nthread *nthread = NULL;
 
-//fwd declared..
+// fwd declared..
 void magicnet_threads_action_free(struct magicnet_nthread_action *action);
 
 int magicnet_threads_nthread_init()
@@ -246,24 +246,29 @@ void magicnet_threads_action_free(struct magicnet_nthread_action *action)
     free(action);
 }
 
+int _magicnet_threads_push_action_to_thread(struct magicnet_nthread_thread *thread, struct magicnet_nthread_action *action)
+{
+    int res = 0;
+    vector_push(thread->actions, &action);
+    return res;
+}
+
 int magicnet_threads_push_action_to_thread(struct magicnet_nthread_thread *thread, struct magicnet_nthread_action *action)
 {
     int res = 0;
     pthread_mutex_lock(&thread->thread.mutex);
-    vector_push(thread->actions, &action);
+    res = _magicnet_threads_push_action_to_thread(thread, action);
     pthread_mutex_unlock(&thread->thread.mutex);
     return res;
 }
 
-struct magicnet_nthread_thread *magicnet_threads_next_thread_for_push()
+struct magicnet_nthread_thread *_magicnet_threads_next_thread_for_push()
 {
     struct magicnet_nthread_thread *thread = NULL;
 
-    pthread_mutex_lock(&nthread->mutex);
     size_t count = vector_count(nthread->threads);
     if (count == 0)
     {
-        pthread_mutex_unlock(&nthread->mutex);
         return NULL;
     }
 
@@ -282,18 +287,31 @@ struct magicnet_nthread_thread *magicnet_threads_next_thread_for_push()
         // reset the next pointer too, to index 1 since we just took zero.
         nthread->next_thread_index_push = 1;
     }
-    pthread_mutex_unlock(&nthread->mutex);
 
+    return thread;
+}
+struct magicnet_nthread_thread *magicnet_threads_next_thread_for_push()
+{
+    struct magicnet_nthread_thread *thread = NULL;
+    pthread_mutex_lock(&nthread->mutex);
+    thread = _magicnet_threads_next_thread_for_push();
+    pthread_mutex_unlock(&nthread->mutex);
     return thread;
 }
 
 int magicnet_threads_push_action(struct magicnet_nthread_action *action)
 {
-    struct magicnet_nthread_thread *nthread = magicnet_threads_next_thread_for_push();
+    int res = 0;
+    pthread_mutex_lock(&nthread->mutex);
+    struct magicnet_nthread_thread *thread = _magicnet_threads_next_thread_for_push();
     if (!nthread)
     {
+        pthread_mutex_unlock(&nthread->mutex);
         return -1;
     }
 
-    return magicnet_threads_push_action_to_thread(nthread, action);
+    res = _magicnet_threads_push_action_to_thread(thread, action);
+    pthread_mutex_unlock(&nthread->mutex);
+
+    return res;
 }

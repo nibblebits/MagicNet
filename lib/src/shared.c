@@ -66,6 +66,8 @@ void magicnet_shared_ptr_release(struct magicnet_shared_ptr *ptr)
     ptr->ref_count--;
     if (ptr->ref_count <= 0)
     {
+        // BUG HERE I THINK ITS MUTLI-THREADED RELATED AS WHEN USING GDB
+        // THE SEG FAULT DOES NOT OCCUR.
         magicnet_shared_ptr_free_data(ptr);
         free(ptr);
         pthread_mutex_unlock(mutex);
