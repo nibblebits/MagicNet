@@ -23,6 +23,8 @@ int main()
 
     // FUNCTIONALITY IS NOW WORKING AGAIN BUT ITS SLOW
     // A GOOD START TO THE REDESIGN
+
+
     magicnet_register_structure(CHAT_PACKET, sizeof(struct chat_packet));
    while (1)
      {
@@ -40,4 +42,8 @@ int main()
         usleep(10000);
 
      }
+
+     // Will likely kill the cliejnt causing the ref count to drop expected
+
+     magicnet_program_release(decentralized_program);
 }

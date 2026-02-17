@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include "magicnet/vector.h"
 #include "magicnet/config.h"
+#include "magicnet/shared.h"
 #include "key.h"
 #include "buffer.h"
 #include "vector.h"
@@ -680,6 +681,8 @@ struct magicnet_client
     // running thread action..
     pthread_mutex_t mutex;
 
+    struct magicnet_shared_ptr* shared_ptr;
+
 };
 
 // This is the network vote structure to vote for the next block creator
@@ -725,10 +728,10 @@ struct magicnet_server
     // vector of pthread_t . Holds all the thread ids for every thread created in this server instance.
     struct vector *thread_ids;
     // Clients our server accepted.
-    struct magicnet_client clients[MAGICNET_MAX_INCOMING_CONNECTIONS];
+    struct magicnet_client* clients[MAGICNET_MAX_INCOMING_CONNECTIONS];
 
     // Clients our server initiated the connection for
-    struct magicnet_client outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
+    struct magicnet_client* outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
 
     // This is the last client that sent a block to us.
     struct magicnet_client *last_client_to_send_block;
@@ -1300,7 +1303,8 @@ struct magicnet_connection_exchange_peer_data
 enum
 {
     MAGICNET_CLIENT_FLAG_CONNECTED = 0b00000001,
-    MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
+    // DEPRECATED NOW SHARED POINTER LOGIC USED..
+//    MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE = 0b00000010,
     // True if this connection is from an IP address on our local machine.
     MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST = 0b00000100,
     // True if this client is an outgoing connection made with connect()
@@ -1350,6 +1354,9 @@ bool magicnet_client_no_packet_loading(struct magicnet_client *client);
 void magicnet_client_monitor_packet_type(struct magicnet_client* client, int type);
 void magicnet_client_unmonitor_packet_type(struct magicnet_client* client, int type);
 void magicnet_client_handle_packet_monitoring(struct magicnet_client* client, struct magicnet_packet* packet);
+
+void magicnet_client_hold(struct magicnet_client* client);
+void magicnet_client_release(struct magicnet_client* client);
 
 /**
  * To be called to enhance the client to the next stage, such as moving forward
@@ -1477,6 +1484,8 @@ int magicnet_flags();
 int magicnet_get_structure(int type, struct magicnet_registered_structure *struct_out);
 int magicnet_register_structure(long type, size_t size);
 struct magicnet_program *magicnet_program(const char *name);
+void magicnet_program_release(struct magicnet_program* program);
+
 
 /**
  * Makes a money transfer to the recipient

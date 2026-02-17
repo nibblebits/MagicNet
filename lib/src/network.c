@@ -177,7 +177,7 @@ int magicnet_client_packet_strip_private_flags(const struct magicnet_packet *pac
     return flags & ~MAGICNET_PACKET_PRIVATE_FLAGS;
 }
 
-int magicnet_client_unsigned_packet_allowed(const struct magicnet_packet* packet)
+int magicnet_client_unsigned_packet_allowed(const struct magicnet_packet *packet)
 {
     int type = magicnet_signed_data(packet)->type;
     // Put this in some kind of array at some point rather than this thing..
@@ -252,13 +252,13 @@ struct magicnet_client *magicnet_client_new()
     magicnet_init_client(client, NULL, 0, NULL);
     return client;
 }
-void magicnet_client_free(struct magicnet_client *client)
+void magicnet_client_free(struct magicnet_shared_ptr *ptr, void *data_ptr)
 {
-    if (client->unflushed_data)
-    {
-        magicnet_client_destruct(client);
-        client->unflushed_data = NULL;
-    }
+    struct magicnet_client *client = data_ptr;
+
+    magicnet_client_destruct(client);
+    client->unflushed_data = NULL;
+
     free(client);
 }
 
@@ -489,7 +489,7 @@ int magicnet_server_add_seen_packet(struct magicnet_server *server, struct magic
 
 bool magicnet_client_in_use(struct magicnet_client *client)
 {
-    return client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
+    return client && client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
 }
 
 size_t magicnet_client_seconds_since_last_contact(struct magicnet_client *client)
@@ -509,12 +509,17 @@ struct magicnet_client *magicnet_find_free_client(struct magicnet_server *server
 {
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        if (!magicnet_client_in_use(&server->clients[i]))
+        if (!magicnet_client_in_use(server->clients[i]))
         {
-            bzero(&server->clients[i], sizeof(struct magicnet_client));
-            return &server->clients[i];
+            if (server->clients[i])
+            {
+                magicnet_log("%s BUG found, the client is not null\n", __FUNCTION__);
+            }
+           
+            server->clients[i] = calloc(1, sizeof(struct magicnet_client*));
+            return server->clients[i];
         }
-    }
+     }
 
     return NULL;
 }
@@ -523,10 +528,14 @@ struct magicnet_client *magicnet_find_free_outgoing_client(struct magicnet_serve
 {
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        if (!magicnet_client_in_use(&server->outgoing_clients[i]))
+        if (!magicnet_client_in_use(server->outgoing_clients[i]))
         {
-            bzero(&server->outgoing_clients[i], sizeof(struct magicnet_client));
-            return &server->outgoing_clients[i];
+            if (server->outgoing_clients[i])
+            {
+                printf("%s BUG the client memory still exists\n", __FUNCTION__);
+            }
+            server->outgoing_clients[i] = calloc(1, sizeof(struct magicnet_client));
+            return server->outgoing_clients[i];
         }
     }
 
@@ -979,6 +988,13 @@ int magicnet_init_client(struct magicnet_client *client, struct magicnet_server 
 
     client->unflushed_data = buffer_create();
 
+    client->shared_ptr = magicnet_shared_ptr_new(client, magicnet_client_free);
+    if (!client->shared_ptr)
+    {
+        res = -1;
+        goto out;
+    }
+
 out:
     if (res < 0)
     {
@@ -996,8 +1012,25 @@ out:
         {
             buffer_free(client->unflushed_data);
         }
+
+        if (client->shared_ptr)
+        {
+            // change to seperate func..
+            free(client->shared_ptr);
+        }
     }
     return res;
+}
+
+
+void magicnet_client_hold(struct magicnet_client* client)
+{
+    magicnet_shared_ptr_hold(client->shared_ptr);
+}
+
+void magicnet_client_release(struct magicnet_client* client)
+{
+    magicnet_shared_ptr_release(client->shared_ptr);
 }
 
 /**
@@ -1223,12 +1256,7 @@ void magicnet_close(struct magicnet_client *client)
     magicnet_important("%s client %p was closed, total bytes read=%i total bytes wrote=%i, average download speed=%i bps, average upload speed=%i bps, time elapsed=%i\n", __FUNCTION__, client, client->total_bytes_received, client->total_bytes_sent, magicnet_client_average_download_speed(client), magicnet_client_average_upload_speed(client), magicnet_client_time_elapsed(client));
 
     close(client->sock);
-    magicnet_client_destruct(client);
-
-    if (client->flags & MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE)
-    {
-        free(client);
-    }
+    // Deletion moved to the actual shared pointer logic
 }
 
 void magicnet_client_readjust_download_speed(struct magicnet_client *client)
@@ -2639,7 +2667,7 @@ out:
     return res;
 }
 
-bool magicnet_client_allowed_no_signature(struct magicnet_client* client, struct magicnet_packet* packet)
+bool magicnet_client_allowed_no_signature(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     if (magicnet_client_unsigned_packet_allowed(packet))
     {
@@ -2704,7 +2732,6 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         res = packet_type;
         goto out;
     }
-
 
     packet_flags = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (packet_flags < 0)
@@ -2981,7 +3008,6 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
 
     // Change this so it works in real time or remove and deprecate it..
     packet_out->not_sent.total_read_bytes = magicnet_signed_data(packet_out)->expected_size;
-
 
 out:
 
@@ -4185,10 +4211,6 @@ struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, in
 
     char *ip_address = inet_ntoa(addr.sin_addr);
     strncpy(mclient->peer_info.ip_address, ip_address, sizeof(mclient->peer_info.ip_address));
-    if (flags & MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE)
-    {
-        mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
-    }
 
     // NEW PROTOCOL THE AUTHENTICATION HANDSHAKE IS HANDLED ON ITS OWN THREAD
 
@@ -4270,11 +4292,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
     }
 
-    if (flags & MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE)
-    {
-        mclient->flags |= MAGICNET_CLIENT_FLAG_SHOULD_DELETE_ON_CLOSE;
-    }
-
+ 
 // NEW PROTOCOL AUTHENTICATION IS HANDLED ON ITS OWN THREAD
 #warning "LOTS OF FUNCTIONS LIKE THIS ABSTRACT INTO ONE FUNCTION"
 
@@ -5713,7 +5731,6 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
             goto out;
         }
 
-
         // Okay we have peer information save it locally so we know who this person is
         // when they communicate with us forward from now.
         // We only want to save the peer info if we are a server client
@@ -5737,7 +5754,6 @@ int magicnet_client_preform_entry_protocol_post_read_process(struct magicnet_cli
         strncpy(client->peer_info.ip_address, ip_address, sizeof(client->peer_info.ip_address));
         magicnet_log("%s received peer information\n", __FUNCTION__);
     }
-
 
     // Peer info now copied into the client so hes identifyable throughout
     // the session..
@@ -5930,7 +5946,6 @@ int magicnet_ping(struct magicnet_client *client)
 {
     magicnet_log("%s sending ping..\n", __FUNCTION__);
     int res = 0;
-
 
     struct magicnet_packet *packet = magicnet_packet_new_init(MAGICNET_PACKET_TYPE_PING);
     if (!packet)
@@ -6221,7 +6236,6 @@ out:
     magicnet_server_unlock(client->server);
     return res;
 }
-
 
 // int (*MAGICNET_NTHREAD_POLL_FUNCTION)(struct magicnet_nthread_action* action)
 
@@ -6569,6 +6583,8 @@ out:
 
     magicnet_client_unlock(client);
 
+
+    // revise this looks hacky.
     if (should_close)
     {
         if (server)
@@ -6589,14 +6605,28 @@ int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
     int res = 0;
 
     struct magicnet_client *client = (struct magicnet_client *)action->private;
-
+    magicnet_shared_ptr_hold(client->shared_ptr);
     res = magicnet_client_poll(client, magicnet_server_poll_process);
+    magicnet_shared_ptr_release(client->shared_ptr);
+
+    if (res < 0)
+    {
+        // If the res is below zero that thread shall end, given this case we release
+        // the final pointer that wsas held during the client push to the thread
+        // shall it not be held else where then the memory shall be freed of the client.
+        magicnet_shared_ptr_release(client->shared_ptr);
+    }
     return res;
 }
 
 int magicnet_client_push(struct magicnet_client *client)
 {
     int res = 0;
+    // We will hold the client memory, but it needs to be released later on when the thread ends
+    // released in: magicnet_client_thread_poll .. hack maybe not sure yet
+    // we shall see.
+    magicnet_shared_ptr_hold(client->shared_ptr);
+
     struct magicnet_nthread_action *thread_action = magicnet_threads_action_new(magicnet_client_thread_poll, client, NULL);
     res = magicnet_threads_push_action(thread_action);
     return res;
@@ -7013,7 +7043,7 @@ out:
 
 /**
  * Called if your a client that connected to another peer, you call it to sync with it.
- * 
+ *
  * DEPRECATED..
  */
 // int magicnet_server_poll(struct magicnet_client *client)
@@ -7301,7 +7331,6 @@ out:
 //     magicnet_server_remove_thread(client->server, pthread_self());
 //     magicnet_server_unlock(client->server);
 // }
-
 
 void magicnet_server_outgoing_client_thread_free(struct magicnet_nthread_action *action, void *private_data)
 {
