@@ -172,8 +172,9 @@ int main(int argc, char **argv)
     int* y = magicnet_shared_ptr_hold(shared_ptr);
     *y = 60;
     printf("x=%i\n", *x);
+    magicnet_shared_ptr_hold(shared_ptr);
     magicnet_shared_ptr_release(shared_ptr);
-
+    magicnet_shared_ptr_release(shared_ptr);
     // Accept the clients
     bool server_shutdown = false;
     while (!server_shutdown)
