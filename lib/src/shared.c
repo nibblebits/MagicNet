@@ -126,7 +126,7 @@ void magicnet_shared_ptr_release(struct magicnet_shared_ptr *ptr)
         // THE SEG FAULT DOES NOT OCCUR.
         magicnet_shared_ptr_free_data(ptr);
         // free(ptr);
-        // pthread_mutex_unlock(shared_ptr_mutex);
+        pthread_mutex_unlock(shared_ptr_mutex);
         return;
     }
 
