@@ -2,6 +2,7 @@
 #include "magicnet/config.h"
 #include "magicnet/vector.h"
 #include "magicnet/nthread.h"
+#include "magicnet/shared.h"
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +37,7 @@ int magicnet_init(int flags, int t_threads)
     srand(time(NULL));
     mn_set_flags = flags;
 
+    magicnet_shared_ptr_system_init();
     pthread_mutex_init(&tmp_mutex, NULL);
 
     if (t_threads == 0)
