@@ -355,7 +355,7 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        if (magicnet_connected(&server->clients[i]))
+        if (magicnet_connected(server->clients[i]))
         {
             magicnet_ip_count_vec_add_or_increment(ip_vec, server->clients[i]->my_ip_address_to_client);
         }
@@ -363,7 +363,7 @@ void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        if (magicnet_connected(&server->outgoing_clients[i]))
+        if (magicnet_connected(server->outgoing_clients[i]))
         {
             magicnet_ip_count_vec_add_or_increment(ip_vec, server->outgoing_clients[i]->my_ip_address_to_client);
         }
@@ -515,11 +515,11 @@ struct magicnet_client *magicnet_find_free_client(struct magicnet_server *server
             {
                 magicnet_log("%s BUG found, the client is not null\n", __FUNCTION__);
             }
-           
+
             server->clients[i] = calloc(1, sizeof(struct magicnet_client));
             return server->clients[i];
         }
-     }
+    }
 
     return NULL;
 }
@@ -1022,13 +1022,12 @@ out:
     return res;
 }
 
-
-void magicnet_client_hold(struct magicnet_client* client)
+void magicnet_client_hold(struct magicnet_client *client)
 {
     magicnet_shared_ptr_hold(client->shared_ptr);
 }
 
-void magicnet_client_release(struct magicnet_client* client)
+void magicnet_client_release(struct magicnet_client *client)
 {
     magicnet_shared_ptr_release(client->shared_ptr);
 }
@@ -1042,7 +1041,7 @@ void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server,
 {
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        if (magicnet_connected(&server->outgoing_clients[i]))
+        if (magicnet_connected(server->outgoing_clients[i]))
         {
             vector_push(vector_out, &server->outgoing_clients[i]->client_info);
         }
@@ -4271,7 +4270,7 @@ struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_addre
     {
         return NULL;
     }
-    
+
     if (program_name)
     {
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
@@ -4644,17 +4643,17 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
 {
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        if (magicnet_client_in_use(&server->clients[i]))
+        if (magicnet_client_in_use(server->clients[i]))
         {
-            magicnet_relay_packet_to_client(&server->clients[i], packet);
+            magicnet_relay_packet_to_client(server->clients[i], packet);
         }
     }
 
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        if (magicnet_client_in_use(&server->outgoing_clients[i]))
+        if (magicnet_client_in_use(server->outgoing_clients[i]))
         {
-            magicnet_relay_packet_to_client(&server->outgoing_clients[i], packet);
+            magicnet_relay_packet_to_client(server->outgoing_clients[i], packet);
         }
     }
 
@@ -4676,17 +4675,17 @@ struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_serv
 {
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        if (magicnet_client_in_use(&server->clients[i]) && key_cmp(&server->clients[i]->peer_info.key, key))
+        if (magicnet_client_in_use(server->clients[i]) && key_cmp(&server->clients[i]->peer_info.key, key))
         {
-            return &server->clients[i];
+            return server->clients[i];
         }
     }
 
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        if (magicnet_client_in_use(&server->outgoing_clients[i]) && key_cmp(&server->outgoing_clients[i]->peer_info.key, key))
+        if (magicnet_client_in_use(server->outgoing_clients[i]) && key_cmp(&server->outgoing_clients[i]->peer_info.key, key))
         {
-            return &server->outgoing_clients[i];
+            return server->outgoing_clients[i];
         }
     }
 
@@ -5327,7 +5326,7 @@ int magicnet_server_push_event(struct magicnet_server *server, struct magicnet_e
     int res = 0;
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        struct magicnet_client *client = &server->clients[i];
+        struct magicnet_client *client = server->clients[i];
         if (magicnet_connected(client) && magicnet_is_localhost(client) &&
             strncmp(client->program_name, "magicnet", strlen("magicnet")) != 0)
         {
@@ -5529,8 +5528,8 @@ int magicnet_server_get_all_connected_clients(struct magicnet_server *server, st
     struct magicnet_connection_exchange_peer_data data;
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        struct magicnet_client *client = &server->outgoing_clients[i];
-        if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED)
+        struct magicnet_client *client = server->outgoing_clients[i];
+        if (magicnet_connected(client))
         {
             bzero(&data, sizeof(data));
             data.sin_addr = client->client_info.sin_addr;
@@ -5541,8 +5540,8 @@ int magicnet_server_get_all_connected_clients(struct magicnet_server *server, st
 
     for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
     {
-        struct magicnet_client *client = &server->clients[i];
-        if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED)
+        struct magicnet_client *client = server->clients[i];
+        if (magicnet_connected(client))
         {
             bzero(&data, sizeof(data));
             data.sin_addr = client->client_info.sin_addr;
@@ -6566,7 +6565,6 @@ out:
 
     magicnet_client_unlock(client);
 
-
     // revise this looks hacky.
     if (should_close)
     {
@@ -6588,16 +6586,16 @@ int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
     int res = 0;
 
     struct magicnet_client *client = (struct magicnet_client *)action->private;
-    magicnet_shared_ptr_hold(client->shared_ptr);
+    magicnet_client_hold(client);
     res = magicnet_client_poll(client, magicnet_server_poll_process);
-    magicnet_shared_ptr_release(client->shared_ptr);
+    magicnet_client_release(client);
 
     if (res < 0)
     {
         // If the res is below zero that thread shall end, given this case we release
         // the final pointer that wsas held during the client push to the thread
         // shall it not be held else where then the memory shall be freed of the client.
-        magicnet_shared_ptr_release(client->shared_ptr);
+        magicnet_client_release(client);
     }
     return res;
 }
@@ -6608,7 +6606,7 @@ int magicnet_client_push(struct magicnet_client *client)
     // We will hold the client memory, but it needs to be released later on when the thread ends
     // released in: magicnet_client_thread_poll .. hack maybe not sure yet
     // we shall see.
-    magicnet_shared_ptr_hold(client->shared_ptr);
+    magicnet_client_hold(client);
 
     struct magicnet_nthread_action *thread_action = magicnet_threads_action_new(magicnet_client_thread_poll, client, NULL);
     res = magicnet_threads_push_action(thread_action);
@@ -7197,8 +7195,8 @@ bool magicnet_server_is_accepted_connection_connected(struct magicnet_server *se
     }
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        struct magicnet_client *client = &server->clients[i];
-        if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED &&
+        struct magicnet_client *client = server->clients[i];
+        if (magicnet_client_in_use(client) &&
             addr.s_addr == client->client_info.sin_addr.s_addr)
         {
             return true;
@@ -7216,15 +7214,18 @@ bool magicnet_server_is_outgoing_connection_connected(struct magicnet_server *se
     }
     for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
     {
-        struct magicnet_client *client = &server->outgoing_clients[i];
-        if (client->flags & MAGICNET_CLIENT_FLAG_CONNECTED &&
-            addr.s_addr == client->client_info.sin_addr.s_addr)
+        struct magicnet_client *client = server->outgoing_clients[i];
+        if (magicnet_client_in_use(client))
         {
-            return true;
+            if (addr.s_addr == client->client_info.sin_addr.s_addr)
+            {
+                return true;
+            }
         }
     }
     return false;
 }
+
 bool magicnet_server_is_ip_connected(struct magicnet_server *server, const char *ip_address)
 {
     if (magicnet_server_is_accepted_connection_connected(server, ip_address))

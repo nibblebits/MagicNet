@@ -8,12 +8,13 @@
 #include <stddef.h>
 #include <pthread.h>
 
+struct magicnet_shared_ptr;
 typedef void(*MAGICNET_SHARED_PTR_FREE_DATA_FUNCTION)(struct magicnet_shared_ptr* ptr, void* data_ptr);
 
 struct magicnet_shared_ptr
 {
     void* ptr;
-    size_t ref_count;
+    int ref_count;
     pthread_mutex_t* mutex;
 
     struct
