@@ -214,7 +214,6 @@ void magicnet_client_destruct(struct magicnet_client *client)
     client->flags &= ~MAGICNET_CLIENT_FLAG_CONNECTED;
 
     memset(&client->packets_for_client, 0, sizeof(client->packets_for_client));
-    ;
 
     if (client->events)
     {
@@ -931,11 +930,14 @@ void magicnet_client_set_max_bytes_to_recv_per_second(struct magicnet_client *cl
 
 void magicnet_client_lock(struct magicnet_client *client)
 {
+    magicnet_client_hold(client);
     pthread_mutex_lock(&client->mutex);
 }
 
 void magicnet_client_unlock(struct magicnet_client *client)
 {
+    SHARED_POINTER_STATE state = 0;
+    magicnet_client_release(client, &state);
     pthread_mutex_unlock(&client->mutex);
 }
 
@@ -1027,9 +1029,9 @@ void magicnet_client_hold(struct magicnet_client *client)
     magicnet_shared_ptr_hold(client->shared_ptr);
 }
 
-void magicnet_client_release(struct magicnet_client *client)
+void magicnet_client_release(struct magicnet_client *client, SHARED_POINTER_STATE* state_out)
 {
-    magicnet_shared_ptr_release(client->shared_ptr);
+    magicnet_shared_ptr_release(client->shared_ptr, state_out);
 }
 
 /**
@@ -6588,14 +6590,14 @@ int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
     struct magicnet_client *client = (struct magicnet_client *)action->private;
     magicnet_client_hold(client);
     res = magicnet_client_poll(client, magicnet_server_poll_process);
-    magicnet_client_release(client);
+    magicnet_client_release(client, NULL);
 
     if (res < 0)
     {
         // If the res is below zero that thread shall end, given this case we release
         // the final pointer that wsas held during the client push to the thread
         // shall it not be held else where then the memory shall be freed of the client.
-        magicnet_client_release(client);
+        magicnet_client_release(client, NULL);
     }
     return res;
 }

@@ -1355,7 +1355,7 @@ void magicnet_client_unmonitor_packet_type(struct magicnet_client* client, int t
 void magicnet_client_handle_packet_monitoring(struct magicnet_client* client, struct magicnet_packet* packet);
 
 void magicnet_client_hold(struct magicnet_client* client);
-void magicnet_client_release(struct magicnet_client* client);
+void magicnet_client_release(struct magicnet_client* client, SHARED_POINTER_STATE* state_out);
 
 /**
  * To be called to enhance the client to the next stage, such as moving forward

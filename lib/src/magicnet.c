@@ -304,7 +304,7 @@ out:
         }
     }
 
-    magicnet_client_release(program->client);
+    magicnet_client_release(program->client, NULL);
     return res;
 }
 
@@ -671,7 +671,7 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out)
     res = magicnet_signed_data(packet)->payload.user_defined.type;
 out:
     // we are done with the client
-    magicnet_client_release(program->client);
+    magicnet_client_release(program->client, NULL);
     // We are responsible for the original packet payload
     // we own it since we popped it.
     if (packet)
@@ -752,13 +752,13 @@ int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
     {
         goto out;
     }
-    magicnet_client_release(client);
+    magicnet_client_release(client, NULL);
 
     // If theres an error we shall release one reference, this is the reference
     // that was held the moment the thread was created.
     if (res < 0)
     {
-        magicnet_client_release(client);
+        magicnet_client_release(client, NULL);
     }
 out:
     return res;
@@ -772,7 +772,7 @@ void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action *ac
 
 void magicnet_program_release(struct magicnet_program* program)
 {
-    magicnet_client_release(program->client);
+    magicnet_client_release(program->client, NULL);
 
     
 }

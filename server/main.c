@@ -5,6 +5,7 @@
 #include "magicnet/log.h"
 #include "magicnet/signaling.h"
 #include "magicnet/shared.h"
+#include "magicnet/mutex_obj.h"
 #include <memory.h>
 #include <time.h>
 #include <stdio.h>
@@ -173,8 +174,19 @@ int main(int argc, char **argv)
     *y = 60;
     printf("x=%i\n", *x);
     magicnet_shared_ptr_hold(shared_ptr);
-    magicnet_shared_ptr_release(shared_ptr);
-    magicnet_shared_ptr_release(shared_ptr);
+    magicnet_shared_ptr_release(shared_ptr, NULL);
+    magicnet_shared_ptr_release(shared_ptr, NULL);
+
+    // Lets try the mutex protected object test
+    // int* abcdef = malloc(sizeof(int));
+    // struct mutex_obj* abcdef_mutex_obj = mutex_obj_init(abcdef);
+    // int* int_ptr = mutex_obj_lock(abcdef_mutex_obj);
+
+    // *int_ptr = 50;
+    // // int_ptr can be freed without destroying the mutex memory,
+    // free(int_ptr);
+    // mutex_obj_unlock(abcdef_mutex_obj);
+
     // Accept the clients
     bool server_shutdown = false;
     while (!server_shutdown)

@@ -3,7 +3,6 @@
 #include <memory.h>
 #include <stdlib.h>
 
-
 int magicnet_shared_ptr_system_init()
 {
     return 0;
@@ -18,13 +17,11 @@ struct magicnet_shared_ptr *magicnet_shared_ptr_new(void *data, MAGICNET_SHARED_
         goto out;
     }
 
-
     atomic_init(&shared_ptr->ref_count, 0);
     shared_ptr->ptr = data;
     // keep at zero, the person who made the pointer should hold it
     shared_ptr->ref_count = 0;
     shared_ptr->functions.free_data = free_data_func;
- 
 
 out:
     if (res < 0)
@@ -56,13 +53,23 @@ void *magicnet_shared_ptr_hold(struct magicnet_shared_ptr *ptr)
     return _ptr;
 }
 
-void magicnet_shared_ptr_release(struct magicnet_shared_ptr *ptr)
+void magicnet_shared_ptr_release(struct magicnet_shared_ptr *ptr, SHARED_POINTER_STATE *state_out)
 {
-    atomic_fetch_sub(&ptr->ref_count, 1);
-    if (atomic_load(&ptr->ref_count) == 0)
+    if (state_out)
+    {
+        *state_out = SHARED_POINTER_STATE_ALIVE;
+    }
+    int old = atomic_fetch_sub(&ptr->ref_count, 1);
+    // old = 1 means new = 0, lets free it.
+    // don't bother checking below one because of potential data races.
+    if (old == 1)
     {
         magicnet_shared_ptr_free_data(ptr);
         free(ptr);
+        if (state_out)
+        {
+            *state_out = SHARED_POINTER_STATE_DESTROYED;
+        }
         return;
     }
 }
