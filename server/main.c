@@ -5,7 +5,7 @@
 #include "magicnet/log.h"
 #include "magicnet/signaling.h"
 #include "magicnet/shared.h"
-#include "magicnet/mutex_obj.h"
+#include "magicnet/sharedmutexobj.h"
 #include <memory.h>
 #include <time.h>
 #include <stdio.h>
@@ -92,10 +92,10 @@ void test_free(struct magicnet_nthread_action* action, void* private_data)
     printf("Action was freed\n");
 }
 
-void free_x_func(struct magicnet_shared_ptr* ptr, void* data_ptr)
+void protected_int_free(void* data_ptr)
 {
-    printf("server asked us to free test worked\n");
     free(data_ptr);
+    magicnet_log("%s protected data deleted, test complete\n", __FUNCTION__);
 }
 
 int main(int argc, char **argv)
@@ -166,26 +166,29 @@ int main(int argc, char **argv)
         printf("Wallet balance=%f\n", test_wallet->balance);
     }
 
-    // shared test
-    int* x= calloc(1, sizeof(int));
-    *x = 50;
-    struct magicnet_shared_ptr* shared_ptr = magicnet_shared_ptr_new(x, free_x_func);
-    int* y = magicnet_shared_ptr_hold(shared_ptr);
-    *y = 60;
-    printf("x=%i\n", *x);
-    magicnet_shared_ptr_hold(shared_ptr);
-    magicnet_shared_ptr_release(shared_ptr, NULL);
-    magicnet_shared_ptr_release(shared_ptr, NULL);
+    // shared test with viewer
+    int* protected_int = malloc(sizeof(int));
+    *protected_int = 50;
+    struct magicnet_shared_mutex_obj* mutex_obj = 
+        magicnet_shared_mutex_obj_create_hold_as_owner(protected_int, protected_int_free);
 
-    // Lets try the mutex protected object test
-    // int* abcdef = malloc(sizeof(int));
-    // struct mutex_obj* abcdef_mutex_obj = mutex_obj_init(abcdef);
-    // int* int_ptr = mutex_obj_lock(abcdef_mutex_obj);
+    // We already are an owner lets create a viewer to see if it remembers or not
+    int* protected_int_data = magicnet_shared_mutex_obj_viewer_hold(mutex_obj);
 
-    // *int_ptr = 50;
-    // // int_ptr can be freed without destroying the mutex memory,
-    // free(int_ptr);
-    // mutex_obj_unlock(abcdef_mutex_obj);
+    // Now lets release the only owner
+    magicnet_shared_mutex_obj_owner_release(mutex_obj);
+
+    magicnet_shared_mutex_obj_lock(mutex_obj);
+    *protected_int_data = 80;
+    magicnet_log("%s protected_int=%i\n", __FUNCTION__, *protected_int);
+    magicnet_shared_mutex_obj_unlock(mutex_obj);
+    // Data should be gone lets try that
+    if (magicnet_shared_mutex_obj_is_stale(mutex_obj))
+    {
+        magicnet_log("%s Yeah the mutx is stale we can drop ourselves\n", __FUNCTION__);
+        magicnet_shared_mutex_obj_viewer_release(mutex_obj);
+    }
+
 
     // Accept the clients
     bool server_shutdown = false;
