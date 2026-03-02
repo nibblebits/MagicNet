@@ -47,13 +47,14 @@ struct magicnet_shared_mutex_obj
         MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data;
     } functions;
 };
-struct magicnet_shared_mutex_obj *magicnet_shared_mutex_obj_create_hold_as_owner(void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func);
+struct magicnet_shared_mutex_obj *magicnet_shared_mutex_obj_create_hold_as_owner(void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func, struct magicnet_shared_mutex_obj *recycle_obj);
+
 void *magicnet_shared_mutex_obj_owner_hold(struct magicnet_shared_mutex_obj *mutex_obj);
 bool magicnet_shared_mutex_obj_is_stale(struct magicnet_shared_mutex_obj* mutex_obj);
 void magicnet_shared_mutex_obj_owner_release(struct magicnet_shared_mutex_obj *mutex_obj);
-void *magicnet_shared_mutex_obj_viewer_hold(struct magicnet_shared_mutex_obj *mutex_obj);
+void magicnet_shared_mutex_obj_viewer_hold(struct magicnet_shared_mutex_obj *mutex_obj);
 void magicnet_shared_mutex_obj_viewer_release(struct magicnet_shared_mutex_obj *mutex_obj);
 void magicnet_shared_mutex_obj_lock(struct magicnet_shared_mutex_obj *mutex_obj);
 void magicnet_shared_mutex_obj_unlock(struct magicnet_shared_mutex_obj *mutex_obj);
-
+int magicnet_shared_mutex_obj_fill(struct magicnet_shared_mutex_obj *obj, void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func);
 #endif

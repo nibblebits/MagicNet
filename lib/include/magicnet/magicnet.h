@@ -11,6 +11,7 @@
 #include "magicnet/vector.h"
 #include "magicnet/config.h"
 #include "magicnet/shared.h"
+#include "magicnet/sharedmutexobj.h"
 #include "key.h"
 #include "buffer.h"
 #include "vector.h"
@@ -677,11 +678,8 @@ struct magicnet_client
     // so we need to be sure the packet is ready before processing.
     struct magicnet_packet *packet_in_loading;
 
-    // Only lock for data that is shared outside of the peers
-    // running thread action..
-    pthread_mutex_t mutex;
-
-    struct magicnet_shared_ptr* shared_ptr;
+    // Shared pointer to self, becareful with this dont use it in release functions or whatever.
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* our_shared_ptr;
 
 };
 
@@ -728,10 +726,10 @@ struct magicnet_server
     // vector of pthread_t . Holds all the thread ids for every thread created in this server instance.
     struct vector *thread_ids;
     // Clients our server accepted.
-    struct magicnet_client* clients[MAGICNET_MAX_INCOMING_CONNECTIONS];
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* clients[MAGICNET_MAX_INCOMING_CONNECTIONS];
 
     // Clients our server initiated the connection for
-    struct magicnet_client* outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* outgoing_clients[MAGICNET_MAX_OUTGOING_CONNECTIONS];
 
     // This is the last client that sent a block to us.
     struct magicnet_client *last_client_to_send_block;
@@ -1332,8 +1330,11 @@ void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
 void magicnet_server_shutdown_server_instance(struct magicnet_server *server);
 struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
-struct magicnet_client *magicnet_client_new();
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_client_new();
 
+
+void magicnet_client_hold(struct magicnet_client* client);
+void magicnet_client_release(struct magicnet_client* client);
 void magicnet_client_lock(struct magicnet_client* client);
 void magicnet_client_unlock(struct magicnet_client* client);
 
@@ -1353,9 +1354,6 @@ bool magicnet_client_no_packet_loading(struct magicnet_client *client);
 void magicnet_client_monitor_packet_type(struct magicnet_client* client, int type);
 void magicnet_client_unmonitor_packet_type(struct magicnet_client* client, int type);
 void magicnet_client_handle_packet_monitoring(struct magicnet_client* client, struct magicnet_packet* packet);
-
-void magicnet_client_hold(struct magicnet_client* client);
-void magicnet_client_release(struct magicnet_client* client, SHARED_POINTER_STATE* state_out);
 
 /**
  * To be called to enhance the client to the next stage, such as moving forward
@@ -1426,7 +1424,7 @@ int magicnet_client_unsigned_packet_allowed(const struct magicnet_packet* packet
 /**
  * Pushes the client to the thread pool so it can be polled frequently
  */
-int magicnet_client_push(struct magicnet_client *client);
+int magicnet_client_push(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *client_shared);
 int magicnet_client_packets_for_client_flush(struct magicnet_client* client);
 int magicnet_client_read_packet(struct magicnet_client *client, struct magicnet_packet *packet_out);
 int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet_packet *packet, int flags);
@@ -1511,7 +1509,8 @@ int magicnet_certificate_transfer_initiate(struct magicnet_program *program, int
 
 // Shared network functions
 int magicnet_server_get_next_ip_to_connect_to(struct magicnet_server *server, char *ip_out);
-struct magicnet_client *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id, int flags);
+
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id, int flags);
 
 void magicnet_server_free(struct magicnet_server *server);
 /**
