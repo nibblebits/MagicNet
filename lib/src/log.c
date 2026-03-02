@@ -10,6 +10,29 @@ void magicnet_log_initialize()
 
 }
 
+int magicnet_bug(const char* message, ...)
+{
+     if (magicnet_flags() & MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING)
+    {
+        return -1;
+    }
+    
+    #ifdef MAGICNET_SHOW_BUG_LOGS
+    pthread_mutex_lock(&log_lock);
+    va_list args;
+    va_start(args, message);
+    vfprintf(stdout, message, args);
+    va_end(args);
+    fflush(stdout);
+    pthread_mutex_unlock(&log_lock);
+
+    // kill the process for protection
+    exit(-1);
+    return 0;
+    #else
+    return -1;
+    #endif
+}
 int magicnet_important(const char* message, ...)
 {
     if (magicnet_flags() & MAGICNET_INIT_FLAG_NO_STDOUT_WARNING_LOGGING)
