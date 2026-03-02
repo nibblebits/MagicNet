@@ -1,4 +1,5 @@
 #include "sharedmutexobj.h"
+#include "log.h"
 
 struct magicnet_shared_mutex_obj *magicnet_shared_mutex_obj_create_hold_as_owner(void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func)
 {
@@ -16,6 +17,14 @@ struct magicnet_shared_mutex_obj *magicnet_shared_mutex_obj_create_hold_as_owner
         res = -1;
         goto out;
     }
+    
+    obj->refcount_mutex = calloc(1, sizeof(pthread_mutex_t));
+    if (!obj->refcount_mutex)
+    {
+        res = -1;
+        goto out;
+    }
+
     obj->owner_refcount = 1;
     obj->viewer_refcount = 0;
     obj->functions.free_data = free_data_func;
@@ -28,6 +37,10 @@ struct magicnet_shared_mutex_obj *magicnet_shared_mutex_obj_create_hold_as_owner
     pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
     pthread_mutex_init(obj->mutex, &mutex_attr);
 
+
+    // non-recursive for this one.
+    pthread_mutex_init(obj->owner_refcount, NULL);
+
 out:
     if (res < 0 && obj)
     {
@@ -37,6 +50,12 @@ out:
             pthread_mutex_destroy(obj->mutex);
             free(obj->mutex);
             obj->mutex = NULL;
+        }
+        if (obj->refcount_mutex)
+        {
+            pthread_mutex_destory(obj->refcount_mutex);
+            free(obj->refcount_mutex);
+            obj->refcount_mutex = NULL;
         }
 
         free(obj);
@@ -49,9 +68,9 @@ void *magicnet_shared_mutex_obj_owner_hold(struct magicnet_shared_mutex_obj *mut
     // lock it, better deisgn might be an atomic integer
     // then when its zero, lock the lock to wait until someone is done with it
     // then finally free and destory, we will see. decide later..
-    pthread_mutex_lock(mutex_obj->mutex);
+    pthread_mutex_lock(mutex_obj->refcount_mutex);
     mutex_obj->owner_refcount++;
-    pthread_mutex_unlock(mutex_obj->mutex);
+    pthread_mutex_unlock(mutex_obj->refcount_mutex);
 
     return mutex_obj->data;
 }
@@ -72,58 +91,115 @@ void _magicnet_shared_mutex_obj_free_data(struct magicnet_shared_mutex_obj *mute
         mutex_obj->flags |= MAGICNET_SHARED_MUTEX_OBJ_FLAG_STALE;
     }
 }
-
-void magicnet_shared_mutex_obj_handle_release_refcounts(struct magicnet_shared_mutex_obj *mutex_obj, bool *mutex_deleted)
-{
-    *mutex_deleted = false;
-    if (mutex_obj->owner_refcount <= 0 && mutex_obj->data)
-    {
-        _magicnet_shared_mutex_obj_free_data(mutex_obj);
-        mutex_obj->data = NULL;
-    }
-
-    if (mutex_obj->viewer_refcount <= 0)
-    {
-        // Are we also out of viewers, then free the entire structure
-        pthread_mutex_unlock(mutex_obj->mutex);
-        pthread_mutex_destroy(mutex_obj->mutex);
-        free(mutex_obj->mutex);
-        free(mutex_obj);
-        *mutex_deleted = true;
-    }
-}
 void magicnet_shared_mutex_obj_owner_release(struct magicnet_shared_mutex_obj *mutex_obj)
 {
-    bool mutex_deleted = false;
-    pthread_mutex_lock(mutex_obj->mutex);
+    bool unlock_mutex = true;
+    pthread_mutex_lock(mutex_obj->refcount_mutex);
     mutex_obj->owner_refcount--;
 
-    magicnet_shared_mutex_obj_handle_release_refcounts(mutex_obj, &mutex_deleted);
-    if (!mutex_deleted)
+    if (mutex_obj->owner_refcount < 0)
     {
-        pthread_mutex_unlock(mutex_obj->mutex);
+        magicnet_bug("%s releasing a owner that was never held\n", __FUNCTION__);
+        return;
+    }
+
+    // Has the owner_refcount dropped to zero
+    if (mutex_obj->owner_refcount == 0)
+    {
+        // great we need to free the data, theirs no more owners
+        // of this object.
+        // technically should be safe if someone locks the lock for the data
+        // during free, because we have seperate mutexes now
+        // but if the lock is held after free is done we are in trouble.
+        mutex_obj->functions.free_data(mutex_obj->data);
+
+        // try to think of a way to capture a lock thats still held
+        // and flag a warning
+        // for now we assume the user of this functionality has done it correctly
+        pthread_mutex_destroy(mutex_obj->mutex);
+        free(mutex_obj->mutex);
+        free(mutex_obj->data);
+        // finally null it, the slot is still available to the observers
+        // the slot is stale now.
+        mutex_obj->data = NULL;
+        mutex_obj->flags |= MAGICNET_SHARED_MUTEX_OBJ_FLAG_STALE;
+
+        // what about the visitor refcount is this zero too, if so we can get rid
+        // of this memory
+        if (mutex_obj->viewer_refcount == 0)
+        {
+            // owner_refcount == 0 && viewer_refcount == 0
+            // therefore we are the last thread to be here, so we dont 
+            // have to worry about concurrency anymore
+            pthread_mutex_unlock(mutex_obj->refcount_mutex);
+            pthread_mutex_destroy(mutex_obj->refcount_mutex);
+            free(mutex_obj->refcount_mutex);
+            free(mutex_obj);
+
+            // with that all the data is gone.
+            unlock_mutex = false;
+        }
+    }
+   
+    if (unlock_mutex)
+    {
+        pthread_mutex_unlock(mutex_obj->refcount_mutex);
     }
 }
 
 void *magicnet_shared_mutex_obj_viewer_hold(struct magicnet_shared_mutex_obj *mutex_obj)
 {
-    pthread_mutex_lock(mutex_obj->mutex);
+    pthread_mutex_lock(mutex_obj->refcount_mutex);
     mutex_obj->viewer_refcount++;
-    pthread_mutex_unlock(mutex_obj->mutex);
+    pthread_mutex_unlock(mutex_obj->refcount_mutex);
     return mutex_obj->data;
 }
 
 void magicnet_shared_mutex_obj_viewer_release(struct magicnet_shared_mutex_obj *mutex_obj)
 {
-    bool mutex_deleted = false;
-    pthread_mutex_lock(mutex_obj->mutex);
+    bool unlock_mutex = true;
+    pthread_mutex_lock(mutex_obj->refcount_mutex);
     mutex_obj->viewer_refcount--;
 
-    magicnet_shared_mutex_obj_handle_release_refcounts(mutex_obj, &mutex_deleted);
-    if (!mutex_deleted)
+    if (mutex_obj->viewer_refcount < 0)
     {
-        pthread_mutex_unlock(mutex_obj->mutex);
+        magicnet_bug("%s releasing a viewer that never held\n", __FUNCTION__);
+        return;
     }
+
+    if (mutex_obj->viewer_refcount == 0)
+    {
+        // The viewer refcount has dropped to zero
+        // theirs no more observers, we can delete the mutex and the shared object
+        // but only if theres also no owners
+        if (mutex_obj->owner_refcount == 0)
+        {
+            if (mutex_obj->data)
+            {
+                magicnet_bug("%s owner_refcount == 0 yet the data still exists it should've been deleted in the owner release\n", __FUNCTION__);
+                return;
+            }
+            // no owners means the memory for the mutex data was already cleaned up
+            // so we just have to deal with the mutex object its self
+            pthread_mutex_unlock(mutex_obj->refcount_mutex);
+
+            // We unlocked ourseleves but since we are the last viewer among all threads
+            // data-race shouldnt happen
+            pthread_mutex_destroy(mutex_obj->refcount_mutex);
+            free(mutex_obj->refcount_mutex);
+            free(mutex_obj);
+
+            // and thats it the object is gone.
+            unlock_mutex = false;
+        }
+    }
+
+    if (unlock_mutex)
+    {
+        pthread_mutex_unlock(mutex_obj->refcount_mutex);
+    }
+ 
+    
 }
 
 void magicnet_shared_mutex_obj_lock(struct magicnet_shared_mutex_obj *mutex_obj)

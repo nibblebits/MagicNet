@@ -8,6 +8,10 @@
 #ifndef MAGICNET_SHARED_MUTEX_OBJ
 #define MAGICNET_SHARED_MUTEX_OBJ
 
+// allows it to look like your defining a type
+// for code cleanliness not compiler correctness.
+#define MAGICNET_SHARED_MUTEX_OBJECT(x) struct magicnet_shared_mutex_obj
+
 typedef void (*MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION)(void* data);
 #include <pthread.h>
 #include <stdbool.h>
@@ -30,6 +34,12 @@ struct magicnet_shared_mutex_obj
     // along with the whole object.
     int viewer_refcount;
 
+    // Used by the internal system to prevent data-races
+    // more powerful than atomic for what we need.
+    pthread_mutex_t* refcount_mutex;
+
+    // Mutex for the data only, not used by the shared mutex functionality
+    // only by the programmer whome wishes to lock the object inside in data.
     pthread_mutex_t* mutex;
 
     struct
