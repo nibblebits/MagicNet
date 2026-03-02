@@ -2,7 +2,7 @@
 #include "log.h"
 bool _magicnet_shared_mutex_obj_is_stale(struct magicnet_shared_mutex_obj *mutex_obj);
 
-int magicnet_shared_mutex_obj_fill(struct magicnet_shared_mutex_obj *obj, void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func)
+int magicnet_shared_mutex_obj_fill_hold(struct magicnet_shared_mutex_obj *obj, void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func)
 {
     int res = 0;
     if (!obj || !obj->refcount_mutex)
@@ -21,9 +21,22 @@ int magicnet_shared_mutex_obj_fill(struct magicnet_shared_mutex_obj *obj, void *
 
     obj->flags = 0;
     obj->owner_refcount = 1;
-    obj->viewer_refcount = 0;
     obj->functions.free_data = free_data_func;
     obj->data = data;
+
+    obj->mutex = calloc(1, sizeof(pthread_mutex_t));
+    if (!obj->mutex)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // thread action, recursive could be a bad idea
+    // but for now we will keep it, maybe change it later.
+    pthread_mutexattr_t mutex_attr;
+    pthread_mutexattr_init(&mutex_attr);
+    pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(obj->mutex, &mutex_attr);
 
 out:
     pthread_mutex_unlock(obj->refcount_mutex);
@@ -45,13 +58,6 @@ struct magicnet_shared_mutex_obj *magicnet_shared_mutex_obj_create_hold_as_owner
             goto out;
         }
 
-        obj->mutex = calloc(1, sizeof(pthread_mutex_t));
-        if (!obj->mutex)
-        {
-            res = -1;
-            goto out;
-        }
-
         obj->refcount_mutex = calloc(1, sizeof(pthread_mutex_t));
         if (!obj->refcount_mutex)
         {
@@ -59,18 +65,13 @@ struct magicnet_shared_mutex_obj *magicnet_shared_mutex_obj_create_hold_as_owner
             goto out;
         }
 
-        // thread action, recursive could be a bad idea
-        // but for now we will keep it, maybe change it later.
-        pthread_mutexattr_t mutex_attr;
-        pthread_mutexattr_init(&mutex_attr);
-        pthread_mutexattr_settype(&mutex_attr, PTHREAD_MUTEX_RECURSIVE);
-        pthread_mutex_init(obj->mutex, &mutex_attr);
-
         // non-recursive for this one.
         pthread_mutex_init(obj->refcount_mutex, NULL);
+
+        obj->viewer_refcount = 0;
     }
 
-    res = magicnet_shared_mutex_obj_fill(obj, data, free_data_func);
+    res = magicnet_shared_mutex_obj_fill_hold(obj, data, free_data_func);
 
 out:
     if (res < 0 && obj)
@@ -223,7 +224,6 @@ void magicnet_shared_mutex_obj_viewer_release(struct magicnet_shared_mutex_obj *
     if (!mutex_obj)
     {
         magicnet_bug("%s null object provided\n", __FUNCTION__);
-        
     }
     bool unlock_mutex = true;
     pthread_mutex_lock(mutex_obj->refcount_mutex);

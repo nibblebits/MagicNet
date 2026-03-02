@@ -56,5 +56,5 @@ void magicnet_shared_mutex_obj_viewer_hold(struct magicnet_shared_mutex_obj *mut
 void magicnet_shared_mutex_obj_viewer_release(struct magicnet_shared_mutex_obj *mutex_obj);
 void magicnet_shared_mutex_obj_lock(struct magicnet_shared_mutex_obj *mutex_obj);
 void magicnet_shared_mutex_obj_unlock(struct magicnet_shared_mutex_obj *mutex_obj);
-int magicnet_shared_mutex_obj_fill(struct magicnet_shared_mutex_obj *obj, void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func);
+int magicnet_shared_mutex_obj_fill_hold(struct magicnet_shared_mutex_obj *obj, void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func);
 #endif

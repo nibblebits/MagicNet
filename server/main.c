@@ -135,8 +135,18 @@ int main(int argc, char **argv)
     if (magicnet_shared_mutex_obj_is_stale(mutex_obj))
     {
         // bug if we dont see this..
-        magicnet_log("%s Yeah the mutx is stale we can drop ourselves\n", __FUNCTION__);
+        magicnet_log("%s Lets try to refill since the obj is stale\n", __FUNCTION__);
+        protected_int = malloc(sizeof(int));
+        *protected_int = 60;
+        magicnet_shared_mutex_obj_fill_hold(mutex_obj, protected_int, protected_int_free);
+        int* test_ptr = magicnet_shared_mutex_obj_owner_hold(mutex_obj);
+        *test_ptr = 70;
+        magicnet_shared_mutex_obj_owner_release(mutex_obj);
+        // free the final owner
+        magicnet_shared_mutex_obj_owner_release(mutex_obj);
+
         magicnet_shared_mutex_obj_viewer_release(mutex_obj);
+        // now it should be entirely free.
     }
 
     return 0;
