@@ -472,7 +472,7 @@ out:
     {
         magicnet_log("%s closing client\n", __FUNCTION__);
         magicnet_server_lock(downloader->server);
-        magicnet_close(new_client);
+        magicnet_client_close(new_client);
         magicnet_server_unlock(downloader->server);
     }
 

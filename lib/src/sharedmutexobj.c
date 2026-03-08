@@ -1,5 +1,7 @@
 #include "sharedmutexobj.h"
 #include "log.h"
+#include <stdlib.h>
+#include <stdio.h>
 bool _magicnet_shared_mutex_obj_is_stale(struct magicnet_shared_mutex_obj *mutex_obj);
 
 int magicnet_shared_mutex_obj_fill_hold(struct magicnet_shared_mutex_obj *obj, void *data, MAGICNET_SHARED_MUTEX_OBJ_FREE_DATA_FUNCTION free_data_func)
@@ -147,7 +149,11 @@ void magicnet_shared_mutex_obj_owner_release(struct magicnet_shared_mutex_obj *m
 {
     if (!mutex_obj)
     {
-        magicnet_bug("%s NULL object provided\n", __FUNCTION__);
+        // for simplicty we will allows nulls in hold and release
+        // the default action will be to ignore the requst, this is to simplify the code
+        // when working with large arrays where nulls may be present ect.
+        // hold shall return a null data result if hold is called
+       return;
     }
     bool unlock_mutex = true;
     pthread_mutex_lock(mutex_obj->refcount_mutex);

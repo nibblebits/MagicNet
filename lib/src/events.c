@@ -125,21 +125,27 @@ void magicnet_events_vector_clone_events_and_push(struct vector* events_from, st
 int _magicnet_events_poll(struct magicnet_program *program, bool reconnect_if_neccessary)
 {
     int res = 0;
-    struct magicnet_packet* res_packet = magicnet_packet_new();
+    struct magicnet_client* client = magicnet_client_shared_hold(program->client);
+    if (!client)
+    {
+        res = -1;
+        goto out;
+    }
 
+    struct magicnet_packet* res_packet = magicnet_packet_new();
     struct magicnet_packet *poll_packet = magicnet_packet_new();
     magicnet_signed_data(poll_packet)->type = MAGICNET_PACKET_TYPE_EVENTS_POLL;
     magicnet_signed_data(poll_packet)->flags |= MAGICNET_PACKET_FLAG_MUST_BE_SIGNED;
     // We will ask for 10 events for now. replace with definition later..
     magicnet_signed_data(poll_packet)->payload.events_poll.total = MAGICNET_TOTAL_EVENTS_TO_REQUEST;
-    res = magicnet_client_write_packet(program->client, poll_packet, 0);
+    res = magicnet_client_write_packet(client, poll_packet, 0);
     if (res < 0)
     {
         goto out;
     }
 
     // Alright lets read the next packet as they should send us one
-    res = magicnet_client_read_packet(program->client, res_packet);
+    res = magicnet_client_read_packet(client, res_packet);
     if (res < 0)
     {
         goto out;
@@ -154,9 +160,10 @@ int _magicnet_events_poll(struct magicnet_program *program, bool reconnect_if_ne
     }
 
     // Feed the events into our program client vector and boom its done.
-    magicnet_events_vector_clone_events_and_push(magicnet_signed_data(res_packet)->payload.events_poll_res.events, program->client->events);
+    magicnet_events_vector_clone_events_and_push(magicnet_signed_data(res_packet)->payload.events_poll_res.events, client->events);
 
 out:
+    magicnet_client_shared_release(program->client);
     magicnet_packet_free(res_packet);
     if (res < 0 && reconnect_if_neccessary)
     {
@@ -213,13 +220,18 @@ int magicnet_client_push_event(struct magicnet_client* client, struct magicnet_e
 
 bool magicnet_has_queued_events(struct magicnet_program *program)
 {
-    return magicnet_client_has_known_events(program->client);
+    bool res = false;
+    struct magicnet_client* client = magicnet_client_shared_hold(program->client);
+    res =  magicnet_client_has_known_events(client);
+    magicnet_client_shared_release(program->client);
+    return res;
 }
 
 struct magicnet_event *magicnet_next_event(struct magicnet_program *program)
 {
     int res = 0;
     struct magicnet_event *event = NULL;
+    struct magicnet_client* client = magicnet_client_shared_hold(program->client);
 
     // No queued events? Lets poll and find new ones.
     if (!magicnet_has_queued_events(program))
@@ -239,10 +251,11 @@ struct magicnet_event *magicnet_next_event(struct magicnet_program *program)
     }
 
     // Yeah we got queued events alright lets return one.
-    event = vector_peek_ptr_at(program->client->events, 0);
-    vector_pop_at(program->client->events, 0);
+    event = vector_peek_ptr_at(client->events, 0);
+    vector_pop_at(client->events, 0);
 
 out:
+    magicnet_client_shared_release(program->client);
     return event;
 }
 

@@ -76,7 +76,7 @@ struct magicnet_event
 struct magicnet_program
 {
     char name[MAGICNET_PROGRAM_NAME_SIZE];
-    struct magicnet_client *client;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* client;
 };
 
 enum
@@ -1329,14 +1329,22 @@ void magicnet_server_read_lock(struct magicnet_server *server);
 void magicnet_server_lock(struct magicnet_server *server);
 void magicnet_server_unlock(struct magicnet_server *server);
 void magicnet_server_shutdown_server_instance(struct magicnet_server *server);
-struct magicnet_client *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name);
 MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_client_new();
 
+
+struct magicnet_client* magicnet_client_shared_hold(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient);
+void magicnet_client_shared_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient);
+void magicnet_client_shared_viewer_hold(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient);
+void magicnet_client_shared_viewer_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient);
 
 void magicnet_client_hold(struct magicnet_client* client);
 void magicnet_client_release(struct magicnet_client* client);
 void magicnet_client_lock(struct magicnet_client* client);
 void magicnet_client_unlock(struct magicnet_client* client);
+
+void magicnet_client_shared_lock(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *client) * client_shared);
+void magicnet_client_shared_unlock(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * client_shared);
 
 /**
  * Returns true if the login protocol has been completed from both sides, our clients side
@@ -1349,7 +1357,8 @@ struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_pop(struc
 struct magicnet_packet* magicnet_client_packet_monitoring_packet_queue_find_pop(struct magicnet_client* client, int packet_type);
 
 bool magicnet_connected(struct magicnet_client *client);
-void magicnet_close(struct magicnet_client *client);
+void magicnet_client_close(struct magicnet_client* client);
+void magicnet_shared_client_close(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)  *sclient);
 bool magicnet_client_no_packet_loading(struct magicnet_client *client);
 void magicnet_client_monitor_packet_type(struct magicnet_client* client, int type);
 void magicnet_client_unmonitor_packet_type(struct magicnet_client* client, int type);
@@ -1399,10 +1408,11 @@ struct signed_data *magicnet_signed_data(struct magicnet_packet *packet);
 
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
-struct magicnet_client *magicnet_accept(struct magicnet_server *server);
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_accept(struct magicnet_server *server);
+
 int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id);
-struct magicnet_client *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name);
 int magicnet_next_packet(struct magicnet_program *program, void **packet_out);
 bool magicnet_client_door_opened(struct magicnet_client *client);
 

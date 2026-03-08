@@ -149,7 +149,7 @@ int main(int argc, char **argv)
         // now it should be entirely free.
     }
 
-    return 0;
+
 
     // We wil use two threads
     // but compute the cpu count next time
@@ -229,7 +229,7 @@ int main(int argc, char **argv)
             break;
         }
 
-        struct magicnet_client *client = magicnet_accept(server);
+        MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *client = magicnet_accept(server);
         if (client)
         {
             magicnet_client_push(client);
