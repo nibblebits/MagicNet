@@ -104,7 +104,22 @@ void vector_resize(struct vector *vector)
 
 void *vector_at(struct vector *vector, int index)
 {
+    // Lets ensure we dont overflow here
+    if (index >= vector_count(vector))
+        return NULL;
+
     return vector->data + (index * vector->esize);
+}
+
+void *vector_at_ptr(struct vector *vector, int index)
+{
+    void **ptr = vector_at(vector, index);
+    if (!ptr)
+    {
+        return NULL;
+    }
+
+    return *ptr;
 }
 
 void vector_set_peek_pointer(struct vector *vector, int index)
@@ -124,7 +139,7 @@ void *vector_peek_at(struct vector *vector, int index)
         return NULL;
     }
 
-    void* ptr = vector_at(vector, index);
+    void *ptr = vector_at(vector, index);
     return ptr;
 }
 
@@ -139,7 +154,7 @@ void *vector_peek_no_increment(struct vector *vector)
     return ptr;
 }
 
-void vector_peek_back(struct vector* vector)
+void vector_peek_back(struct vector *vector)
 {
     vector->pindex--;
 }
@@ -231,10 +246,10 @@ void vector_save_purge(struct vector *vector)
     vector_pop(vector->saves);
 }
 
-void vector_pop_last_peek(struct vector* vector)
+void vector_pop_last_peek(struct vector *vector)
 {
     assert(vector->pindex >= 1);
-    vector_pop_at(vector, vector->pindex-1);
+    vector_pop_at(vector, vector->pindex - 1);
     vector->pindex--;
 }
 
@@ -310,15 +325,13 @@ void vector_stretch(struct vector *vector, int index)
     vector->rindex = index;
 }
 
-
-
-int vector_pop_value(struct vector* vector, void* val)
+int vector_pop_value(struct vector *vector, void *val)
 {
     size_t size = vector->esize;
     int index = 0;
-    for(size_t i = 0; i < vector->count; i++)
+    for (size_t i = 0; i < vector->count; i++)
     {
-        void* ptr = vector_at(vector, i);
+        void *ptr = vector_at(vector, i);
         if (memcmp(ptr, val, size) == 0)
         {
             vector_pop_at(vector, i);
@@ -329,13 +342,13 @@ int vector_pop_value(struct vector* vector, void* val)
     return index;
 }
 
-int vector_pop_ptr_value(struct vector* vector, void* val)
+int vector_pop_ptr_value(struct vector *vector, void *val)
 {
     int old_pp = vector->pindex;
     vector_set_peek_pointer(vector, 0);
-    void* ptr = vector_peek_ptr(vector);
+    void *ptr = vector_peek_ptr(vector);
     int index = 0;
-    while(ptr)
+    while (ptr)
     {
         if (ptr == val)
         {
@@ -481,12 +494,12 @@ int vector_count(struct vector *vector)
     return vector->count;
 }
 
-bool vector_exists(struct vector* vector, void* data)
-{   
+bool vector_exists(struct vector *vector, void *data)
+{
     size_t size = vector->esize;
     for (size_t i = 0; i < vector->count; i++)
     {
-        void* element_data = vector_at(vector, i);
+        void *element_data = vector_at(vector, i);
         if (memcmp(element_data, data, size) == 0)
         {
             return true;
@@ -494,4 +507,167 @@ bool vector_exists(struct vector* vector, void* data)
     }
 
     return false;
+}
+
+struct vector_group *vector_group_new(size_t e_size)
+{
+    int res = 0;
+    struct vector_group *group = calloc(1, sizeof(struct vector_group));
+    if (!group)
+    {
+        goto out;
+    }
+
+    group->pindex = 0;
+    group->pvindex = 0;
+    group->esize = e_size;
+    group->vectors = vector_create(sizeof(struct vector *));
+    if (!group->vectors)
+    {
+        res = -1;
+        goto out;
+    }
+
+out:
+    if (res < 0)
+    {
+
+        if (group && group->vectors)
+        {
+            vector_free(group->vectors);
+            group->vectors = NULL;
+        }
+
+        if (group)
+        {
+            free(group);
+            group = NULL;
+        }
+    }
+    return group;
+}
+
+// TODO: TEST ALL OF THIS GROUP VECTOR FUNCTIONALITY AFTER COMPILE ERRORS SOLVED
+int vector_group_vector_add(struct vector_group *vector_group, struct vector *vector)
+{
+    int res = 0;
+    if (vector_group->esize != vector->esize)
+    {
+        res = -1;
+        goto out;
+    }
+
+    // Push the vector to the groups.
+    vector_push(vector_group->vectors, &vector);
+    // The vector has been added to the vector group..
+out:
+    return res;
+}
+
+int vector_group_vector_remove(struct vector_group *vector_group, struct vector *vector)
+{
+    return vector_pop_ptr_value(vector_group->vectors, &vector);
+}
+
+void *vector_group_peek(struct vector_group *vector_group)
+{
+    if (!vector_group->pvector)
+    {
+        // Null vector, then we are done with the peek
+        return NULL;
+    }
+
+    // We have a pvector great, lets extract the next index
+    void *data = vector_at(vector_group->pvector, vector_group->pindex);
+    // Are we in bounds? Yes then this vector is the correct one
+    if (vector_group->pindex < vector_count(vector_group->pvector))
+    {
+        vector_group->pindex++;
+        return data;
+    }
+
+    // We have a problem that we have overflowed, our index exceeds
+    // the bounds
+    // lets switch to the following vector
+    vector_group->pvindex++;
+    // Reset the peek index now we have a new vector.
+    vector_group->pindex = 0;
+    struct vector* new_vector = vector_at_ptr(vector_group->vectors, vector_group->pvindex);
+    if (!new_vector)
+    {
+        // we peeked as far as we can, we have exausted all possible vectors
+        return NULL;
+    }
+
+    vector_group->pvector = new_vector;
+    // We can do a bit of recursion now that the vector has moved forward
+    // acceptable for now could be a problem if stack gets too large..
+    return vector_group_peek(vector_group);
+}
+
+void *vector_group_peek_ptr(struct vector_group *vector_group)
+{
+    void** ptr = vector_group_peek(vector_group);
+    if (!ptr)
+    {
+        return NULL;
+    }
+    return *ptr;
+}
+
+int vector_group_vector_for_index(struct vector_group *vector_group, int index, struct vector **vector_out, int* rel_index_out)
+{
+    int res = -1;
+    int total_vec_elem_count_current = 0;
+    struct vector *vec_chosen = NULL;
+    int rel_index = 0;
+    // We have to loop through the entire vectors array until we find the vector
+    // for the given element index
+    vector_set_peek_pointer(vector_group->vectors, 0);
+    struct vector *vector = vector_peek_ptr(vector_group->vectors);
+    while (vector)
+    {
+        if (vector)
+        {
+            int vec_t_elem = vector_count(vector);
+            // Local index within the vector
+            int lindex = index - total_vec_elem_count_current;
+            if (lindex < vec_t_elem)
+            {
+                // The index is within bounds this is the correct vector
+                vec_chosen = vector;
+                rel_index = lindex;
+                break;
+            }
+            total_vec_elem_count_current += vec_t_elem;
+        }
+        vector = vector_peek_ptr(vector_group->vectors);
+    }
+
+    *vector_out = vec_chosen;
+    if (rel_index_out)
+    {
+        *rel_index_out = rel_index;
+    }
+    return res;
+}
+/**
+ * Sets the peek pointer
+ * \param index The index if we assumed all vectors are a continuous group
+ */
+int vector_group_set_peek_pointer(struct vector_group *vector_group, int index)
+{
+    int res = 0;
+    if (vector_count(vector_group->vectors) == 0)
+    {
+        return -1;
+    }
+
+    res = vector_group_vector_for_index(vector_group, index, &vector_group->pvector, &vector_group->pindex);
+    if (res < 0)
+    {
+        return res;
+    }
+
+    return 0;
 }

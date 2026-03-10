@@ -38,10 +38,50 @@ struct vector
     struct vector* saves;
 };
 
+struct vector_group
+{
+    // The peek index is an index within the pvector for the next element
+    // when we overflow we switch to the next vector in vectors.
+    int pindex;
+    // The current peek vector index in the vectors vector
+    int pvindex;
+
+    // The vector within the vectors we are currently peeking in
+    // this value is changed on overflow to the following vector
+    struct vector* pvector;
+
+    // The size of a single element of a individual vetor.
+    size_t esize;
+    // sub-vectors that are inside this vector group
+    struct vector* vectors;
+};
+
+
+/**
+ * Peeks at the next element in one of the vectors circurling to the next vector 
+ * if theres an overflow.
+ * 
+ * If the individual vectors rely on their own mutexes at some area in the project
+ * then you need to take into account they might not be safe grouped together.
+ */
+void* vector_group_peek(struct vector_group* vector_group);
+void* vector_group_peek_ptr(struct vector_group* vector_group);
+
+int vector_group_vector_add(struct vector_group* vector_group, struct vector* vector);
+int vector_group_vector_remove(struct vector_group* vector_group, struct vector* vector);
+struct vector_group* vector_group_new(size_t e_size);
+
+/**
+ * Sets the peek pointer
+ * \param index The index if we assumed all vectors are a continuous group
+ */
+int vector_group_set_peek_pointer(struct vector_group* vector_group, int index);
 
 struct vector* vector_create(size_t esize);
 void vector_free(struct vector* vector);
 void* vector_at(struct vector* vector, int index);
+void* vector_at_ptr(struct vector* vector, int index);
+
 void* vector_peek_ptr_at(struct vector* vector, int index);
 void* vector_peek_no_increment(struct vector* vector);
 void* vector_peek(struct vector* vector);
