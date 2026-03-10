@@ -776,10 +776,6 @@ int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
     }
 
     res = magicnet_client_poll(client, magicnet_program_client_thread_poll_process_packet);
-    if (res < 0)
-    {
-        goto out;
-    }
     magicnet_client_shared_release(sclient);
 
     // If theres an error we shall release one reference, this is the reference
@@ -838,6 +834,11 @@ struct magicnet_program *magicnet_program(const char *name)
 
      // SO long the program is open we hold a reference
     struct magicnet_client* lclient = magicnet_client_shared_hold(sclient);
+    if (!lclient)
+    {
+        res = -1;
+        goto out;
+    }
 
     strncpy(program->name, name, sizeof(program->name));
     vector_push(program_vec, program);
@@ -845,6 +846,7 @@ struct magicnet_program *magicnet_program(const char *name)
     // Lets setup monitoring before the threads begin
     // We only care about user defined packets, this is what we must montior
     magicnet_client_monitor_packet_type(lclient, MAGICNET_PACKET_TYPE_USER_DEFINED);
+    magicnet_client_shared_release(sclient);
 
     struct magicnet_nthread_action *action = magicnet_threads_action_new(magicnet_program_client_thread_poll, sclient, magicnet_program_client_thread_poll_free);
     if (!action)

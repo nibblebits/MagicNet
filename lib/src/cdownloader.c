@@ -320,6 +320,7 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     struct magicnet_chain_downloader_hash_to_download hash_to_find;
     struct magicnet_chain_downloader_hash_to_download *hash = NULL;
     struct magicnet_signal *signal = NULL;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *new_sclient = NULL;
     struct magicnet_client *new_client = NULL;
     struct magicnet_packet *super_download_response  = NULL;
     struct magicnet_packet *req_packet = magicnet_packet_new();
@@ -372,10 +373,16 @@ int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downlo
     magicnet_log("%s key=%s\n", __FUNCTION__, key->key);
 
     magicnet_log("%s attempting to connect to key\n", __FUNCTION__);
-    new_client = magicnet_connect_for_key(downloader->server, key, "chain-downloader");
-    if (!new_client)
+    new_sclient = magicnet_connect_for_key(downloader->server, key, "chain-downloader");
+    if (!new_sclient)
     {
         magicnet_log("%s FAILED\n", __FUNCTION__);
+        goto out;
+    }
+    new_client = magicnet_client_shared_hold(new_sclient);
+    if (!new_client)
+    {
+        magicnet_log("%s FAILED to hold connected client\n", __FUNCTION__);
         goto out;
     }
 
@@ -474,6 +481,7 @@ out:
         magicnet_server_lock(downloader->server);
         magicnet_client_close(new_client);
         magicnet_server_unlock(downloader->server);
+        magicnet_client_shared_release(new_sclient);
     }
 
     if (signal)

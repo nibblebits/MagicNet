@@ -1397,8 +1397,8 @@ void magicnet_events_vector_free(struct vector *events_vec);
 void magicnet_events_vector_clone_events_and_push(struct vector *events_from, struct vector *events_to);
 
 int magicnet_client_connection_type(struct magicnet_client *client);
-struct magicnet_client *magicnet_connect_again(struct magicnet_client *client, const char *program_name);
-struct magicnet_client *magicnet_connect_for_key(struct magicnet_server *server, struct key *key, const char *program_name);
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_again_outgoing(struct magicnet_client *client, const char *program_name);
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_for_key(struct magicnet_server *server, struct key *key, const char *program_name);
 
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet);
 
@@ -1439,7 +1439,8 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet);
 int magicnet_client_entry_protocol_read_known_clients(struct magicnet_client *client, struct magicnet_packet *packet);
 int magicnet_client_entry_protocol_write_known_clients(struct magicnet_client *client);
-struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key);
+// Returns a held shared client pointer. Caller must call magicnet_client_shared_release().
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key);
 int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magicnet_packet *packet);
 
 /**
