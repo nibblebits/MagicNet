@@ -34,6 +34,9 @@
 #include "key.h"
 #include "misc.h"
 
+size_t magicnet_server_clients_count(struct magicnet_server *server);
+size_t magicnet_server_outgoing_clients_count(struct magicnet_server *server);
+
 int magicnet_init_client(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * client_shared, struct magicnet_server *server, int connfd, struct sockaddr_in *addr_in);
 int magicnet_client_preform_entry_protocol_read(struct magicnet_client *client, struct magicnet_packet *packet);
 
@@ -137,26 +140,25 @@ void magicnet_server_remove_thread(struct magicnet_server *server, pthread_t thr
     }
 }
 
-struct magicnet_client* magicnet_client_shared_hold(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient)
+struct magicnet_client *magicnet_client_shared_hold(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient)
 {
     return magicnet_shared_mutex_obj_owner_hold(sclient);
 }
 
-void magicnet_client_shared_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient)
+void magicnet_client_shared_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient)
 {
     magicnet_shared_mutex_obj_owner_release(sclient);
 }
 
-void magicnet_client_shared_viewer_hold(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient)
+void magicnet_client_shared_viewer_hold(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient)
 {
     magicnet_shared_mutex_obj_viewer_hold(sclient);
 }
 
-void magicnet_client_shared_viewer_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient)
+void magicnet_client_shared_viewer_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient)
 {
     magicnet_shared_mutex_obj_viewer_release(sclient);
 }
-
 
 void magicnet_client_hold(struct magicnet_client *client)
 {
@@ -442,32 +444,35 @@ const char *magicnet_ip_count_get_dominant(struct vector *ip_count_vec)
     return NULL;
 }
 
+void magicnet_server_recalculate_my_ip_for_client_vec(struct vector *sclient_vec, struct vector *ip_vec)
+{
+    vector_set_peek_pointer(sclient_vec, 0);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclient_vec);
+    while (sclient)
+    {
+        struct magicnet_client *client = magicnet_shared_mutex_obj_owner_hold(sclient);
+        if (magicnet_connected(client))
+        {
+            magicnet_ip_count_vec_add_or_increment(ip_vec, client->my_ip_address_to_client);
+        }
+
+        magicnet_shared_mutex_obj_owner_release(sclient);
+        client = vector_peek_ptr(sclient_vec);
+    }
+}
 void magicnet_server_recalculate_my_ip(struct magicnet_server *server)
 {
     struct vector *ip_vec = vector_create(sizeof(struct magicnet_ip_count *));
 
-    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
-    {
-        struct magicnet_client *client = magicnet_shared_mutex_obj_owner_hold(server->clients[i]);
-        if (magicnet_connected(client))
-        {
-            magicnet_ip_count_vec_add_or_increment(ip_vec, client->my_ip_address_to_client);
-        }
+    // Adjust the ip vector based on the input and output vectors
+    // we shall discover my true IP decentralized.
+    magicnet_server_recalculate_my_ip_for_client_vec(server->clients, ip_vec);
+    magicnet_server_recalculate_my_ip_for_client_vec(server->outgoing_clients, ip_vec);
 
-        magicnet_shared_mutex_obj_owner_release(server->clients[i]);
-    }
-
-    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
-    {
-        struct magicnet_client *client = magicnet_shared_mutex_obj_owner_hold(server->outgoing_clients[i]);
-        if (magicnet_connected(client))
-        {
-            magicnet_ip_count_vec_add_or_increment(ip_vec, client->my_ip_address_to_client);
-        }
-
-        magicnet_shared_mutex_obj_owner_release(server->outgoing_clients[i]);
-    }
-
+    // Why do we do this, we do it as people might lie about our IP to us.
+    // we could just ping a random server somewhere that will tell us our IP
+    // but then its a centralized point of failure
+    // but this needs improving too.
     const char *dominant_ip = magicnet_ip_count_get_dominant(ip_vec);
 
     // We must never allow 127.0.0.1 to be seen as our global ip address
@@ -549,6 +554,7 @@ struct magicnet_server *magicnet_server_start(int port)
 
     srand(time(NULL));
 
+    // TODO LATER ADD NULL CHECKS.
     server->next_block.verifier_votes.votes = vector_create(sizeof(struct magicnet_certificate_vote *));
     server->next_block.verifier_votes.vote_counts = vector_create(sizeof(struct magicnet_vote_count *));
     server->next_block.signed_up_verifiers = vector_create(sizeof(struct magicnet_council_certificate **));
@@ -557,6 +563,9 @@ struct magicnet_server *magicnet_server_start(int port)
     server->server_started = time(NULL);
     server->first_block_cycle = server->server_started + (MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS - (server->server_started % MAGICNET_MAKE_BLOCK_EVERY_TOTAL_SECONDS));
     server->thread_ids = vector_create(sizeof(pthread_t));
+    server->clients = vector_create(sizeof(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *));
+    server->outgoing_clients = vector_create(sizeof(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *));
+    server->connected_ips = vector_create(sizeof(const char*));
 
     return server;
 }
@@ -614,45 +623,58 @@ bool magicnet_client_inactive(struct magicnet_client *client)
     return magicnet_client_seconds_since_last_contact(client) > MAGICNET_CLIENT_TIMEOUT_SECONDS;
 }
 
+size_t magicnet_server_clients_count(struct magicnet_server *server)
+{
+    return vector_count(server->clients);
+}
+
+size_t magicnet_server_outgoing_clients_count(struct magicnet_server *server)
+{
+    return vector_count(server->outgoing_clients);
+}
+
+/**
+ * The new implementation uses vectors rather than fixed size arrays
+ * they are still limited in size, I've kept this function incase in the future
+ * i want a slot recycling type of thing, like the previous design but better because
+ * of the vector aspect.
+ */
 MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_find_free_client(struct magicnet_server *server)
 {
-    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = NULL;
+    struct magicnet_client *client = NULL;
+    if (magicnet_server_clients_count(server) > MAGICNET_MAX_INCOMING_CONNECTIONS)
     {
-        if (!magicnet_client_shared_in_use(server->clients[i]))
-        {
-            struct magicnet_client *client = calloc(1, sizeof(struct magicnet_client));
-            if (!client)
-            {
-                return NULL;
-            }
-
-            // Create or recycle the old shared pointer filling it with the new data.
-            server->clients[i] = magicnet_shared_mutex_obj_create_hold_as_owner(client, magicnet_client_free, server->clients[i]);
-            return server->clients[i];
-        }
+        return NULL;
+    }
+    client = calloc(1, sizeof(struct magicnet_client));
+    if (!client)
+    {
+        return NULL;
     }
 
-    return NULL;
+    sclient = magicnet_shared_mutex_obj_create_hold_as_owner(client, magicnet_client_free, NULL);
+    vector_push(server->clients, &sclient);
+    return sclient;
 }
 
 MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_find_free_outgoing_client(struct magicnet_server *server)
 {
-    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = NULL;
+    struct magicnet_client *client = NULL;
+    if (magicnet_server_clients_count(server) > MAGICNET_MAX_OUTGOING_CONNECTIONS)
     {
-        if (!magicnet_client_shared_in_use(server->outgoing_clients[i]))
-        {
-            struct magicnet_client *client = calloc(1, sizeof(struct magicnet_client));
-            if (!client)
-            {
-                return NULL;
-            }
-
-            server->outgoing_clients[i] = magicnet_shared_mutex_obj_create_hold_as_owner(client, magicnet_client_free, server->outgoing_clients[i]);
-            return server->outgoing_clients[i];
-        }
+        return NULL;
+    }
+    client = calloc(1, sizeof(struct magicnet_client));
+    if (!client)
+    {
+        return NULL;
     }
 
-    return NULL;
+    sclient = magicnet_shared_mutex_obj_create_hold_as_owner(client, magicnet_client_free, NULL);
+    vector_push(server->outgoing_clients, &sclient);
+    return sclient;
 }
 
 void magicnet_server_read_lock(struct magicnet_server *server)
@@ -1115,29 +1137,6 @@ out:
 }
 
 /**
- * Pushes all connected ip addresses to the output vector.
- *
- * Output vector should be sizeof(struct sockaddr_in)
- */
-void magicnet_server_push_outgoing_connected_ips(struct magicnet_server *server, struct vector *vector_out)
-{
-    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
-    {
-        struct magicnet_client *client = magicnet_shared_mutex_obj_owner_hold(server->outgoing_clients[i]);
-
-        if (magicnet_connected(client))
-        {
-            vector_push(vector_out, &client->client_info);
-        }
-
-        if (client)
-        {
-            magicnet_shared_mutex_obj_owner_release(server->outgoing_clients[i]);
-        }
-    }
-}
-
-/**
  * Connects to an IP address and returns a client.
  */
 MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_tcp_network_connect_for_ip_for_server(struct magicnet_server *server, const char *ip_address, int port, const char *program_name, int signal_id, int flags)
@@ -1247,7 +1246,7 @@ out:
     return mclient_shared;
 }
 
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_accept(struct magicnet_server *server)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_accept(struct magicnet_server *server)
 {
     struct sockaddr_in client;
     int client_len = sizeof(client);
@@ -1330,6 +1329,8 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_accept(struct m
         mclient->flags |= MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
     }
 
+    // i have a better idea..
+
     magicnet_client_push_event(mclient, &(struct magicnet_event){.type = MAGICNET_EVENT_TYPE_TEST});
     magicnet_shared_mutex_obj_owner_release(mclient_shared);
     magicnet_server_unlock(server);
@@ -1337,14 +1338,14 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_accept(struct m
     return mclient_shared;
 }
 
-void magicnet_client_close(struct magicnet_client* client)
+void magicnet_client_close(struct magicnet_client *client)
 {
     close(client->sock);
 }
 
-void magicnet_shared_client_close(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)  *sclient)
+void magicnet_shared_client_close(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient)
 {
-    struct magicnet_client* client = magicnet_client_shared_hold(sclient);
+    struct magicnet_client *client = magicnet_client_shared_hold(sclient);
     magicnet_important("%s client %p was closed, total bytes read=%i total bytes wrote=%i, average download speed=%i bps, average upload speed=%i bps, time elapsed=%i\n", __FUNCTION__, client, client->total_bytes_received, client->total_bytes_sent, magicnet_client_average_download_speed(client), magicnet_client_average_upload_speed(client), magicnet_client_time_elapsed(client));
 
     close(client->sock);
@@ -4247,10 +4248,10 @@ int magicnet_client_connection_type(struct magicnet_client *client)
     return MAGICNET_CONNECTION_TYPE_INCOMING;
 }
 
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_tcp_network_connect(struct sockaddr_in addr, int flags, int communication_flags, const char *program_name)
 {
     int sockfd = -1;
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient = NULL;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = NULL;
     // socket create and varification
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1)
@@ -4282,7 +4283,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_tcp_network_con
     }
 
     sclient = magicnet_client_new();
-    struct magicnet_client* mclient = magicnet_client_shared_hold(sclient);
+    struct magicnet_client *mclient = magicnet_client_shared_hold(sclient);
     if (!mclient)
     {
         goto out;
@@ -4317,11 +4318,11 @@ out:
     // do cleanup here later..
     return mclient;
 }
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_tcp_network_connect_for_ip(const char *ip_address, int port, int flags, const char *program_name)
 {
     int sockfd;
     struct sockaddr_in servaddr, cli;
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *)* sclient = NULL;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = NULL;
     struct in_addr addr = {};
     if (inet_aton(ip_address, &addr) == 0)
     {
@@ -4373,7 +4374,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_tcp_network_conn
         return NULL;
     }
 
-    struct magicnet_client* mclient = magicnet_client_shared_hold(sclient);
+    struct magicnet_client *mclient = magicnet_client_shared_hold(sclient);
     if (program_name)
     {
         memcpy(mclient->program_name, program_name, sizeof(mclient->program_name));
@@ -4688,6 +4689,7 @@ void magicnet_client_relay_packet_finished(struct magicnet_client *client, struc
 int magicnet_relay_packet_to_client(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
+    // round robin type of setup here, looks decent.
     struct magicnet_packet *packet_out = &client->packets_for_client.packets[client->packets_for_client.pos_write % MAGICNET_MAX_AWAITING_PACKETS];
     if (!(magicnet_signed_data(packet_out)->flags & MAGICNET_PACKET_FLAG_IS_AVAILABLE_FOR_USE))
     {
@@ -4743,28 +4745,26 @@ int magicnet_client_packets_for_client_flush(struct magicnet_client *client)
 
     return res;
 }
+
+void magicnet_server_relay_packets_to_clients_vec(struct vector *sclients_vec, struct magicnet_packet *packet)
+{
+    vector_set_peek_pointer(sclients_vec, 0);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclients_vec);
+    while (sclient)
+    {
+        struct magicnet_client *client = magicnet_client_shared_hold(sclient);
+        if (magicnet_client_in_use(client))
+        {
+            magicnet_relay_packet_to_client(client, packet);
+        }
+        magicnet_client_shared_release(sclient);
+        sclient = vector_peek_ptr(sclients_vec);
+    }
+}
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
 {
-    struct magicnet_client *client = NULL;
-    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
-    {
-        client = magicnet_shared_mutex_obj_owner_hold(server->clients[i]);
-        if (magicnet_client_in_use(client))
-        {
-            magicnet_relay_packet_to_client(client, packet);
-        }
-        magicnet_shared_mutex_obj_owner_release(server->clients[i]);
-    }
-
-    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
-    {
-        client = magicnet_shared_mutex_obj_owner_hold(server->outgoing_clients[i]);
-        if (magicnet_client_in_use(client))
-        {
-            magicnet_relay_packet_to_client(client, packet);
-        }
-        magicnet_shared_mutex_obj_owner_release(server->outgoing_clients[i]);
-    }
+    magicnet_server_relay_packets_to_clients_vec(server->clients, packet);
+    magicnet_server_relay_packets_to_clients_vec(server->outgoing_clients, packet);
 
     return 0;
 }
@@ -4780,39 +4780,41 @@ int magicnet_server_relay_packet_to_client_key(struct magicnet_server *server, s
     return magicnet_relay_packet_to_client(client, packet);
 }
 
-struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key)
+struct magicnet_client *magicnet_server_get_client_with_key_for_client_vec(struct vector *sclients_vec, struct key *key)
 {
-    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
+    vector_set_peek_pointer(sclients_vec, 0);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclients_vec);
+    while (sclient)
     {
-        struct magicnet_client *client = magicnet_shared_mutex_obj_owner_hold(server->clients[i]);
-        if (magicnet_client_in_use(client) && key_cmp(&client->peer_info.key, key))
+        struct magicnet_client *client = magicnet_client_shared_hold(sclient);
+        if (!client)
         {
-            magicnet_shared_mutex_obj_owner_release(server->clients[i]);
-            return client;
+            sclient = vector_peek_ptr(sclients_vec);
+            continue;
         }
-        if (client)
-        {
-            magicnet_shared_mutex_obj_owner_release(server->clients[i]);
-        }
-    }
-
-    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
-    {
-        struct magicnet_client *client = magicnet_shared_mutex_obj_owner_hold(server->outgoing_clients[i]);
 
         if (magicnet_client_in_use(client) && key_cmp(&client->peer_info.key, key))
         {
-            magicnet_shared_mutex_obj_owner_release(server->outgoing_clients[i]);
+            magicnet_client_shared_release(sclients_vec);
+            // its okay as to call this expecting a non-shared client return
+            // means the caller is already holding the instance somewhere.
             return client;
         }
-
-        if (client)
-        {
-            magicnet_shared_mutex_obj_owner_release(server->outgoing_clients[i]);
-        }
+        magicnet_client_shared_release(sclients_vec);
+        sclient = vector_peek_ptr(sclients_vec);
     }
 
     return NULL;
+}
+
+struct magicnet_client *magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key)
+{
+    struct magicnet_client *client = magicnet_server_get_client_with_key_for_client_vec(server->clients, key);
+    if (client)
+    {
+        return client;
+    }
+    return magicnet_server_get_client_with_key_for_client_vec(server->outgoing_clients, key);
 }
 
 // int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
@@ -5645,34 +5647,39 @@ out:
     return res;
 }
 
+int magicnet_server_push_client_info_to_peer_exchange_vector(struct vector *sclients_vec, struct vector *peer_vec_out)
+{
+    int res = 0;
+    vector_set_peek_pointer(sclients_vec, 0);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclients_vec);
+    while (sclient)
+    {
+        struct magicnet_client *client = magicnet_client_shared_hold(sclient);
+        if (!client || !magicnet_connected(client))
+        {
+            sclient = vector_peek_ptr(sclients_vec);
+            continue;
+        }
+
+        // Client is connected proceed.
+        struct magicnet_connection_exchange_peer_data data = {0};
+        data.public_key = client->peer_info.key;
+        data.sin_addr = client->client_info.sin_addr;
+        vector_push(peer_vec_out, &data);
+        sclient = vector_peek_ptr(sclients_vec);
+    }
+    return res;
+}
 int magicnet_server_get_all_connected_clients(struct magicnet_server *server, struct vector *vector_out)
 {
     int res = 0;
-    struct magicnet_connection_exchange_peer_data data;
-    for (int i = 0; i < MAGICNET_MAX_OUTGOING_CONNECTIONS; i++)
+    res = magicnet_server_push_client_info_to_peer_exchange_vector(server->clients, vector_out);
+    if (res < 0)
     {
-        struct magicnet_client *client = server->outgoing_clients[i];
-        if (magicnet_connected(client))
-        {
-            bzero(&data, sizeof(data));
-            data.sin_addr = client->client_info.sin_addr;
-            data.public_key = client->peer_info.key;
-            vector_push(vector_out, &data);
-        }
+       return res;
     }
 
-    for (int i = 0; i < MAGICNET_MAX_INCOMING_CONNECTIONS; i++)
-    {
-        struct magicnet_client *client = server->clients[i];
-        if (magicnet_connected(client))
-        {
-            bzero(&data, sizeof(data));
-            data.sin_addr = client->client_info.sin_addr;
-            data.public_key = client->peer_info.key;
-            vector_push(vector_out, &data);
-        }
-    }
-
+    res = magicnet_server_push_client_info_to_peer_exchange_vector(server->outgoing_clients, vector_out);
     return res;
 }
 
@@ -7357,17 +7364,25 @@ bool magicnet_server_is_outgoing_connection_connected(struct magicnet_server *se
     return false;
 }
 
+
+/**
+ * In future have a single vector that has the connected ips, will save processing power.
+ * 
+ * screw it lets do it now..
+ */
 bool magicnet_server_is_ip_connected(struct magicnet_server *server, const char *ip_address)
 {
-    if (magicnet_server_is_accepted_connection_connected(server, ip_address))
+    vector_set_peek_pointer(server->connected_ips, 0);
+    const char* ip_addr = vector_peek_ptr(server->connected_ips);
+    while(ip_addr)
     {
-        return true;
+        if (strncmp(ip_addr, ip_address, MAGICNET_MAX_IP_STRING_SIZE) == 0)
+        {
+            return true;
+        }
+        ip_addr = vector_peek_ptr(server->connected_ips);
     }
 
-    if (magicnet_server_is_outgoing_connection_connected(server, ip_address))
-    {
-        return true;
-    }
     return false;
 }
 
