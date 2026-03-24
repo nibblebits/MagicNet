@@ -712,6 +712,8 @@ enum
     BLOCK_CREATION_SEQUENCE_CLEAR_EXISTING_SEQUENCE
 };
 
+
+
 struct block_transaction;
 struct magicnet_server
 {
@@ -726,6 +728,10 @@ struct magicnet_server
     // Clients our server initiated the connection for, vector of MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)*
     struct vector *outgoing_clients;
 
+    // Allows iterating through all the clients, and outgoing_clients in one vector
+    // vector_gorup groups clients, outgoing_clients into a readonly state 
+    // any change to either vector will result in the change accessible through all_clients
+    struct vector_group* all_clients;
 
     // vector of const char* , holds the connected ip addresses.
     struct vector* connected_ips;

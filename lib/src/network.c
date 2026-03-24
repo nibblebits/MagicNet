@@ -615,6 +615,11 @@ struct magicnet_server *magicnet_server_start(int port)
     server->thread_ids = vector_create(sizeof(pthread_t));
     server->clients = vector_create(sizeof(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *));
     server->outgoing_clients = vector_create(sizeof(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *));
+    server->all_clients = vector_group_new(sizeof(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *));
+    vector_group_vector_add(server->all_clients, server->outgoing_clients);
+    vector_group_vector_add(server->all_clients, server->clients);
+
+
     server->connected_ips = vector_create(sizeof(const char*));
 
     return server;
@@ -4844,7 +4849,6 @@ int magicnet_client_packets_for_client_flush(struct magicnet_client *client)
 
     return res;
 }
-
 void magicnet_server_relay_packets_to_clients_vec(struct vector *sclients_vec, struct magicnet_packet *packet)
 {
     vector_set_peek_pointer(sclients_vec, 0);
@@ -4865,6 +4869,7 @@ void magicnet_server_relay_packets_to_clients_vec(struct vector *sclients_vec, s
         sclient = vector_peek_ptr(sclients_vec);
     }
 }
+
 int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct magicnet_packet *packet)
 {
     magicnet_server_relay_packets_to_clients_vec(server->clients, packet);

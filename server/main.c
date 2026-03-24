@@ -150,6 +150,30 @@ int main(int argc, char **argv)
     }
 
 
+    struct vector* ivec_test = vector_create(sizeof(int));
+    int m = 30;
+    vector_push(ivec_test, &m);
+    m = 20;
+    vector_push(ivec_test, &m);
+
+    struct vector* ivec_test2 = vector_create(sizeof(int));
+    m = 90;
+    vector_push(ivec_test2, &m);
+
+    struct vector_group* vec_group = vector_group_new(sizeof(int));
+    vector_group_vector_add(vec_group, ivec_test);
+    vector_group_vector_add(vec_group, ivec_test2);
+
+    vector_group_set_peek_pointer(vec_group, 0);
+
+    int total_test = 3;
+    for (int i = 0; i < total_test; i++)
+    {
+        int result = (int)(uintptr_t)vector_group_peek_ptr(vec_group);
+        printf("%s test_group_result=%i\n", __FUNCTION__, result);
+    }
+
+
 
     // We wil use two threads
     // but compute the cpu count next time
