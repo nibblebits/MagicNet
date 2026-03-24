@@ -267,7 +267,7 @@ int magicnet_client_packet_strip_private_flags(const struct magicnet_packet *pac
 
 int magicnet_client_unsigned_packet_allowed(const struct magicnet_packet *packet)
 {
-    int type = magicnet_signed_data((struct magicnet_packet*) packet)->type;
+    int type = magicnet_signed_data((struct magicnet_packet *)packet)->type;
     // Put this in some kind of array at some point rather than this thing..
     return type == MAGICNET_PACKET_TYPE_PING || type == MAGICNET_PACKET_TYPE_OPEN_DOOR || type == MAGICNET_PACKET_TYPE_OPEN_DOOR_ACK || type == MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET;
 }
@@ -358,7 +358,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_client_new()
     return client_shared;
 }
 
-static MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_server_client_vec_find_stale_slot(struct vector *sclients_vec)
+static MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_server_client_vec_find_stale_slot(struct vector *sclients_vec)
 {
     vector_set_peek_pointer(sclients_vec, 0);
     MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclients_vec);
@@ -375,7 +375,7 @@ static MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_server_c
     return NULL;
 }
 
-static void magicnet_server_client_vec_add(struct vector *sclients_vec, MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient)
+static void magicnet_server_client_vec_add(struct vector *sclients_vec, MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient)
 {
     magicnet_client_shared_viewer_hold(sclient);
     vector_push(sclients_vec, &sclient);
@@ -619,8 +619,7 @@ struct magicnet_server *magicnet_server_start(int port)
     vector_group_vector_add(server->all_clients, server->outgoing_clients);
     vector_group_vector_add(server->all_clients, server->clients);
 
-
-    server->connected_ips = vector_create(sizeof(const char*));
+    server->connected_ips = vector_create(sizeof(const char *));
 
     return server;
 }
@@ -688,14 +687,12 @@ size_t magicnet_server_outgoing_clients_count(struct magicnet_server *server)
     return vector_count(server->outgoing_clients);
 }
 
-size_t magicnet_server_all_clients_count(struct magicnet_server* server)
+size_t magicnet_server_all_clients_count(struct magicnet_server *server)
 {
     // all_clients is joined with clients, outgoing_clients anyc hanges
     // to either vectors shall affect the read only aspect of all clients.
     return vector_group_elements_count(server->all_clients);
 }
-
-
 
 /**
  * The new implementation uses vectors rather than fixed size arrays
@@ -2993,6 +2990,14 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         }
         break;
 
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        res = magicnet_client_read_verifier_signup_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read signup packet failed\n", __FUNCTION__);
+        }
+        break;
+
     default:
         magicnet_log("%s unimplemented packet type=%x\n", __FUNCTION__, magicnet_signed_data(packet_out)->type);
     }
@@ -4087,6 +4092,9 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     case MAGICNET_PACKET_TYPE_USER_DEFINED:
         res = magicnet_client_write_packet_user_defined(client, packet);
         break;
+    case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+        res = magicnet_client_write_packet_verifier_signup(client, packet);
+        break;
 
     default:
         magicnet_log("%s sending unimplemented packet type=%i", __FUNCTION__, magicnet_signed_data(packet)->type);
@@ -4122,16 +4130,8 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     //     res = magicnet_client_write_packet_events_res(client, packet);
     //     break;
 
-    // case MAGICNET_PACKET_TYPE_USER_DEFINED:
-    //     res = magicnet_client_write_packet_user_defined(client, packet);
-    //     break;
-
     // case MAGICNET_PACKET_TYPE_NOT_FOUND:
     //     res = magicnet_client_write_packet_not_found(client, packet);
-    //     break;
-
-    // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
-    //     res = magicnet_client_write_packet_verifier_signup(client, packet);
     //     break;
 
     // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
@@ -4488,7 +4488,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_tcp_network_co
     return sclient;
 }
 
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_again_outgoing(struct magicnet_client *client, const char *program_name)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_connect_again_outgoing(struct magicnet_client *client, const char *program_name)
 {
     const char *client_ip = inet_ntoa(client->client_info.sin_addr);
     char client_ip_buf[MAGICNET_MAX_IP_STRING_SIZE];
@@ -4501,13 +4501,13 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_again_ou
 
 // copilot write a function that sums to numbers
 
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_again_incoming(struct magicnet_client *client, const char *program_name)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_connect_again_incoming(struct magicnet_client *client, const char *program_name)
 {
     // Connecting again to this client will be complicated in this respect because they are connected to us
     // their firewall likely wont allow us to connect to them since we accepted their initial connection
     // therefore we must send them a command to connect to us again then intercept the connection
     int res = 0;
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)  *sclient_out = NULL;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient_out = NULL;
     struct magicnet_signal *signal = magicnet_signal_find_free("connect-again-signal");
     if (!signal)
     {
@@ -4544,7 +4544,7 @@ out:
  * If the client is an incoming connection then we will send a packet to the client asking them to connect to us again
  * If the client is an outgoing connection then we will attempt to connect to the client again
  */
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_again(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *sclient, const char *program_name)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_connect_again(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient, const char *program_name)
 {
     struct magicnet_client *client = magicnet_client_shared_hold(sclient);
     if (!client)
@@ -4558,7 +4558,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_again(MA
         return NULL;
     }
 
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *cloned_sclient = NULL;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *cloned_sclient = NULL;
     int conn_type = magicnet_client_connection_type(client);
     if (conn_type == MAGICNET_CONNECTION_TYPE_OUTGOING)
     {
@@ -4577,10 +4577,10 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_connect_again(MA
     return cloned_sclient;
 }
 
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* magicnet_connect_for_key(struct magicnet_server *server, struct key *key, const char *program_name)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_connect_for_key(struct magicnet_server *server, struct key *key, const char *program_name)
 {
     // Let's see if we can find someone whose already connected with us with that client key.
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* key_sclient = magicnet_server_get_client_with_key(server, key);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *key_sclient = magicnet_server_get_client_with_key(server, key);
     if (!key_sclient)
     {
         magicnet_log("%s though someone responded with a key we aren't connected to them. TODO in the future: Make it search the database for potential IP address for this peer key\n", __FUNCTION__);
@@ -4588,7 +4588,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* magicnet_connect_for_key(
     }
 
     // Client already connected? Then lets connect to them again
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* sclient =  magicnet_connect_again(key_sclient, program_name);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = magicnet_connect_again(key_sclient, program_name);
     // key_sclient is returned held from magicnet_server_get_client_with_key()
     magicnet_client_shared_release(key_sclient);
     return sclient;
@@ -4768,7 +4768,6 @@ void magicnet_copy_packet(struct magicnet_packet *packet_out, struct magicnet_pa
         }
     }
 out:
-
 }
 
 struct magicnet_packet *magicnet_client_next_packet_to_relay(struct magicnet_client *client)
@@ -4890,7 +4889,7 @@ int magicnet_server_add_packet_to_relay(struct magicnet_server *server, struct m
 int magicnet_server_relay_packet_to_client_key(struct magicnet_server *server, struct key *key, struct magicnet_packet *packet)
 {
     int res = 0;
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *sclient = magicnet_server_get_client_with_key(server, key);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = magicnet_server_get_client_with_key(server, key);
     if (!sclient)
     {
         return -1;
@@ -4909,7 +4908,7 @@ int magicnet_server_relay_packet_to_client_key(struct magicnet_server *server, s
     return res;
 }
 
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_server_get_client_with_key_for_client_vec(struct vector *sclients_vec, struct key *key)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_server_get_client_with_key_for_client_vec(struct vector *sclients_vec, struct key *key)
 {
     vector_set_peek_pointer(sclients_vec, 0);
     MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclients_vec);
@@ -4924,7 +4923,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_server_get_clien
 
         if (magicnet_client_in_use(client) && key_cmp(&client->peer_info.key, key))
         {
-            // we will return only the shared instance only, caller must release it 
+            // we will return only the shared instance only, caller must release it
             return sclient;
         }
         magicnet_client_shared_release(sclient);
@@ -4934,16 +4933,15 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *magicnet_server_get_clien
     return NULL;
 }
 
-MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) * magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key)
+MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_server_get_client_with_key(struct magicnet_server *server, struct key *key)
 {
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) *sclient = magicnet_server_get_client_with_key_for_client_vec(server->clients, key);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = magicnet_server_get_client_with_key_for_client_vec(server->clients, key);
     if (sclient)
     {
         return sclient;
     }
     return magicnet_server_get_client_with_key_for_client_vec(server->outgoing_clients, key);
 }
-// just booting the virtual machine sec..
 
 // int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
 // {
@@ -5820,7 +5818,7 @@ int magicnet_server_get_all_connected_clients(struct magicnet_server *server, st
     res = magicnet_server_push_client_info_to_peer_exchange_vector(server->clients, vector_out);
     if (res < 0)
     {
-       return res;
+        return res;
     }
 
     res = magicnet_server_push_client_info_to_peer_exchange_vector(server->outgoing_clients, vector_out);
@@ -6908,7 +6906,7 @@ int magicnet_client_push(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) 
     return res;
 }
 
-static int magicnet_server_begin_polling_shared_client(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient)
+static int magicnet_server_begin_polling_shared_client(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient)
 {
     int res = 0;
     struct magicnet_client *client = NULL;
@@ -7296,9 +7294,9 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
         res = magicnet_server_poll_process_user_defined_packet(client, packet);
         break;
 
-        // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
-        //     res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
-        //     break;
+        case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
+            res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
+            break;
 
         // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
         //     res = magicnet_server_process_vote_for_verifier_packet(client, packet);
@@ -7568,17 +7566,16 @@ bool magicnet_server_is_outgoing_connection_connected(struct magicnet_server *se
     return false;
 }
 
-
 /**
  * In future have a single vector that has the connected ips, will save processing power.
- * 
+ *
  * screw it lets do it now..
  */
 bool magicnet_server_is_ip_connected(struct magicnet_server *server, const char *ip_address)
 {
     vector_set_peek_pointer(server->connected_ips, 0);
-    const char* ip_addr = vector_peek_ptr(server->connected_ips);
-    while(ip_addr)
+    const char *ip_addr = vector_peek_ptr(server->connected_ips);
+    while (ip_addr)
     {
         if (strncmp(ip_addr, ip_address, MAGICNET_MAX_IP_STRING_SIZE) == 0)
         {
