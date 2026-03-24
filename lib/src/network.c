@@ -2998,6 +2998,14 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         }
         break;
 
+    case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+        res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
+        if (res < 0)
+        {
+            magicnet_log("%s read verifier packet failed\n", __FUNCTION__);
+        }
+        break;
+
     default:
         magicnet_log("%s unimplemented packet type=%x\n", __FUNCTION__, magicnet_signed_data(packet_out)->type);
     }
@@ -3051,21 +3059,8 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
     //     }
     //     break;
 
-    // case MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP:
-    //     res = magicnet_client_read_verifier_signup_packet(client, packet_out);
-    //     if (res < 0)
-    //     {
-    //         magicnet_log("%s read signup packet failed\n", __FUNCTION__);
-    //     }
-    //     break;
 
-    // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
-    //     res = magicnet_client_read_vote_for_verifier_packet(client, packet_out);
-    //     if (res < 0)
-    //     {
-    //         magicnet_log("%s read verifier packet failed\n", __FUNCTION__);
-    //     }
-    //     break;
+
 
     // case MAGICNET_PACKET_TYPE_TRANSACTION_SEND:
     //     res = magicnet_client_read_tansaction_send_packet(client, packet_out);
@@ -4096,6 +4091,10 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         res = magicnet_client_write_packet_verifier_signup(client, packet);
         break;
 
+        case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+        res = magicnet_client_write_packet_vote_for_verifier(client, packet);
+        break;
+
     default:
         magicnet_log("%s sending unimplemented packet type=%i", __FUNCTION__, magicnet_signed_data(packet)->type);
     }
@@ -4134,9 +4133,7 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
     //     res = magicnet_client_write_packet_not_found(client, packet);
     //     break;
 
-    // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
-    //     res = magicnet_client_write_packet_vote_for_verifier(client, packet);
-    //     break;
+
     // case MAGICNET_PACKET_TYPE_SERVER_SYNC:
     //     res = magicnet_client_write_packet_server_poll(client, packet);
     //     break;
@@ -6307,6 +6304,8 @@ out:
     return res;
 }
 
+
+// TESTED WITH REMOTE SERVER IMPLEMENTATION WORKS...
 int magicnet_server_poll_process_verifier_signup_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -7298,9 +7297,9 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
             res = magicnet_server_poll_process_verifier_signup_packet(client, packet);
             break;
 
-        // case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
-        //     res = magicnet_server_process_vote_for_verifier_packet(client, packet);
-        //     break;
+        case MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER:
+            res = magicnet_server_process_vote_for_verifier_packet(client, packet);
+            break;
 
         // case MAGICNET_PACKET_TYPE_BLOCK_SEND:
         //     res = magicnet_server_process_block_send_packet(client, packet);
