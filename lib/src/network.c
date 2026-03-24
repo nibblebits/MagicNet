@@ -688,6 +688,15 @@ size_t magicnet_server_outgoing_clients_count(struct magicnet_server *server)
     return vector_count(server->outgoing_clients);
 }
 
+size_t magicnet_server_all_clients_count(struct magicnet_server* server)
+{
+    // all_clients is joined with clients, outgoing_clients anyc hanges
+    // to either vectors shall affect the read only aspect of all clients.
+    return vector_group_elements_count(server->all_clients);
+}
+
+
+
 /**
  * The new implementation uses vectors rather than fixed size arrays
  * they are still limited in size, I've kept this function incase in the future
@@ -4934,6 +4943,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) * magicnet_server_get_clie
     }
     return magicnet_server_get_client_with_key_for_client_vec(server->outgoing_clients, key);
 }
+// just booting the virtual machine sec..
 
 // int magicnet_client_process_packet_poll_packets(struct magicnet_client *client, struct magicnet_packet *packet)
 // {
@@ -6200,7 +6210,8 @@ int magicnet_ping(struct magicnet_client *client)
         goto out;
     }
 
-    res = magicnet_client_write_packet(client, packet, MAGICNET_PACKET_FLAG_MUST_BE_SIGNED);
+    // We never expect signging on a ping packet as local clients can ping too.
+    res = magicnet_client_write_packet(client, packet, 0);
 out:
     return res;
 }

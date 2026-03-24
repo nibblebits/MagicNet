@@ -1413,6 +1413,7 @@ struct signed_data *magicnet_signed_data(struct magicnet_packet *packet);
 int magicnet_network_thread_start(struct magicnet_server *server);
 struct magicnet_server *magicnet_server_start();
 MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_accept(struct magicnet_server *server);
+size_t magicnet_server_all_clients_count(struct magicnet_server* server);
 
 int magicnet_client_thread_start(struct magicnet_client *client);
 int magicnet_client_preform_entry_protocol_write(struct magicnet_client *client, const char *program_name, int communication_flags, int signal_id);
