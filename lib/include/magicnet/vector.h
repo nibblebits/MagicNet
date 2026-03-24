@@ -72,6 +72,12 @@ int vector_group_vector_remove(struct vector_group* vector_group, struct vector*
 struct vector_group* vector_group_new(size_t e_size);
 
 /**
+ * Returns the total number of elements in all vectors that belong to this group
+ * summed together 
+ */
+size_t vector_group_elements_count(struct vector_group* group_vec);
+
+/**
  * Sets the peek pointer
  * \param index The index if we assumed all vectors are a continuous group
  */

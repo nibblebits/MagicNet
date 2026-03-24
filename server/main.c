@@ -164,6 +164,11 @@ int main(int argc, char **argv)
     vector_group_vector_add(vec_group, ivec_test);
     vector_group_vector_add(vec_group, ivec_test2);
 
+    printf("%s total_elems_test=%i\n", __FUNCTION__, vector_group_elements_count(vec_group));
+    // Let's pop one result
+    vector_pop(ivec_test);
+    printf("%s total_elems_new_test=%i\n", __FUNCTION__, vector_group_elements_count(vec_group));
+
     vector_group_set_peek_pointer(vec_group, 0);
 
     int total_test = 3;

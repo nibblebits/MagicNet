@@ -509,6 +509,21 @@ bool vector_exists(struct vector *vector, void *data)
     return false;
 }
 
+size_t vector_group_elements_count(struct vector_group* group_vec)
+{
+    size_t t_elems = 0;
+    for (size_t i = 0; i < group_vec->vectors->count; i++)
+    {
+        struct vector* subvector = vector_at_ptr(group_vec->vectors, i);
+        if (subvector)
+        {
+            t_elems += vector_count(subvector);
+        }
+    }
+
+    return t_elems;
+}
+
 struct vector_group *vector_group_new(size_t e_size)
 {
     int res = 0;
