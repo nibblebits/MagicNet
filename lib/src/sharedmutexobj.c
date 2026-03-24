@@ -29,6 +29,10 @@ int magicnet_shared_mutex_obj_fill_hold(struct magicnet_shared_mutex_obj *obj, v
     obj->mutex = calloc(1, sizeof(pthread_mutex_t));
     if (!obj->mutex)
     {
+        obj->flags = MAGICNET_SHARED_MUTEX_OBJ_FLAG_STALE;
+        obj->owner_refcount = 0;
+        obj->functions.free_data = NULL;
+        obj->data = NULL;
         res = -1;
         goto out;
     }
@@ -97,6 +101,10 @@ out:
             free(obj);
             obj = NULL;
         }
+        else
+        {
+            obj = NULL;
+        }
     }
     return obj;
 }
@@ -129,6 +137,10 @@ bool _magicnet_shared_mutex_obj_is_stale(struct magicnet_shared_mutex_obj *mutex
 bool magicnet_shared_mutex_obj_is_stale(struct magicnet_shared_mutex_obj *mutex_obj)
 {
     bool stale = false;
+    if (!mutex_obj)
+    {
+        return true;
+    }
     pthread_mutex_lock(mutex_obj->refcount_mutex);
     stale = _magicnet_shared_mutex_obj_is_stale(mutex_obj);
     pthread_mutex_unlock(mutex_obj->refcount_mutex);
@@ -162,6 +174,7 @@ void magicnet_shared_mutex_obj_owner_release(struct magicnet_shared_mutex_obj *m
     if (mutex_obj->owner_refcount < 0)
     {
         magicnet_bug("%s releasing a owner that was never held\n", __FUNCTION__);
+        pthread_mutex_unlock(mutex_obj->refcount_mutex);
         return;
     }
 
@@ -216,6 +229,7 @@ void magicnet_shared_mutex_obj_viewer_hold(struct magicnet_shared_mutex_obj *mut
     if (!mutex_obj)
     {
         magicnet_bug("%s null object provided\n", __FUNCTION__);
+        return;
     }
     pthread_mutex_lock(mutex_obj->refcount_mutex);
     mutex_obj->viewer_refcount++;
@@ -230,6 +244,7 @@ void magicnet_shared_mutex_obj_viewer_release(struct magicnet_shared_mutex_obj *
     if (!mutex_obj)
     {
         magicnet_bug("%s null object provided\n", __FUNCTION__);
+        return;
     }
     bool unlock_mutex = true;
     pthread_mutex_lock(mutex_obj->refcount_mutex);
@@ -238,6 +253,7 @@ void magicnet_shared_mutex_obj_viewer_release(struct magicnet_shared_mutex_obj *
     if (mutex_obj->viewer_refcount < 0)
     {
         magicnet_bug("%s releasing a viewer that never held\n", __FUNCTION__);
+        pthread_mutex_unlock(mutex_obj->refcount_mutex);
         return;
     }
 
@@ -251,6 +267,7 @@ void magicnet_shared_mutex_obj_viewer_release(struct magicnet_shared_mutex_obj *
             if (mutex_obj->data)
             {
                 magicnet_bug("%s owner_refcount == 0 yet the data still exists it should've been deleted in the owner release\n", __FUNCTION__);
+                pthread_mutex_unlock(mutex_obj->refcount_mutex);
                 return;
             }
             // no owners means the memory for the mutex data was already cleaned up

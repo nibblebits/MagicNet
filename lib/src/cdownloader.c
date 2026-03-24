@@ -481,6 +481,7 @@ out:
         magicnet_server_lock(downloader->server);
         magicnet_client_close(new_client);
         magicnet_server_unlock(downloader->server);
+        magicnet_client_release(new_client);
         magicnet_client_shared_release(new_sclient);
     }
 

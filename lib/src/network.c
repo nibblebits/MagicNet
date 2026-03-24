@@ -350,11 +350,54 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_client_new()
     client_shared = magicnet_shared_mutex_obj_create_hold_as_owner(client, magicnet_client_free, NULL);
     if (!client_shared)
     {
+        free(client);
         return NULL;
     }
 
     magicnet_init_client(client_shared, NULL, 0, NULL);
     return client_shared;
+}
+
+static MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *magicnet_server_client_vec_find_stale_slot(struct vector *sclients_vec)
+{
+    vector_set_peek_pointer(sclients_vec, 0);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclients_vec);
+    while (sclient)
+    {
+        if (magicnet_shared_mutex_obj_is_stale(sclient))
+        {
+            return sclient;
+        }
+
+        sclient = vector_peek_ptr(sclients_vec);
+    }
+
+    return NULL;
+}
+
+static void magicnet_server_client_vec_add(struct vector *sclients_vec, MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient)
+{
+    magicnet_client_shared_viewer_hold(sclient);
+    vector_push(sclients_vec, &sclient);
+}
+
+static void magicnet_server_client_vec_release_all(struct vector *sclients_vec)
+{
+    if (!sclients_vec)
+    {
+        return;
+    }
+
+    vector_set_peek_pointer(sclients_vec, 0);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = vector_peek_ptr(sclients_vec);
+    while (sclient)
+    {
+        vector_pop_last_peek(sclients_vec);
+        magicnet_client_shared_viewer_release(sclient);
+        sclient = vector_peek_ptr(sclients_vec);
+    }
+
+    vector_free(sclients_vec);
 }
 
 void magicnet_server_free(struct magicnet_server *server)
@@ -381,6 +424,9 @@ void magicnet_server_free(struct magicnet_server *server)
     vector_free(server->next_block.verifier_votes.vote_counts);
     vector_free(server->next_block.verifier_votes.votes);
     vector_free(server->thread_ids);
+    magicnet_server_client_vec_release_all(server->clients);
+    magicnet_server_client_vec_release_all(server->outgoing_clients);
+    vector_free(server->connected_ips);
     pthread_rwlock_destroy(&server->lock);
     free(server);
 }
@@ -647,18 +693,37 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_find_free_clie
 {
     MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = NULL;
     struct magicnet_client *client = NULL;
-    if (magicnet_server_clients_count(server) > MAGICNET_MAX_INCOMING_CONNECTIONS)
+    sclient = magicnet_server_client_vec_find_stale_slot(server->clients);
+    if (!sclient && vector_count(server->clients) >= MAGICNET_MAX_INCOMING_CONNECTIONS)
     {
         return NULL;
     }
+
     client = calloc(1, sizeof(struct magicnet_client));
     if (!client)
     {
         return NULL;
     }
 
+    if (sclient)
+    {
+        if (magicnet_shared_mutex_obj_fill_hold(sclient, client, magicnet_client_free) < 0)
+        {
+            free(client);
+            return NULL;
+        }
+
+        return sclient;
+    }
+
     sclient = magicnet_shared_mutex_obj_create_hold_as_owner(client, magicnet_client_free, NULL);
-    vector_push(server->clients, &sclient);
+    if (!sclient)
+    {
+        free(client);
+        return NULL;
+    }
+
+    magicnet_server_client_vec_add(server->clients, sclient);
     return sclient;
 }
 
@@ -666,18 +731,37 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_find_free_outg
 {
     MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = NULL;
     struct magicnet_client *client = NULL;
-    if (magicnet_server_clients_count(server) > MAGICNET_MAX_OUTGOING_CONNECTIONS)
+    sclient = magicnet_server_client_vec_find_stale_slot(server->outgoing_clients);
+    if (!sclient && vector_count(server->outgoing_clients) >= MAGICNET_MAX_OUTGOING_CONNECTIONS)
     {
         return NULL;
     }
+
     client = calloc(1, sizeof(struct magicnet_client));
     if (!client)
     {
         return NULL;
     }
 
+    if (sclient)
+    {
+        if (magicnet_shared_mutex_obj_fill_hold(sclient, client, magicnet_client_free) < 0)
+        {
+            free(client);
+            return NULL;
+        }
+
+        return sclient;
+    }
+
     sclient = magicnet_shared_mutex_obj_create_hold_as_owner(client, magicnet_client_free, NULL);
-    vector_push(server->outgoing_clients, &sclient);
+    if (!sclient)
+    {
+        free(client);
+        return NULL;
+    }
+
+    magicnet_server_client_vec_add(server->outgoing_clients, sclient);
     return sclient;
 }
 
@@ -6782,6 +6866,7 @@ int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
 int magicnet_client_push(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * client_shared)
 {
     int res = 0;
+    struct magicnet_nthread_action *thread_action = NULL;
     // We will hold the client memory, but it needs to be released later on when the thread ends
     // released in: magicnet_client_thread_poll .. hack maybe not sure yet
     // we shall see.
@@ -6790,11 +6875,49 @@ int magicnet_client_push(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) 
 
     // RELEASE IS DONE IN THE THREAD ITS SELF UPON COMPLETION!
     magicnet_shared_mutex_obj_owner_hold(client_shared);
-    struct magicnet_nthread_action *thread_action = magicnet_threads_action_new(magicnet_client_thread_poll, client_shared, NULL);
+    thread_action = magicnet_threads_action_new(magicnet_client_thread_poll, client_shared, NULL);
+    if (!thread_action)
+    {
+        magicnet_shared_mutex_obj_owner_release(client_shared);
+        return -1;
+    }
+
     res = magicnet_threads_push_action(thread_action);
+    if (res < 0)
+    {
+        magicnet_shared_mutex_obj_owner_release(client_shared);
+        free(thread_action);
+    }
 
     return res;
 }
+
+static int magicnet_server_begin_polling_shared_client(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient)
+{
+    int res = 0;
+    struct magicnet_client *client = NULL;
+
+    if (!sclient)
+    {
+        return -1;
+    }
+
+    res = magicnet_client_push(sclient);
+    if (res < 0)
+    {
+        client = magicnet_client_shared_hold(sclient);
+        if (client)
+        {
+            magicnet_client_close(client);
+            magicnet_client_shared_release(sclient);
+        }
+    }
+
+    // Release the owner ref returned by the connect/accept path.
+    magicnet_client_shared_release(sclient);
+    return res;
+}
+
 int magicnet_server_process_make_new_connection_packet(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -6811,7 +6934,7 @@ int magicnet_server_process_make_new_connection_packet(struct magicnet_client *c
     if (new_client)
     {
         // Push the new client to the thread pool for regular polling.
-        magicnet_client_push(new_client);
+        res = magicnet_server_begin_polling_shared_client(new_client);
     }
 
     magicnet_log("%s new server thread is running that will handle this new connection\n", __FUNCTION__);
@@ -7542,7 +7665,7 @@ void magicnet_server_attempt_new_connections(struct magicnet_server *server)
     MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *client = magicnet_tcp_network_connect_for_ip_for_server(server, ip, MAGICNET_SERVER_PORT, MAGICNET_LISTEN_ALL_PROGRAM, 0, 0);
     if (client)
     {
-        magicnet_client_push(client);
+        magicnet_server_begin_polling_shared_client(client);
     }
 
 out:

@@ -263,10 +263,12 @@ void magicnet_reconnect(struct magicnet_program *program)
     struct magicnet_client* client_old = magicnet_client_shared_hold(program->client);
     if (!client_old)
     {
+        magicnet_client_shared_release(sclient_new);
         return;
     }
     // Kill the old client..
     magicnet_client_close(client_old);
+    magicnet_client_shared_release(program->client);
     magicnet_client_shared_release(program->client);
     program->client = sclient_new;
 }
@@ -734,10 +736,12 @@ void magicnet_program_free(struct magicnet_program *program)
     if (program->client)
     {
         struct magicnet_client* client = magicnet_client_shared_hold(program->client);
-        if (!client)
-            return;
+        if (client)
+        {
+            magicnet_client_close(client);
+            magicnet_client_shared_release(program->client);
+        }
 
-        magicnet_client_close(client);
         magicnet_client_shared_release(program->client);
     }
     free(program);

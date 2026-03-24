@@ -102,12 +102,12 @@ void vector_resize(struct vector *vector)
     vector_resize_for(vector, 0);
 }
 
+/**
+ * We do not check for overflow because some functions
+ * use it to predict future addressing.
+ */
 void *vector_at(struct vector *vector, int index)
 {
-    // Lets ensure we dont overflow here
-    if (index >= vector_count(vector))
-        return NULL;
-
     return vector->data + (index * vector->esize);
 }
 
