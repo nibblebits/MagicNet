@@ -314,6 +314,11 @@ int magicnet_chain_downloader_queue_for_block_download(const char *block_hash)
 }
 
 
+/**
+ * Warning: We are not a blocking protocol anymore this implementation
+ * is officially broken and needs refactoring, because it sends a packet
+ * and expects an immediate response..
+ */
 int magicnet_chain_downloader_thread_ask_for_blocks(struct magicnet_chain_downloader *downloader)
 {
     int res = 0;

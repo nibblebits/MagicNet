@@ -99,6 +99,10 @@ enum
     MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE,
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
+
+    /**
+     * \deprecated  Marked for deprecation, server sync may not be required anymore because its a state-less protocol now
+     */
     MAGICNET_PACKET_TYPE_SERVER_SYNC = 200,
     MAGICNET_PACKET_TYPE_VERIFIER_SIGNUP,
     MAGICNET_PACKET_TYPE_VOTE_FOR_VERIFIER,
