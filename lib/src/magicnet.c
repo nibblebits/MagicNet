@@ -131,17 +131,21 @@ void magicnet_events_res_packet_free(struct magicnet_packet *packet)
 
 void magicnet_reqres_req_packet_free(struct magicnet_packet *packet)
 {
-    if (magicnet_signed_data(packet)->payload.request_and_respond.input_data)
+    if (magicnet_signed_data(packet)->payload.request.input_data)
     {
-        magicnet_reqres_input_data_free(magicnet_signed_data(packet)->payload.request_and_respond.input_data);
+        magicnet_reqres_input_data_free(magicnet_signed_data(packet)->payload.request.input_data);
     }
 }
 
 void magicnet_reqres_res_packet_free(struct magicnet_packet *packet)
 {
-    if (magicnet_signed_data(packet)->payload.request_and_respond_response.output_data)
+    if (magicnet_signed_data(packet)->payload.request_response.input_data)
     {
-        magicnet_reqres_output_data_free(magicnet_signed_data(packet)->payload.request_and_respond_response.output_data);
+        magicnet_reqres_input_data_free(magicnet_signed_data(packet)->payload.request_response.input_data);
+    }
+    if (magicnet_signed_data(packet)->payload.request_response.output_data)
+    {
+        magicnet_reqres_output_data_free(magicnet_signed_data(packet)->payload.request_response.output_data);
     }
 }
 
@@ -209,11 +213,11 @@ void magicnet_free_packet_pointers(struct magicnet_packet *packet)
         magicnet_events_res_packet_free(packet);
         break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND:
+    case MAGICNET_PACKET_TYPE_REQUEST:
         magicnet_reqres_req_packet_free(packet);
         break;
 
-    case MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE:
+    case MAGICNET_PACKET_TYPE_REQUEST_RESPONSE:
         magicnet_reqres_res_packet_free(packet);
         break;
 
@@ -254,13 +258,13 @@ struct magicnet_program *magicnet_get_program(const char *name)
 
 void magicnet_reconnect(struct magicnet_program *program)
 {
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*) * sclient_new = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, 0, program->name);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient_new = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, 0, program->name);
     if (!sclient_new)
     {
         return;
     }
 
-    struct magicnet_client* client_old = magicnet_client_shared_hold(program->client);
+    struct magicnet_client *client_old = magicnet_client_shared_hold(program->client);
     if (!client_old)
     {
         magicnet_client_shared_release(sclient_new);
@@ -281,14 +285,13 @@ int _magicnet_send_packet(struct magicnet_program *program, int packet_type, voi
     {
         return -1;
     }
-    
+
     // We must protect the client
-    struct magicnet_client* client = magicnet_client_shared_hold(program->client);
+    struct magicnet_client *client = magicnet_client_shared_hold(program->client);
     if (!client)
     {
         goto out;
     }
-
 
     // Use a secure random... temporary..
     magicnet_packet.signed_data.id = rand() % 999999999;
@@ -327,7 +330,7 @@ int _magicnet_make_transaction(struct magicnet_program *program, int type, void 
     int res = 0;
     struct magicnet_packet *packet = magicnet_packet_new();
     struct block_transaction *transaction = block_transaction_build(program->name, data, size);
-    struct magicnet_client* client = magicnet_client_shared_hold(program->client);
+    struct magicnet_client *client = magicnet_client_shared_hold(program->client);
     transaction->type = type;
     magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_TRANSACTION_SEND;
     magicnet_signed_data(packet)->payload.transaction_send.transaction = transaction;
@@ -445,13 +448,13 @@ out:
 int magicnet_council_request_certificate(struct magicnet_program *program, const char *council_certificate_hash, struct magicnet_council_certificate **certificate_out)
 {
     int res = 0;
-    struct request_and_respond_input_data *input_data = magicnet_reqres_input_data_create((void *)council_certificate_hash, strlen(council_certificate_hash));
-    struct request_and_respond_output_data *output_data = NULL;
+    struct magicnet_request_input_data *input_data = magicnet_reqres_input_data_create((void *)council_certificate_hash, strlen(council_certificate_hash));
+    struct magicnet_request_response_output_data *output_data = NULL;
     struct magicnet_council_certificate *certificate = NULL;
     struct buffer *buffer = NULL;
     *certificate_out = NULL;
-    struct magicnet_client* client = magicnet_client_shared_hold(program->client);
-    res = magicnet_reqres_request(client, MAGICNET_REQRES_HANDLER_GET_COUNCIL_CERTIFICATE, input_data, &output_data);
+    struct magicnet_client *client = magicnet_client_shared_hold(program->client);
+    res = magicnet_reqres_request_obj(client, MAGICNET_REQRES_HANDLER_GET_COUNCIL_CERTIFICATE, input_data, &output_data);
     if (res < 0)
     {
         goto out;
@@ -652,7 +655,7 @@ out:
 int magicnet_send_packet(struct magicnet_program *program, int packet_type, void *packet)
 {
     int res = 0;
-    
+
     magicnet_client_shared_lock(program->client);
     res = _magicnet_send_packet(program, packet_type, packet, true);
     magicnet_client_shared_unlock(program->client);
@@ -667,7 +670,7 @@ int _magicnet_next_packet(struct magicnet_program *program, void **packet_out)
     void *payload_clone = NULL;
 
     // Hold it to protect the memory!
-    struct magicnet_client* client = magicnet_client_shared_hold(program->client);
+    struct magicnet_client *client = magicnet_client_shared_hold(program->client);
     // We must locate the USER DEFINED PACKET from the monitoring queue
     struct magicnet_packet *packet = magicnet_client_packet_monitoring_packet_queue_find_pop(client, MAGICNET_PACKET_TYPE_USER_DEFINED);
     if (!packet)
@@ -735,7 +738,7 @@ void magicnet_program_free(struct magicnet_program *program)
 {
     if (program->client)
     {
-        struct magicnet_client* client = magicnet_client_shared_hold(program->client);
+        struct magicnet_client *client = magicnet_client_shared_hold(program->client);
         if (client)
         {
             magicnet_client_close(client);
@@ -759,20 +762,55 @@ int magicnet_program_client_thread_poll_process_packet(struct magicnet_client *c
         goto out;
     }
 
+    switch(magicnet_signed_data(packet)->type)
+    {
+        case MAGICNET_PACKET_TYPE_REQUEST_RESPONSE:
+        magicnet_client_process_request_response(client, packet);
+        break;
+    }
+
+
+    // You might wonder where we handle the USER DEFINED PACKET
+    // its handled instead with packet monitoring,  seek magicnet_default_poll_packet_process
     magicnet_log("%s processing read packet\n", __FUNCTION__);
 
 out:
     return res;
 }
 
+int magicnet_program_client_resreq_process(struct magicnet_client *client)
+{
+    int res = 0;
+    magicnet_reqres_lock(client->reqres);
+    int total = magicnet_reqres_response_count(client->reqres);
+    if (total > 0)
+    {
+        // Lets pop off the response and deal with it
+        // one at a time no while loop./
+        struct magicnet_reqres_response *response = NULL;
+        res = magicnet_reqres_response_pop(client->reqres, &response);
+        if (res >= 0 && response)
+        {
+            // Ok activate the signal deal with it..
+            // this will allow the main thread to unpause..
+            if (magicnet_signal_desc_valid(&response->signal_desc))
+            {
+                res = magicnet_signal_post_for_signal_desc(&response->signal_desc, response, sizeof(*response), 0);
+            }
+        }
+    }
+    magicnet_reqres_unlock(client->reqres);
+
+    return res;
+}
 int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
 {
     int res = 0;
 
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* sclient = (MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)*)action->private;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = (MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *)action->private;
 
     // likely not neccessary but makes more cleaner sense..
-    struct magicnet_client* client = magicnet_client_shared_hold(sclient);
+    struct magicnet_client *client = magicnet_client_shared_hold(sclient);
     if (!client)
     {
         res = -1;
@@ -780,6 +818,9 @@ int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
     }
 
     res = magicnet_client_poll(client, magicnet_program_client_thread_poll_process_packet);
+    // Lets check if we have any reqres responses to deal with for this program
+    res = magicnet_program_client_resreq_process(client);
+
     magicnet_client_shared_release(sclient);
 
     // If theres an error we shall release one reference, this is the reference
@@ -798,11 +839,9 @@ void magicnet_program_client_thread_poll_free(struct magicnet_nthread_action *ac
     // by the network
 }
 
-void magicnet_program_release(struct magicnet_program* program)
+void magicnet_program_release(struct magicnet_program *program)
 {
     magicnet_client_shared_release(program->client);
-
-    
 }
 struct magicnet_program *magicnet_program(const char *name)
 {
@@ -826,7 +865,7 @@ struct magicnet_program *magicnet_program(const char *name)
         goto out;
     }
 
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* sclient = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, 0, name);
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = magicnet_tcp_network_connect_for_ip(MAGICNET_LOCAL_SERVER_ADDRESS, MAGICNET_SERVER_PORT, 0, name);
     if (!sclient)
     {
         res = -1;
@@ -836,8 +875,8 @@ struct magicnet_program *magicnet_program(const char *name)
     // Associate the program with the client.
     program->client = sclient;
 
-     // SO long the program is open we hold a reference
-    struct magicnet_client* lclient = magicnet_client_shared_hold(sclient);
+    // SO long the program is open we hold a reference
+    struct magicnet_client *lclient = magicnet_client_shared_hold(sclient);
     if (!lclient)
     {
         res = -1;
@@ -859,9 +898,7 @@ struct magicnet_program *magicnet_program(const char *name)
         goto out;
     }
 
-  
-
-    // We shall hold one reference to the shared pointer which the magicnet_program_client_thread_poll shall 
+    // We shall hold one reference to the shared pointer which the magicnet_program_client_thread_poll shall
     // release upon an error or leaving.
     // REMEMBER THE REFERNECE WILL BE RELEASED IN THE THREAD WE JUST ARE ABOUT TO START
     // WHEN WE PUSH THE ACTION.
@@ -949,7 +986,7 @@ struct magicnet_transactions *magicnet_transactions_request(struct magicnet_prog
     magicnet_signed_data(packet)->payload.transaction_list_request.req = *request_data;
 
     // Send packet
-    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* sclient = program->client;
+    MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *sclient = program->client;
     struct magicnet_client *client = magicnet_client_shared_hold(sclient);
     res = magicnet_client_write_packet(client, packet, 0);
     if (res < 0)

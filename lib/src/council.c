@@ -686,10 +686,10 @@ out:
 /**
  * Gets a council certificate and writes it into the output
  */
-int magicnet_council_reqres_handler(struct request_and_respond_input_data *input_data, struct request_and_respond_output_data **output_data_out)
+int magicnet_council_reqres_handler(struct magicnet_request_input_data *input_data, struct magicnet_request_response_output_data **output_data_out)
 {
     int res = 0;
-    struct request_and_respond_output_data *output_data = NULL;
+    struct magicnet_request_response_output_data *output_data = NULL;
     struct buffer *buffer_out = buffer_create();
     if (!buffer_out)
     {

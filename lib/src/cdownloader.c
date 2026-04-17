@@ -11,7 +11,7 @@
 #include <time.h>
 #include <assert.h>
 #include <errno.h>
-#include <signal.h>
+#include <signaling.h>
 #include "database.h"
 #include "signaling.h"
 

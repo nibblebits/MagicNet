@@ -286,6 +286,17 @@ out:
         }
     }
     return res;
+
+}
+
+bool magicnet_signal_desc_valid(struct magicnet_signal_desc* signal_desc)
+{
+    return signal_desc->signal_type[0] != 0x00;
+}
+
+int magicnet_signal_post_for_signal_desc(struct magicnet_signal_desc* signal_desc, void* data, size_t size, int flags)
+{
+    return magicnet_signal_post_for_signal(signal_desc->id, signal_desc->signal_type, data, size, flags);
 }
 
 void magicnet_signal_release(struct magicnet_signal *signal)

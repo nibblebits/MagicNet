@@ -262,6 +262,7 @@ int main(int argc, char **argv)
         if (client)
         {
             magicnet_client_push(client);
+            magicnet_client_resreq_begin_polling(client);
            
         }
 

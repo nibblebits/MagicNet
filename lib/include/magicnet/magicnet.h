@@ -15,8 +15,13 @@
 #include "key.h"
 #include "buffer.h"
 #include "vector.h"
+#include "reqres.h"
+
+// 65k for now, work the real value out later..
+#define MAGICNET_MAX_LOGIN_PROTOCOL_ENTRY_BYTES 65000
 
 struct magicnet_packet;
+struct magicnet_reqres;
 struct magicnet_client;
 typedef int (*PROCESS_PACKET_FUNCTION)(struct magicnet_client *client, struct magicnet_packet *packet);
 
@@ -81,7 +86,6 @@ struct magicnet_program
 
 enum
 {
-#warning "NOTE TO SELF THERES MEMORY CORRUPTION ON PACKET SEND. pROVEN AS empty packet is now 7000 yet packet type still zero"
     MAGICNET_PACKET_TYPE_EMPTY_PACKET = 7000,
     MAGICNET_PACKET_TYPE_LOGIN_PROTOCOL_IDENTIFICATION_PACKET,
 
@@ -95,8 +99,8 @@ enum
     MAGICNET_PACKET_TYPE_POLL_PACKETS,
 
     // Request some data and expect a response.
-    MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND,
-    MAGICNET_PACKET_TYPE_REQUEST_AND_RESPOND_RESPONSE,
+    MAGICNET_PACKET_TYPE_REQUEST,
+    MAGICNET_PACKET_TYPE_REQUEST_RESPONSE,
     MAGICNET_PACKET_TYPE_PING,
     MAGICNET_PACKET_TYPE_PONG,
 
@@ -256,17 +260,7 @@ struct magicnet_transactions_request
     int page;
 };
 
-struct request_and_respond_input_data
-{
-    void *input;
-    size_t size;
-};
 
-struct request_and_respond_output_data
-{
-    void *output;
-    size_t size;
-};
 
 struct magicnet_peer_information
 {
@@ -392,26 +386,31 @@ struct magicnet_packet
                     struct vector *events;
                 } events_poll_res;
 
-                struct request_and_respond
+                struct request
                 {
+                    int id;
                     // The numeric type of the particular request we are making
                     int type;
                     int flags;
+                    int signal_id;
                     // The data that helps us locate the information we are requesting
-                    struct request_and_respond_input_data *input_data;
+                    struct magicnet_request_input_data *input_data;
 
-                } request_and_respond;
+                } request;
 
-                struct request_and_respond_response
+                struct request_response
                 {
+                    int id;
                     // The numeric type of the request
                     int type;
                     int flags;
+                    int signal_id;
 
-                    struct request_and_respond_input_data *input_data;
-                    struct request_and_respond_output_data *output_data;
+                    struct magicnet_request_input_data *input_data;
+                    struct magicnet_request_response_output_data *output_data;
 
-                } request_and_respond_response;
+                } request_response;
+
 
                 struct sync
                 {
@@ -662,6 +661,7 @@ struct magicnet_client
 
     struct magicnet_peer_information peer_info;
     struct magicnet_server *server;
+    struct magicnet_reqres* reqres;
 
     struct
     {
@@ -1816,28 +1816,9 @@ int magicnet_setting_get(const char *key, char *value_out);
 
 bool magicnet_setting_exists(const char *key);
 
-// Request response system, allowing local host clients to request information from the local server
-#define MAGICNET_REQRES_MAX_HANDLERS 200
 
-// 65k for now, work the real value out later..
-#define MAGICNET_MAX_LOGIN_PROTOCOL_ENTRY_BYTES 65000
 
-// For people writing modules for MagicNet Don't use any handler below 100 they are all reserved for internal system use
-// Public use above 100 please, bare in mind that other modules might use the same ID so ensure you
-// pick a completely random number
-enum
-{
-    MAGICNET_REQRES_HANDLER_GET_COUNCIL_CERTIFICATE = 0,
-};
-typedef int (*REQUEST_RESPONSE_HANDLER_FUNCTION)(struct request_and_respond_input_data *input_data, struct request_and_respond_output_data **output_data_out);
+int magicnet_client_process_request_response(struct magicnet_client *client, struct magicnet_packet *packet);
 
-int reqres_register_handler(REQUEST_RESPONSE_HANDLER_FUNCTION handler, int type);
-REQUEST_RESPONSE_HANDLER_FUNCTION reqres_get_handler(int type);
-int magicnet_reqres_request(struct magicnet_client *client, int type, struct request_and_respond_input_data *input_data, struct request_and_respond_output_data **output_data_out);
-void magicnet_reqres_input_data_free(struct request_and_respond_input_data *input_data);
-void magicnet_reqres_output_data_free(struct request_and_respond_output_data *output_data);
-struct request_and_respond_output_data *magicnet_reqres_output_data_clone(struct request_and_respond_output_data *output_data);
-struct request_and_respond_input_data *magicnet_reqres_input_data_clone(struct request_and_respond_input_data *input_data);
-struct request_and_respond_output_data *magicnet_reqres_output_data_create(void *output_data_ptr, size_t size);
-struct request_and_respond_input_data *magicnet_reqres_input_data_create(void *input_data_ptr, size_t size);
+
 #endif

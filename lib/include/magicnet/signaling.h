@@ -1,5 +1,5 @@
-#ifndef MAGICNET_SIGNALING
-#define MAGICNET_SIGNALING
+#ifndef MAGICNET_SIGNALING_H
+#define MAGICNET_SIGNALING_H
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdbool.h>
@@ -38,6 +38,16 @@ struct magicnet_signal
     bool free;
 };
 
+
+/**
+ * Used as an identifier for a signal that you dont know the pointer for.
+ */
+struct magicnet_signal_desc
+{
+    int id;
+    char signal_type[MAGICNET_MAX_SIGNAL_TYPE_NAME];
+};
+
 int magicnet_signals_init();
 void magicnet_signals_free();
 struct magicnet_signal *magicnet_signal_find_free(const char* signal_type);
@@ -45,6 +55,9 @@ struct magicnet_signal* magicnet_signal_get_by_id_and_type(const char* signal_ty
 int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void** data_out);
 int magicnet_signal_post(struct magicnet_signal *signal, void *data, size_t size, int flags);
 int magicnet_signal_post_for_signal(int signal_id, const char* signal_type, void* data, size_t size, int flags);
+int magicnet_signal_post_for_signal_desc(struct magicnet_signal_desc* signal_desc, void* data, size_t size, int flags);
+bool magicnet_signal_desc_valid(struct magicnet_signal_desc* signal_desc)
+
 void magicnet_signal_release(struct magicnet_signal* signal);
 void magicnet_signals_release_all();
 #endif
