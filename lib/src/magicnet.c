@@ -49,6 +49,15 @@ int magicnet_init(int flags, int t_threads)
     // Let's get those threads going.
     magicnet_threads_init(t_threads);
 
+    int res = magicnet_signals_init();
+    if (res < 0)
+    {
+        printf("Failed to initialize signals\n");
+        return res;
+    }
+
+    magicnet_reqres_init();
+
     return 0;
 }
 
@@ -778,7 +787,7 @@ out:
     return res;
 }
 
-int magicnet_program_client_resreq_process(struct magicnet_client *client)
+int magicnet_program_client_resreq_process_next_response(struct magicnet_client *client)
 {
     int res = 0;
     magicnet_reqres_lock(client->reqres);
@@ -803,6 +812,17 @@ int magicnet_program_client_resreq_process(struct magicnet_client *client)
 
     return res;
 }
+
+struct magicnet_client* magicnet_program_client_hold(struct magicnet_program* program)
+{
+    return magicnet_client_shared_hold(program->client);
+}
+
+void magicnet_program_client_release(struct magicnet_program* program)
+{
+    magicnet_client_shared_release(program->client);
+}
+
 int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
 {
     int res = 0;
@@ -819,7 +839,7 @@ int magicnet_program_client_thread_poll(struct magicnet_nthread_action *action)
 
     res = magicnet_client_poll(client, magicnet_program_client_thread_poll_process_packet);
     // Lets check if we have any reqres responses to deal with for this program
-    res = magicnet_program_client_resreq_process(client);
+    res = magicnet_program_client_resreq_process_next_response(client);
 
     magicnet_client_shared_release(sclient);
 

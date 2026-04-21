@@ -1181,6 +1181,7 @@ int magicnet_init_client(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) 
     client->max_bytes_send_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     client->max_bytes_recv_per_second = MAGICNET_IDEAL_DATA_TRANSFER_BYTE_RATE_PER_SECOND;
     client->events = vector_create(sizeof(struct magicnet_event *));
+    client->reqres = magicnet_reqres_new(client_shared);
     // We lied we haven't got a packet yet but we need to be sure the connection isnt booted right away.
     client->last_packet_received = time(NULL);
 
@@ -3025,7 +3026,11 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
         break;
 
     case MAGICNET_PACKET_TYPE_REQUEST:
-        res = magicnet_client_read_request_packet
+        res = magicnet_client_read_request_packet(client, packet_out);
+        break;
+
+    case MAGICNET_PACKET_TYPE_REQUEST_RESPONSE:
+        res = magicnet_client_read_request_response_packet(client, packet_out);
         break;
 
     default:
@@ -4134,9 +4139,12 @@ int magicnet_client_write_packet(struct magicnet_client *client, struct magicnet
         break;
 
         case MAGICNET_PACKET_TYPE_REQUEST:
-        res = magicnet_client_write_packet_request(client, packet;)
+        res = magicnet_client_write_packet_request(client, packet);
         break;
 
+        case MAGICNET_PACKET_TYPE_REQUEST_RESPONSE:
+        res = magicnet_client_write_packet_request_response(client, packet);
+        break;  
     default:
         magicnet_log("%s sending unimplemented packet type=%i", __FUNCTION__, magicnet_signed_data(packet)->type);
     }
@@ -5473,6 +5481,8 @@ out:
     }
     return res;
 }
+
+#warning "COME BACK TO THIS TO ENSURE REMOTE CLIENTS CANNOT PUSH RESPONSES TO US SECURITY MEASURE"
 int magicnet_client_process_request_response(struct magicnet_client *client, struct magicnet_packet *packet)
 {
     int res = 0;
@@ -5483,6 +5493,7 @@ int magicnet_client_process_request_response(struct magicnet_client *client, str
     struct magicnet_request_input_data* input_data = magicnet_signed_data(packet)->payload.request_response.input_data;
     struct magicnet_request_response_output_data* output_data = magicnet_signed_data(packet)->payload.request_response.output_data;
     struct magicnet_reqres_response* reqres_res = NULL;
+    int flags = magicnet_signed_data(packet)->payload.request_response.flags;
 
     // We need to process this response and forward it to the client
     // I think we should force it into the responses reqres of this client
@@ -5490,7 +5501,7 @@ int magicnet_client_process_request_response(struct magicnet_client *client, str
     // then they can pop later
     // its a cleaner solution
 
-    reqres_res = magicnet_reqres_response_new(request_id, request_type, request_signal_id, input_data, output_data);
+    reqres_res = magicnet_reqres_response_new(request_type, request_id, flags,  request_signal_id, input_data, output_data, NULL);
     if (!reqres_res)
     {
         res = -1;
@@ -6980,6 +6991,21 @@ int magicnet_server_client_push(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_cli
 out:
     return res;
 }
+
+int magicnet_client_resreq_begin_polling(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* client_shared)
+{
+    int res = 0;
+    struct magicnet_client* client = magicnet_client_shared_hold(client_shared);
+    if (!client->reqres)
+    {
+        res = -1;
+        goto out;
+    }
+    res = magicnet_reqres_begin_polling(client->reqres);
+out:
+    magicnet_client_shared_release(client_shared);
+    return res;
+}
 int magicnet_client_push(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * client_shared)
 {
     int res = 0;
@@ -7371,6 +7397,47 @@ out:
     return res;
 }
 
+struct magicnet_packet* magicnet_packet_response_create_from_reqres_response(struct magicnet_reqres_response* reqres_res)
+{
+    struct magicnet_packet* packet = magicnet_packet_new();
+    if (!packet) return NULL;
+    magicnet_signed_data(packet)->type = MAGICNET_PACKET_TYPE_REQUEST_RESPONSE;
+    magicnet_signed_data(packet)->payload.request_response.id = reqres_res->id;
+    magicnet_signed_data(packet)->payload.request_response.type = reqres_res->type;
+    magicnet_signed_data(packet)->payload.request_response.flags = reqres_res->flags;
+    magicnet_signed_data(packet)->payload.request_response.input_data = magicnet_reqres_input_data_clone(reqres_res->input_data);
+    magicnet_signed_data(packet)->payload.request_response.output_data = magicnet_reqres_output_data_clone(reqres_res->output_data);
+    magicnet_signed_data(packet)->payload.request_response.signal_id = reqres_res->signal_desc.id;
+
+    return packet;
+}
+
+
+void magicnet_server_client_reqres_responses_process(struct magicnet_client* client)
+{
+
+    magicnet_reqres_lock(client->reqres);
+    while (magicnet_reqres_response_count(client->reqres) > 0)
+    {
+        struct magicnet_reqres_response* reqres_res = NULL;
+        magicnet_reqres_response_pop(client->reqres, &reqres_res);
+
+        if (reqres_res)
+        {
+            // Alright we popped it, lets send it to the local client
+            struct magicnet_packet* packet = magicnet_packet_response_create_from_reqres_response(reqres_res);
+            if (packet)
+            {
+                // Alright lets send this to the local client so it knows the response
+                // from its initial request
+                magicnet_client_write_packet(client, packet, 0);
+                // DONE! 
+            }
+        }
+    }
+
+    magicnet_reqres_unlock(client->reqres);
+}
 /**
  * Called ONLY by clients that have been pushed to the server thread pool
  * 
@@ -7444,6 +7511,14 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
     {
         goto out;
     }
+
+    // Do we have any awaiting responses on our client, if so they shall be 
+    // popped and forwarded to the local client whome requsted them
+    // we know that the requestor is this client its self, as any responses stored
+    // are from requests the client requested
+    // forward to its local instance of the client so it can deal with it
+    magicnet_server_client_reqres_responses_process(client);
+
 
     // Lets flush any packets now awaiting to be flushed to our client
     res = magicnet_client_packets_for_client_flush(client);

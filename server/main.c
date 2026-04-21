@@ -193,12 +193,7 @@ int main(int argc, char **argv)
     pthread_sigmask(SIG_BLOCK, &set, NULL);
     signal(SIGINT, sig_int_handler);
 
-    res = magicnet_signals_init();
-    if (res < 0)
-    {
-        printf("Failed to initialize signals\n");
-        return res;
-    }
+   
 
     res = magicnet_server_init();
     if (res < 0)

@@ -12,13 +12,24 @@
 #include "signaling.h"
 #include "nthread.h"
 #include "log.h"
-
+int magicnet_reqres_poll(struct magicnet_nthread_action *action);
 static REQUEST_RESPONSE_HANDLER_FUNCTION request_response_handlers[MAGICNET_REQRES_MAX_HANDLERS] = {0};
+
+// test handler...
+int magicnet_reqres_helloworld_handler(struct magicnet_request_input_data *input_data, struct magicnet_request_response_output_data **output_data_out)
+{
+    char helloworld = {"hello world"};
+    struct magicnet_request_response_output_data* output_data = magicnet_reqres_output_data_create(helloworld, strlen("helloworld"));
+    *output_data_out = output_data;
+    return 0;
+}
 
 int magicnet_reqres_init()
 {
     int res = 0;
-   
+    // Register the hello world handler
+    reqres_register_handler(magicnet_reqres_helloworld_handler, MAGICNET_REQRES_HANDLER_HELLOWORLD_TEST);
+
     return res;
 }
 struct magicnet_request_input_data *magicnet_reqres_input_data_create(void *input_data_ptr, size_t size)
@@ -85,7 +96,7 @@ void magicnet_reqres_input_data_free(struct magicnet_request_input_data *input_d
 }
 
 
-int magicnet_reqres_validate_res(struct magicnet_reqres_response* res)
+int magicnet_reqres_validate_res(struct magicnet_reqres_response* reqres_res)
 {
     int res = 0;
     return res;
@@ -98,15 +109,77 @@ int magicnet_reqres_request_count(struct magicnet_reqres *reqres)
 
 int magicnet_reqres_response_count(struct magicnet_reqres* reqres)
 {
-    return vecotr_count(reqres->responses);
+    return vector_count(reqres->responses);
 }
 
+
+struct magicnet_reqres* magicnet_reqres_new(void* private)
+{
+    int res = 0;
+    struct magicnet_reqres* reqres = calloc(1, sizeof(struct magicnet_reqres));
+    if (!reqres)
+    {
+        res = -1;
+        goto out;
+    }
+
+    pthread_mutex_init(&reqres->mutex, NULL);
+    reqres->requests = vector_create(sizeof(struct magicnet_reqres_request*));
+    if (!reqres->requests)
+    {
+        res = -1;
+        goto out;
+    }
+    reqres->responses = vector_create(sizeof(struct magicnet_reqres_response*));
+    if (!reqres->responses)
+    {
+        res = -1;
+        goto out;
+    }
+
+    reqres->private = private;
+out:
+
+    if (res < 0)
+    {
+        if (reqres->requests)
+        {
+            vector_free(reqres->requests);
+            reqres->requests = NULL;
+        }
+
+        if (reqres->responses)
+        {
+            vector_free(reqres->responses);
+            reqres->responses = NULL;
+        }
+
+        free(reqres);
+        reqres = NULL;
+    }
+    return reqres;
+}
+
+void magicnet_reqres_free(struct magicnet_reqres* reqres)
+{
+    if (reqres->requests)
+    {
+        vector_free(reqres->requests);
+    }
+
+    if (reqres->responses)
+    {
+        vector_free(reqres->responses);
+    }
+
+    free(reqres);
+}
 
 struct magicnet_reqres_request* magicnet_reqres_request_new(int id, int type, int signal_id, struct magicnet_request_input_data* input_data)
 {
     int res = 0;
     struct magicnet_reqres_request* request = calloc(1, sizeof(struct magicnet_reqres_request));
-    if (request)
+    if (!request)
     {
         res = -1;
         goto out;
@@ -196,6 +269,11 @@ int magicnet_reqres_request_push(struct magicnet_reqres *reqres, struct magicnet
         goto out;
     }
 
+    // lets call the callback so they can modify it if they wish
+    if (reqres->functions.request_callback)
+    {
+        reqres->functions.request_callback(reqres, req_cloned);
+    }
     // We are now responsible for the req_cloned memory
     // owner of req remains responsible for his own memory.
     vector_push(reqres->requests, &req_cloned);
@@ -258,18 +336,25 @@ struct magicnet_reqres_response* magicnet_reqres_response_clone(struct magicnet_
 out:
     return res_clone;
 }
-int magicnet_reqres_response_push(struct magicnet_reqres *reqres, struct magicnet_reqres_response *res)
+/// lag is a bit unbareable 
+int magicnet_reqres_response_push(struct magicnet_reqres *reqres, struct magicnet_reqres_response *reqres_res)
 {
     int res = 0;
     // Yeah we should probably clone here too 
     // we will think abotu shared pointers another time
     // memory safety is important right now
 
-    struct magicnet_reqres_response* res_cloned = magicnet_reqres_response_clone(res);
+    struct magicnet_reqres_response* res_cloned = magicnet_reqres_response_clone(reqres_res);
     if (!res_cloned)
     {
         res = -1;
         goto out;
+    }
+
+    // Lets call the event handler so they may modify the response if they choose
+    if (reqres->functions.response_callback)
+    {
+        reqres->functions.response_callback(reqres, res_cloned);
     }
     vector_push(reqres->responses, &res);
 out:
@@ -394,9 +479,8 @@ REQUEST_RESPONSE_HANDLER_FUNCTION magicnet_reqres_get_handler(int type)
     return request_response_handlers[type];
 }
 
-typedef int (*MAGICNET_NTHREAD_POLL_FUNCTION)(struct magicnet_nthread_action *action);
 
-struct magicnet_reqres_response *magicnet_reqres_response_new(int type, int id, int flags, struct magicnet_signal_desc *signal_desc, struct magicnet_request_input_data *input_data, struct magicnet_request_response_output_data *output_data)
+struct magicnet_reqres_response *magicnet_reqres_response_new(int type, int id, int flags, struct magicnet_signal_desc *signal_desc, struct magicnet_request_input_data *input_data, struct magicnet_request_response_output_data *output_data, void* private)
 {
     struct magicnet_reqres_response *response = calloc(1, sizeof(struct magicnet_reqres_response));
     if (!response)
@@ -410,6 +494,7 @@ struct magicnet_reqres_response *magicnet_reqres_response_new(int type, int id, 
     response->signal_desc = *signal_desc;
     response->input_data = input_data;
     response->output_data = output_data;
+    response->private = private;
     return response;
 }
 
@@ -427,7 +512,7 @@ int magicnet_reqres_request_process_failure_push(struct magicnet_reqres *reqres,
     }
 
     input_data = req->data;
-    reqres_res = magicnet_reqres_response_new(req->type, req->id, flags, &req->signal_desc, input_data, output_data);
+    reqres_res = magicnet_reqres_response_new(req->type, req->id, flags, &req->signal_desc, input_data, output_data, NULL);
     if (reqres_res < 0)
     {
         goto out;
@@ -467,7 +552,7 @@ int magicnet_reqres_request_process(struct magicnet_reqres *reqres, struct magic
     }
 
     input_data = req->data;
-    response = magicnet_reqres_response_new(req->type, req->id, 0, &req->signal_desc, input_data, output_data);
+    response = magicnet_reqres_response_new(req->type, req->id, 0, &req->signal_desc, input_data, output_data, NULL);
     if (!response)
     {
         res = -1;

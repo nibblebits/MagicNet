@@ -1346,6 +1346,9 @@ void magicnet_client_shared_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet
 void magicnet_client_shared_viewer_hold(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient);
 void magicnet_client_shared_viewer_release(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * sclient);
 
+struct magicnet_client* magicnet_program_client_hold(struct magicnet_program* program);
+void magicnet_program_client_release(struct magicnet_program* program);
+
 void magicnet_client_hold(struct magicnet_client *client);
 void magicnet_client_release(struct magicnet_client *client);
 void magicnet_client_lock(struct magicnet_client *client);
@@ -1353,6 +1356,8 @@ void magicnet_client_unlock(struct magicnet_client *client);
 
 void magicnet_client_shared_lock(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *client) * client_shared);
 void magicnet_client_shared_unlock(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * client_shared);
+
+int magicnet_client_resreq_begin_polling(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* client_shared);
 
 /**
  * Returns true if the login protocol has been completed from both sides, our clients side

@@ -7,6 +7,7 @@ all:
 	cd ./example/MoneyTransferApplication && $(MAKE) all
 	cd ./example/EventListenerApplication && $(MAKE) all
 	cd ./example/CouncilCertificateApplication && $(MAKE) all
+	cd ./example/ReqResTestApplication && $(MAKE) all
 
 
 
@@ -19,5 +20,5 @@ clean:
 	cd ./example/MoneyTransferApplication && $(MAKE) clean
 	cd ./example/EventListenerApplication && $(MAKE) clean
 	cd ./example/CouncilCertificateApplication && $(MAKE) clean
-
+	cd ./example/ReqResTestApplication && $(MAKE) clean
 

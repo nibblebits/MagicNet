@@ -56,7 +56,7 @@ int magicnet_signal_wait_timed(struct magicnet_signal *signal, int seconds, void
 int magicnet_signal_post(struct magicnet_signal *signal, void *data, size_t size, int flags);
 int magicnet_signal_post_for_signal(int signal_id, const char* signal_type, void* data, size_t size, int flags);
 int magicnet_signal_post_for_signal_desc(struct magicnet_signal_desc* signal_desc, void* data, size_t size, int flags);
-bool magicnet_signal_desc_valid(struct magicnet_signal_desc* signal_desc)
+bool magicnet_signal_desc_valid(struct magicnet_signal_desc* signal_desc);
 
 void magicnet_signal_release(struct magicnet_signal* signal);
 void magicnet_signals_release_all();
