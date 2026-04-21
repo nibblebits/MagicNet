@@ -2738,7 +2738,7 @@ int magicnet_client_read_request_response_packet(struct magicnet_client *client,
         goto out;
     }
 
-    // read the signal id
+    // read the signal id (offset 8-16) THE OFFSETS MATCH, yet we still have io error
     int signal_id = magicnet_read_int(client, packet_out->not_sent.tmp_buf);
     if (signal_id < 0)
     {
@@ -2761,9 +2761,11 @@ int magicnet_client_read_request_response_packet(struct magicnet_client *client,
     }
 
     // We have read the packet correctly lets construct it
-    magicnet_signed_data(packet_out)->payload.request.type = type;
-    magicnet_signed_data(packet_out)->payload.request.flags = flags;
-    magicnet_signed_data(packet_out)->payload.request.input_data = input_data;
+    magicnet_signed_data(packet_out)->payload.request_response.type = type;
+    magicnet_signed_data(packet_out)->payload.request_response.flags = flags;
+    // found the bug we didnt set the bloody thing
+    magicnet_signed_data(packet_out)->payload.request_response.signal_id = signal_id;
+    magicnet_signed_data(packet_out)->payload.request_response.input_data = input_data;
     magicnet_signed_data(packet_out)->payload.request_response.output_data = output_data;
 out:
     return res;
@@ -3974,7 +3976,7 @@ int magicnet_client_write_packet_request_response(struct magicnet_client *client
         goto out;
     }
 
-    // write the signal id
+    // write the signal id (offst 8-16)
     res = magicnet_write_int(client, magicnet_signed_data(packet_in)->payload.request_response.signal_id, packet_in->not_sent.tmp_buf);
     if (res < 0)
     {
@@ -5501,7 +5503,9 @@ int magicnet_client_process_request_response(struct magicnet_client *client, str
     // then they can pop later
     // its a cleaner solution
 
-    reqres_res = magicnet_reqres_response_new(request_type, request_id, flags,  request_signal_id, input_data, output_data, NULL);
+    struct magicnet_signal_desc signal_desc = {0};
+    magicnet_reqres_signal_desc_from_id(request_signal_id, &signal_desc);
+    reqres_res = magicnet_reqres_response_new(request_type, request_id, flags, &signal_desc, input_data, output_data, NULL);
     if (!reqres_res)
     {
         res = -1;

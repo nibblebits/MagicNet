@@ -95,6 +95,10 @@ void *vector_peek_at(struct vector *vector, int index);
 void vector_set_flag(struct vector* vector, int flag);
 void vector_unset_flag(struct vector* vector, int flag);
 
+void * vector_front_or_null(struct vector* vector);
+void* vector_front_ptr_or_null(struct vector* vector);
+void* vector_front_ptr_pop(struct vector* vector);
+
 /**
  * Pops off the last peeked element
  */

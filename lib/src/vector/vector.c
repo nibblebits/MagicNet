@@ -459,6 +459,34 @@ void vector_clear(struct vector *vector)
     }
 }
 
+void * vector_front_or_null(struct vector* vector)
+{
+    if (!vector_in_bounds_for_at(vector, 0))
+    {
+        return NULL;
+    }
+
+    return vector_at(vector, 0);
+}
+
+void* vector_front_ptr_or_null(struct vector* vector)
+{
+    void** vec_elem_ptr = vector_front_or_null(vector);
+    if (!vec_elem_ptr ) return NULL;
+
+    return *vec_elem_ptr;
+}
+
+void* vector_front_ptr_pop(struct vector* vector)
+{
+    if (vector_count(vector) == 0)
+        return NULL;
+        
+    void* ptr_val = vector_front_ptr_or_null(vector);
+    vector_pop_at(vector, 0);
+    return ptr_val;
+}
+
 void *vector_back_or_null(struct vector *vector)
 {
     // We can't go back or we will access an invalid element

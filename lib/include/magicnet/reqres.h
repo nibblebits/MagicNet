@@ -126,5 +126,6 @@ int magicnet_reqres_response_count(struct magicnet_reqres* reqres);
 int magicnet_reqres_response_pop(struct magicnet_reqres *reqres, struct magicnet_reqres_response **res_out);
 
 int magicnet_reqres_begin_polling(struct magicnet_reqres* reqres);
+void magicnet_reqres_signal_desc_from_id(int id, struct magicnet_signal_desc* desc);
 
 #endif
