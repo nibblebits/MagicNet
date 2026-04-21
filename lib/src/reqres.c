@@ -18,7 +18,7 @@ static REQUEST_RESPONSE_HANDLER_FUNCTION request_response_handlers[MAGICNET_REQR
 // test handler...
 int magicnet_reqres_helloworld_handler(struct magicnet_request_input_data *input_data, struct magicnet_request_response_output_data **output_data_out)
 {
-    char* helloworld = calloc(1, strlen("hello world"));
+    char *helloworld = calloc(1, strlen("hello world"));
     strncpy(helloworld, "hello world", strlen("hello world"));
     struct magicnet_request_response_output_data *output_data = magicnet_reqres_output_data_create(helloworld, strlen("hello world"));
     *output_data_out = output_data;
@@ -59,22 +59,21 @@ struct magicnet_request_response_output_data *magicnet_reqres_output_data_create
 {
     int res = 0;
     struct magicnet_request_response_output_data *output_data = calloc(1, sizeof(struct magicnet_request_response_output_data));
-    if (output_data_ptr == NULL || size == 0)
+
+    // We are allowed outputs of NULL value.
+    if (output_data_ptr && size > 0)
     {
-        res = -1;
-        goto out;
+        output_data->output = calloc(size, sizeof(char));
+        if (!output_data->output)
+        {
+            res = -1;
+            goto out;
+        }
+
+        output_data->size = size;
+
+        memcpy(output_data->output, output_data_ptr, size);
     }
-
-    output_data->output = calloc(size, sizeof(char));
-    if (!output_data->output)
-    {
-        res = -1;
-        goto out;
-    }
-
-    output_data->size = size;
-    memcpy(output_data->output, output_data_ptr, size);
-
 out:
 
     if (res < 0)
@@ -198,7 +197,7 @@ void magicnet_reqres_free(struct magicnet_reqres *reqres)
     free(reqres);
 }
 
-void magicnet_reqres_signal_desc_from_id(int id, struct magicnet_signal_desc* desc)
+void magicnet_reqres_signal_desc_from_id(int id, struct magicnet_signal_desc *desc)
 {
     desc->id = id;
     strncpy(desc->signal_type, "reqres-request", sizeof(desc->signal_type));
@@ -217,7 +216,7 @@ struct magicnet_reqres_request *magicnet_reqres_request_new(int id, int type, in
     request->id = id;
     request->type = type;
     magicnet_reqres_signal_desc_from_id(signal_id, &request->signal_desc);
-    
+
     request->data = magicnet_reqres_input_data_clone(input_data);
     // null data might be allowed..
 out:
@@ -383,7 +382,7 @@ int magicnet_reqres_response_push(struct magicnet_reqres *reqres, struct magicne
         reqres->functions.response_callback(reqres, res_cloned);
     }
 
-    // Push the cloned response 
+    // Push the cloned response
     vector_push(reqres->responses, &res_cloned);
 out:
     return res;
@@ -516,7 +515,7 @@ struct magicnet_reqres_response *magicnet_reqres_response_new(int type, int id, 
     response->id = id;
     response->flags = flags;
     response->type = type;
-    
+
     // let it crash to find the issue.
     response->signal_desc = *signal_desc;
     response->input_data = input_data;
