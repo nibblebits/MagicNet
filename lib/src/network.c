@@ -66,6 +66,12 @@ pthread_mutex_t tmp_mutex;
 
 size_t magicnet_client_unflushed_bytes(struct magicnet_client *client);
 
+
+bool magicnet_client_localhost(struct magicnet_client* client)
+{
+    return client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
+}
+
 // flags in future but this is fool proof for debugging.
 bool magicnet_packet_hashed(struct magicnet_packet *packet)
 {
@@ -1424,6 +1430,7 @@ MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) * magicnet_accept(struct 
     mclient = magicnet_shared_mutex_obj_owner_hold(mclient_shared);
     magicnet_init_client(mclient_shared, server, connfd, &client);
     strncpy(mclient->peer_info.ip_address, inet_ntoa(client.sin_addr), sizeof(mclient->peer_info.ip_address));
+    // bad solution different localhost ips are possible fix that..
     if (strcmp(inet_ntoa(client.sin_addr), "127.0.0.1") == 0)
     {
         // This is a localhost connection, therefore packets that are not signed are allowed.
@@ -1997,7 +2004,7 @@ int magicnet_read_transaction(struct magicnet_client *client, struct block_trans
     // localhost clients can send us data that is not signed with our keys because they dont know what our keys are
     // its our responsibility to take it then sign it.
     // If we fail to sign it then we know not to pass it to others. This is all done in the packet processing stage.
-    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) && !(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
+    if (!magicnet_client_localhost(client) && !(client->flags & MAGICNET_CLIENT_FLAG_IGNORE_TRANSACTION_AND_BLOCK_VALIDATION))
     {
         if (block_transaction_valid(transaction_out) < 0)
         {
@@ -2888,7 +2895,7 @@ bool magicnet_client_allowed_no_signature(struct magicnet_client *client, struct
         return true;
     }
 
-    return (client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST) || !magicnet_client_door_opened(client);
+    return (magicnet_client_localhost(client)) || !magicnet_client_door_opened(client);
 }
 int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struct magicnet_packet *packet_out)
 {
@@ -3198,7 +3205,7 @@ int magicnet_client_read_incomplete_packet(struct magicnet_client *client, struc
      * to sign all packets. Still only if we have a server instance on the client can we sign because
      * the server is responsible for the keys. So local clients outside of the server cannot sign their own packets.
      */
-    if (!has_signature && client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST && client->server)
+    if (!has_signature && (magicnet_client_localhost(client)) && client->server)
     {
         // Since we have no signature let us create our own this is allowed since we have confimed
         // that we are localhost and by default localhost packets have no signatures.
@@ -3458,7 +3465,7 @@ int magicnet_write_transaction(struct magicnet_client *client, struct block_tran
     // Let's verify some things before we send this but only if we are not local host.
     // If we are a localhost client its impossible for us to know our keypair
     // so nothing has been signed.
-    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
+    if (!magicnet_client_localhost(client))
     {
         // It is possible that the state of the blockchain is greater than it was
         // for when the transaction we are writing was created. For that reason we dont want to verify transaction data
@@ -4384,7 +4391,7 @@ bool magicnet_connected(struct magicnet_client *client)
     return client && client->flags & MAGICNET_CLIENT_FLAG_CONNECTED;
 }
 
-bool magicnet_is_localhost(struct magicnet_client *client)
+bool magicnet_client_localhost(struct magicnet_client *client)
 {
     return client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST;
 }
@@ -5560,7 +5567,8 @@ int magicnet_client_process_packet(struct magicnet_client *client, struct magicn
         }
     }
 
-    if (!(client->flags & MAGICNET_CLIENT_FLAG_IS_LOCAL_HOST))
+    // Non-localhost client packets
+    if (!magicnet_client_localhost(client))
     {
         // Non local host clients have access to only one packet type
         switch (magicnet_signed_data(packet)->type)
@@ -7482,9 +7490,11 @@ int magicnet_server_poll_process(struct magicnet_client *client, struct magicnet
             res = magicnet_client_process_request(client, packet);
         break;
 
-        case MAGICNET_PACKET_TYPE_REQUEST_RESPONSE:
-            res = magicnet_client_process_request_response(client, packet);
-            break;
+        // We don't allow the server instance to receive request responses
+        // only localhost clients can receive them
+        // case MAGICNET_PACKET_TYPE_REQUEST_RESPONSE:
+        //     res = magicnet_client_process_request_response(client, packet);
+        //     break;
 
 
         // case MAGICNET_PACKET_TYPE_BLOCK_SEND:
