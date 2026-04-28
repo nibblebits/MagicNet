@@ -256,8 +256,7 @@ int main(int argc, char **argv)
         MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client *) *client = magicnet_accept(server);
         if (client)
         {
-            magicnet_client_push(client);
-            magicnet_client_resreq_begin_polling(client);
+            magicnet_server_client_push(client);
            
         }
 

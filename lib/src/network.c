@@ -6959,7 +6959,7 @@ int magicnet_client_thread_poll(struct magicnet_nthread_action *action)
 
     // +1
     struct magicnet_client *client = magicnet_shared_mutex_obj_owner_hold(client_shared);
-    res = magicnet_client_poll(client, magicnet_server_poll_process);
+    res = magicnet_client_poll(client, magicnet_server_poll_client_process);
     // -1
     magicnet_shared_mutex_obj_owner_release(client_shared);
 
