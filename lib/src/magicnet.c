@@ -773,9 +773,6 @@ int magicnet_program_client_thread_poll_process_packet(struct magicnet_client *c
 
     switch(magicnet_signed_data(packet)->type)
     {
-
-        // Crazy bug here, the signal_id is sent correctly but the receving
-        // packet has a null id, yet the read and write functions are operating correctly
         case MAGICNET_PACKET_TYPE_REQUEST_RESPONSE:
         magicnet_client_process_request_response(client, packet);
         break;
@@ -805,9 +802,6 @@ int magicnet_program_client_resreq_process_next_response(struct magicnet_client 
         {
             // Ok activate the signal deal with it..
             // this will allow the main thread to unpause..
-
-            // This fails as the signal_desc data is NULL caused by a faulty transfer
-            // or corruption during getting the packet at an earlier point.
             if (magicnet_signal_desc_valid(&response->signal_desc))
             {
                 res = magicnet_signal_post_for_signal_desc(&response->signal_desc, response, sizeof(*response), 0);

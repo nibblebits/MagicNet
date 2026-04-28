@@ -1390,6 +1390,7 @@ void magicnet_client_handle_packet_monitoring(struct magicnet_client *client, st
 int magicnet_client_poll(struct magicnet_client *client, PROCESS_PACKET_FUNCTION process_packet_func);
 
 void magicnet_reconnect(struct magicnet_program *program);
+int magicnet_server_client_push(MAGICNET_SHARED_MUTEX_OBJECT(struct magicnet_client*)* client_shared);
 
 void magicnet_event_release_data_for_event_type_new_block(struct magicnet_event *event);
 void magicnet_event_release_data(struct magicnet_event *event);
